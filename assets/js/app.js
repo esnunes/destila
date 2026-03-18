@@ -26,9 +26,15 @@ import {hooks as colocatedHooks} from "phoenix-colocated/destila"
 import topbar from "../vendor/topbar"
 import {SortableHook} from "./hooks/sortable"
 
+const ScrollBottomHook = {
+  mounted() { this.el.scrollTop = this.el.scrollHeight },
+  updated() { this.el.scrollTop = this.el.scrollHeight },
+}
+
 const Hooks = {
   ...colocatedHooks,
   Sortable: SortableHook,
+  ScrollBottom: ScrollBottomHook,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
