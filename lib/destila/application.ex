@@ -11,9 +11,7 @@ defmodule Destila.Application do
       DestilaWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:destila, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Destila.PubSub},
-      # Start a worker by calling: Destila.Worker.start_link(arg)
-      # {Destila.Worker, arg},
-      # Start to serve requests, typically the last entry
+      Destila.Store,
       DestilaWeb.Endpoint
     ]
 
