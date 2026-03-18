@@ -96,23 +96,23 @@ Generate the Phoenix project and establish the base layout, routing, and mocked 
 
 **Tasks:**
 
-- [ ] Generate Phoenix project: `mix phx.new destila --no-ecto --no-mailer --no-dashboard`
-- [ ] Configure `mise.toml` in project root (Erlang 28.4, Elixir 1.19.0-otp-28)
-- [ ] Set up global layout in `lib/destila_web/components/layouts/root.html.heex`:
+- [x] Generate Phoenix project: `mix phx.new destila --no-ecto --no-mailer --no-dashboard`
+- [x] Configure `mise.toml` in project root (Erlang 28.4, Elixir 1.19.0-otp-28)
+- [x] Set up global layout in `lib/destila_web/components/layouts/root.html.heex`:
   - App name "Destila" (links to dashboard)
   - Nav links: Dashboard, Prompt Crafting, Implementation
   - Global "+ Create" button
   - User avatar/name with logout dropdown
-- [ ] Create `DestilaWeb.Plugs.RequireAuth` plug:
+- [x] Create `DestilaWeb.Plugs.RequireAuth` plug:
   - Check session for `:current_user`
   - Redirect to `/login` if missing
   - Assign `current_user` map to conn
-- [ ] Create `SessionLive` for login page:
+- [x] Create `SessionLive` for login page:
   - Simple email/password form (any credentials work)
   - POST to `SessionController.create` which sets session and redirects to `/`
-- [ ] Create `SessionController` with `create` (set session) and `delete` (clear session, redirect to `/login`)
-- [ ] Add route pipeline with `RequireAuth` plug for all authenticated routes
-- [ ] Set up Tailwind design tokens for Linear/Notion aesthetic:
+- [x] Create `SessionController` with `create` (set session) and `delete` (clear session, redirect to `/login`)
+- [x] Add route pipeline with `RequireAuth` plug for all authenticated routes
+- [x] Set up Tailwind design tokens for Linear/Notion aesthetic:
   - Font: Inter or system sans-serif
   - Muted color palette, subtle borders, generous spacing
   - Card shadows, hover states
@@ -125,13 +125,13 @@ Build the in-memory data store and populate it with example data.
 
 **Tasks:**
 
-- [ ] Create `Destila.Store` GenServer module (`lib/destila/store.ex`):
+- [x] Create `Destila.Store` GenServer module (`lib/destila/store.ex`):
   - Owns an ETS table (`:set`, `:public`, `:named_table`)
   - API functions: `list_prompts/0`, `get_prompt/1`, `update_prompt/2`, `create_prompt/1`
   - API functions: `list_messages/1`, `add_message/2`
   - API functions: `move_card/3` (prompt_id, new_column, new_position)
-- [ ] Add `Destila.Store` to application supervision tree (`lib/destila/application.ex`)
-- [ ] Create `Destila.Seeds` module (`lib/destila/seeds.ex`) called from `Store.init/1`:
+- [x] Add `Destila.Store` to application supervision tree (`lib/destila/application.ex`)
+- [x] Create `Destila.Seeds` module (`lib/destila/seeds.ex`) called from `Store.init/1`:
   - 8-10 prompt cards distributed across both boards:
     - Crafting Board: 2 in Request, 2 in Distill (one with partial chat), 1 in Done
     - Implementation Board: 2 in Todo, 1 in In Progress, 1 in Review, 1 in QA, 1 in Done
@@ -148,15 +148,15 @@ Build the landing page with board preview summaries.
 
 **Tasks:**
 
-- [ ] Create `DashboardLive` (`lib/destila_web/live/dashboard_live.ex`):
+- [x] Create `DashboardLive` (`lib/destila_web/live/dashboard_live.ex`):
   - Fetch prompts from `Store`, group by board
   - Render two board preview cards side by side
-- [ ] Each board preview shows:
+- [x] Each board preview shows:
   - Board name and description
   - Card count per column (e.g., "Request: 2 | Distill: 2 | Done: 1")
   - Last 2-3 recent card titles as a mini list
   - Click navigates to full board view (`/crafting` or `/implementation`)
-- [ ] Style: clean cards with subtle borders, hover effect, clear visual hierarchy
+- [x] Style: clean cards with subtle borders, hover effect, clear visual hierarchy
 
 **Success criteria:** Dashboard shows accurate summaries for both boards; clicking a preview navigates to the board.
 
@@ -166,22 +166,22 @@ Build both kanban board views with drag-and-drop card movement.
 
 **Tasks:**
 
-- [ ] Create shared function components (`lib/destila_web/components/board_components.ex`):
+- [x] Create shared function components (`lib/destila_web/components/board_components.ex`):
   - `board_column/1` — renders a column header with card count and card list
   - `board_card/1` — renders a card with: title, workflow type badge, repo URL (if any), sub-step progress bar (steps_completed / steps_total)
-- [ ] Create `CraftingBoardLive` (`lib/destila_web/live/crafting_board_live.ex`):
+- [x] Create `CraftingBoardLive` (`lib/destila_web/live/crafting_board_live.ex`):
   - Three columns: Request, Distill, Done
   - "+ New Prompt" button in header area
   - Cards grouped by column from `Store`
-- [ ] Create `ImplementationBoardLive` (`lib/destila_web/live/implementation_board_live.ex`):
+- [x] Create `ImplementationBoardLive` (`lib/destila_web/live/implementation_board_live.ex`):
   - Five columns: Todo, In Progress, Review, QA, Done
   - Cards grouped by column from `Store`
-- [ ] Add SortableJS hook (`assets/js/hooks/sortable.js`):
+- [x] Add SortableJS hook (`assets/js/hooks/sortable.js`):
   - Initialize SortableJS on each column's card list
   - On drag end: `this.pushEvent("card_moved", {id, from_column, to_column, new_index})`
   - Handle `card_moved` event in LiveView to update `Store` and re-render
-- [ ] Card click navigates to `/prompts/:id` (prompt detail page)
-- [ ] Install SortableJS: add to `assets/vendor/` or via npm in `assets/`
+- [x] Card click navigates to `/prompts/:id` (prompt detail page)
+- [x] Install SortableJS: add to `assets/vendor/` or via npm in `assets/`
 
 **Success criteria:** Both boards render with correct columns and seeded cards; cards can be dragged between columns; clicking a card navigates to its detail page.
 
@@ -191,14 +191,14 @@ Build the multi-step prompt creation wizard.
 
 **Tasks:**
 
-- [ ] Create `NewPromptLive` (`lib/destila_web/live/new_prompt_live.ex`):
+- [x] Create `NewPromptLive` (`lib/destila_web/live/new_prompt_live.ex`):
   - Step 1: Pick workflow type — two selectable cards: "Feature Request" and "Project", each with icon and description
   - Step 2: Link repository — text input for repo URL with "Skip" option
   - Step 3: Create prompt in `Store`, redirect to `/prompts/:id`
-- [ ] Track wizard step in LiveView assigns (`@step`)
-- [ ] New prompt lands in `crafting` board, `request` column
-- [ ] Wire up the "+ Create" button in global header and "+ New Prompt" on Crafting Board to navigate to `/prompts/new`
-- [ ] Style: centered card layout, clear step indicator, smooth transitions between steps
+- [x] Track wizard step in LiveView assigns (`@step`)
+- [x] New prompt lands in `crafting` board, `request` column
+- [x] Wire up the "+ Create" button in global header and "+ New Prompt" on Crafting Board to navigate to `/prompts/new`
+- [x] Style: centered card layout, clear step indicator, smooth transitions between steps
 
 **Success criteria:** User can create a new prompt through the 3-step flow; prompt appears on the Crafting Board in the Request column.
 
@@ -208,22 +208,22 @@ Build the chat-based prompt refinement interface — the core UX of the app.
 
 **Tasks:**
 
-- [ ] Create `PromptDetailLive` (`lib/destila_web/live/prompt_detail_live.ex`):
+- [x] Create `PromptDetailLive` (`lib/destila_web/live/prompt_detail_live.ex`):
   - Header: editable title (inline edit with `phx-blur`), workflow type badge, repo URL, step progress indicator
   - Chat area: scrollable message list + input area at bottom
-- [ ] Render messages from `Store.list_messages(prompt_id)`
-- [ ] System (AI) messages styled differently from user messages (left-aligned vs right-aligned, different colors)
-- [ ] Input types rendered based on the current system message's `input_type`:
+- [x] Render messages from `Store.list_messages(prompt_id)`
+- [x] System (AI) messages styled differently from user messages (left-aligned vs right-aligned, different colors)
+- [x] Input types rendered based on the current system message's `input_type`:
   - **Free text:** standard text input with send button
   - **Single-select cards:** horizontally or vertically arranged option cards; clicking one selects it and submits
   - **Multi-select cards:** similar to single-select but with checkboxes; "Confirm" button to submit selections
   - **File upload:** upload button showing a mocked file thumbnail on "upload"
   - **All structured inputs include an "Other" freeform text option**
-- [ ] On user response:
+- [x] On user response:
   - Save user message to `Store`
   - Advance to next mocked AI message (pre-defined in a workflow script)
   - Auto-scroll chat to bottom
-- [ ] Define mocked workflow scripts (`lib/destila/workflows.ex`):
+- [x] Define mocked workflow scripts (`lib/destila/workflows.ex`):
   - **Feature Request workflow** (4 steps):
     - Step 1: "What problem are you solving?" (free text)
     - Step 2: "What type of feature is this?" (single-select: UI Enhancement, API Change, Performance, Infrastructure)
@@ -233,11 +233,11 @@ Build the chat-based prompt refinement interface — the core UX of the app.
     - Step 1: "Describe your project idea" (free text)
     - Step 2: "What's the primary tech stack?" (single-select: Web App, Mobile App, CLI Tool, Library)
     - Step 3: "Which features are in scope for v1?" (multi-select: Auth, Dashboard, API, Admin Panel, Notifications)
-- [ ] When all steps complete:
+- [x] When all steps complete:
   - Show completion message in chat
   - Move prompt to `done` column on Crafting Board via `Store`
   - Update step progress indicator
-- [ ] Moving prompt from Done (crafting) to Implementation Board: for the prototype, add a "Send to Implementation" button that moves the card to `todo` on the Implementation Board
+- [x] Moving prompt from Done (crafting) to Implementation Board: for the prototype, add a "Send to Implementation" button that moves the card to `todo` on the Implementation Board
 
 **Success criteria:** User can open a prompt, interact with the chat using all input types, complete the workflow, and see the card move to Done.
 
@@ -247,16 +247,16 @@ Refine the UI to achieve the Linear/Notion premium aesthetic.
 
 **Tasks:**
 
-- [ ] Typography: consistent heading hierarchy, appropriate font weights, comfortable line heights
-- [ ] Whitespace: generous padding on all containers, spacing between elements
-- [ ] Cards: subtle box shadows on hover, smooth border transitions, rounded corners
-- [ ] Badges: color-coded workflow type labels (e.g., blue for Feature Request, purple for Project)
-- [ ] Progress bars: thin, colored progress indicators on board cards
-- [ ] Transitions: smooth page transitions, fade-in for new chat messages
-- [ ] Empty states: friendly messages for empty columns ("No prompts yet — create one!")
-- [ ] Active nav state: highlight current page in header navigation
-- [ ] Login page: centered card with app branding, clean form styling
-- [ ] Chat input area: sticky at bottom, clear visual separation from message history
+- [x] Typography: consistent heading hierarchy, appropriate font weights, comfortable line heights
+- [x] Whitespace: generous padding on all containers, spacing between elements
+- [x] Cards: subtle box shadows on hover, smooth border transitions, rounded corners
+- [x] Badges: color-coded workflow type labels (e.g., blue for Feature Request, purple for Project)
+- [x] Progress bars: thin, colored progress indicators on board cards
+- [x] Transitions: smooth page transitions, fade-in for new chat messages
+- [x] Empty states: friendly messages for empty columns ("No prompts yet — create one!")
+- [x] Active nav state: highlight current page in header navigation
+- [x] Login page: centered card with app branding, clean form styling
+- [x] Chat input area: sticky at bottom, clear visual separation from message history
 
 **Success criteria:** The app feels polished and premium, comparable to Linear or Notion in visual quality.
 
@@ -264,30 +264,30 @@ Refine the UI to achieve the Linear/Notion premium aesthetic.
 
 ### Functional Requirements
 
-- [ ] User can log in with any credentials and see the authenticated dashboard
-- [ ] User can log out and return to the login page
-- [ ] Dashboard shows accurate previews of both boards with card counts and recent titles
-- [ ] Prompt Crafting Board displays 3 columns (Request, Distill, Done) with seeded cards
-- [ ] Implementation Board displays 5 columns (Todo, In Progress, Review, QA, Done) with seeded cards
-- [ ] Cards show: title, workflow type badge, repo URL (if linked), sub-step progress indicator
-- [ ] Cards can be dragged between columns on both boards
-- [ ] Clicking a card navigates to its detail page
-- [ ] User can create a new prompt via the 3-step flow (type, repo, start)
-- [ ] New prompts appear in the Request column on the Crafting Board
-- [ ] Prompt detail page shows editable title, workflow badge, repo URL, step progress
-- [ ] Chat interface supports free text, single-select, multi-select, and file upload inputs
-- [ ] All structured inputs include an "Other" freeform text option
-- [ ] Completing all steps moves the prompt to Done on the Crafting Board
-- [ ] At least one seeded prompt has a partially completed chat conversation
-- [ ] Global header shows: "Destila" link, nav links, Create button, user avatar with logout
-- [ ] All navigation paths work (header links, board preview clicks, card clicks, back navigation)
+- [x] User can log in with any credentials and see the authenticated dashboard
+- [x] User can log out and return to the login page
+- [x] Dashboard shows accurate previews of both boards with card counts and recent titles
+- [x] Prompt Crafting Board displays 3 columns (Request, Distill, Done) with seeded cards
+- [x] Implementation Board displays 5 columns (Todo, In Progress, Review, QA, Done) with seeded cards
+- [x] Cards show: title, workflow type badge, repo URL (if linked), sub-step progress indicator
+- [x] Cards can be dragged between columns on both boards
+- [x] Clicking a card navigates to its detail page
+- [x] User can create a new prompt via the 3-step flow (type, repo, start)
+- [x] New prompts appear in the Request column on the Crafting Board
+- [x] Prompt detail page shows editable title, workflow badge, repo URL, step progress
+- [x] Chat interface supports free text, single-select, multi-select, and file upload inputs
+- [x] All structured inputs include an "Other" freeform text option
+- [x] Completing all steps moves the prompt to Done on the Crafting Board
+- [x] At least one seeded prompt has a partially completed chat conversation
+- [x] Global header shows: "Destila" link, nav links, Create button, user avatar with logout
+- [x] All navigation paths work (header links, board preview clicks, card clicks, back navigation)
 
 ### Non-Functional Requirements
 
-- [ ] Clean, minimal aesthetic matching Linear/Notion style
-- [ ] No real database connections or AI API calls
-- [ ] Data resets on app restart (in-memory only)
-- [ ] App runs with `mix phx.server` after standard setup
+- [x] Clean, minimal aesthetic matching Linear/Notion style
+- [x] No real database connections or AI API calls
+- [x] Data resets on app restart (in-memory only)
+- [x] App runs with `mix phx.server` after standard setup
 
 ## Dependencies & Prerequisites
 
