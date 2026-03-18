@@ -1,0 +1,3 @@
+[tools]
+erlang = { version = "28.4" }
+elixir = { version = "1.19.0-otp-28" }
