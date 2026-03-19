@@ -1,0 +1,4 @@
+#!/bin/bash
+
+eval "$(mise activate bash)" 2>/dev/null
+mix format --check-formatted
