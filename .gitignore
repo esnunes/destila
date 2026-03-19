@@ -1,3 +1,6 @@
+# mise local
+/mise.local.toml
+
 # claude worktrees
 /.claude/worktrees/
 
