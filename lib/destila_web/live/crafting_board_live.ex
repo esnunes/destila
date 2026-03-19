@@ -46,7 +46,7 @@ defmodule DestilaWeb.CraftingBoardLive do
       <div class="p-6 lg:p-8">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold tracking-tight">Prompt Crafting</h1>
-          <.link navigate={~p"/prompts/new"} class="btn btn-primary btn-sm">
+          <.link navigate={~p"/prompts/new?from=/crafting"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus-micro" class="size-4" /> New Prompt
           </.link>
         </div>

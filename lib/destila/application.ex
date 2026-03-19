@@ -12,6 +12,7 @@ defmodule Destila.Application do
       {DNSCluster, query: Application.get_env(:destila, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Destila.PubSub},
       Destila.Store,
+      {Task.Supervisor, name: Destila.TaskSupervisor},
       DestilaWeb.Endpoint
     ]
 

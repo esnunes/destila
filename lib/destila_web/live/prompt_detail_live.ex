@@ -8,6 +8,10 @@ defmodule DestilaWeb.PromptDetailLive do
     prompt = Destila.Store.get_prompt(id)
 
     if prompt do
+      if connected?(socket) do
+        Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
+      end
+
       messages = Destila.Store.list_messages(id)
 
       # If no messages yet, start the workflow by adding the first system message
@@ -100,6 +104,19 @@ defmodule DestilaWeb.PromptDetailLive do
      |> assign(:prompt, prompt)
      |> put_flash(:info, "Moved to Implementation Board")}
   end
+
+  def handle_info({:prompt_updated, updated_prompt}, socket) do
+    if updated_prompt.id == socket.assigns.prompt.id do
+      {:noreply,
+       socket
+       |> assign(:prompt, updated_prompt)
+       |> assign(:page_title, updated_prompt.title)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp handle_user_response(socket, content, selected) do
     prompt = socket.assigns.prompt
@@ -212,12 +229,22 @@ defmodule DestilaWeb.PromptDetailLive do
               <div class="flex-1 min-w-0">
                 <div :if={!@editing_title} class="flex items-center gap-2">
                   <h1
-                    class="text-lg font-bold truncate cursor-pointer hover:text-primary transition-colors"
-                    phx-click="edit_title"
+                    class={[
+                      "text-lg font-bold truncate transition-colors",
+                      if(@prompt[:title_generating],
+                        do: "animate-pulse text-base-content/50",
+                        else: "cursor-pointer hover:text-primary"
+                      )
+                    ]}
+                    phx-click={if(!@prompt[:title_generating], do: "edit_title")}
                   >
                     {@prompt.title}
                   </h1>
-                  <button phx-click="edit_title" class="cursor-pointer">
+                  <button
+                    :if={!@prompt[:title_generating]}
+                    phx-click="edit_title"
+                    class="cursor-pointer"
+                  >
                     <.icon name="hero-pencil-micro" class="size-3.5 text-base-content/30" />
                   </button>
                 </div>

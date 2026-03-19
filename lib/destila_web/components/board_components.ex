@@ -47,7 +47,12 @@ defmodule DestilaWeb.BoardComponents do
       class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-all cursor-pointer"
     >
       <div class="card-body p-4 gap-2">
-        <h4 class="text-sm font-medium leading-tight">{@card.title}</h4>
+        <h4 class={[
+          "text-sm font-medium leading-tight",
+          @card[:title_generating] && "animate-pulse text-base-content/50"
+        ]}>
+          {@card.title}
+        </h4>
 
         <div class="flex items-center gap-2 flex-wrap">
           <.workflow_badge type={@card.workflow_type} />
