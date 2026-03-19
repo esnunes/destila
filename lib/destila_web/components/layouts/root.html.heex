@@ -27,6 +27,27 @@
         window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
         
         window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+
+        window.addEventListener("phx:cycle-theme", () => {
+          const current = localStorage.getItem("phx:theme") || "system";
+          const next = current === "system" ? "light" : current === "light" ? "dark" : "system";
+          setTheme(next);
+        });
+
+        // Sidebar toggle — restore from localStorage
+        if (localStorage.getItem("phx:sidebar") === "expanded") {
+          document.documentElement.setAttribute("data-sidebar", "expanded");
+        }
+        window.addEventListener("phx:toggle-sidebar", () => {
+          const el = document.documentElement;
+          if (el.getAttribute("data-sidebar") === "expanded") {
+            localStorage.removeItem("phx:sidebar");
+            el.removeAttribute("data-sidebar");
+          } else {
+            localStorage.setItem("phx:sidebar", "expanded");
+            el.setAttribute("data-sidebar", "expanded");
+          }
+        });
       })();
     </script>
   </head>

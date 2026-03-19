@@ -101,6 +101,15 @@
 /* Use the data attribute for dark mode  */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
+/* Sidebar expanded state — driven by data-sidebar on <html> */
+@custom-variant sidebar-open ([data-sidebar=expanded] &);
+
+/* Theme indicator — show only active theme's icon/label */
+.theme-indicator > :is(.theme-system, .theme-light, .theme-dark) { display: none; }
+:root:not([data-theme]) .theme-indicator > .theme-system,
+[data-theme="light"] .theme-indicator > .theme-light,
+[data-theme="dark"] .theme-indicator > .theme-dark { display: inline-block; }
+
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 

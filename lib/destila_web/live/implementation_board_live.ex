@@ -42,7 +42,7 @@ defmodule DestilaWeb.ImplementationBoardLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
       <div class="p-6 lg:p-8">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold tracking-tight">Implementation</h1>

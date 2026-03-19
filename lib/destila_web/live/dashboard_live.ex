@@ -64,36 +64,31 @@ defmodule DestilaWeb.DashboardLive do
       |> assign(:implementation_summary, implementation_summary)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
       <div class="p-6 lg:p-8 max-w-6xl mx-auto">
-        <div class="mb-8">
-          <h1 class="text-2xl font-bold tracking-tight">Welcome back, {@current_user.name}</h1>
-          <p class="text-base-content/50 mt-1">Here's an overview of your prompt boards.</p>
-        </div>
+        <h1 class="text-2xl font-bold tracking-tight mb-8">
+          Welcome back, {@current_user.name}
+        </h1>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <%!-- Prompt Crafting Board Preview --%>
           <.link
             navigate={~p"/crafting"}
-            class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-all"
+            class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow"
           >
             <div class="card-body">
-              <div class="flex items-center justify-between mb-4">
-                <h2 class="card-title text-lg">Prompt Crafting</h2>
-                <.icon name="hero-beaker" class="size-5 text-base-content/30" />
+              <h2 class="card-title text-lg mb-1">Prompt Crafting</h2>
+
+              <div class="flex gap-3 text-xs text-base-content/50 mb-3">
+                <span :for={{col, cards} <- @crafting_summary}>
+                  {length(cards)} {column_label(col)}
+                </span>
               </div>
 
-              <div class="flex gap-4 mb-4">
-                <div :for={{col, cards} <- @crafting_summary} class="flex items-center gap-1.5">
-                  <span class="text-xs text-base-content/50">{column_label(col)}</span>
-                  <span class="badge badge-sm badge-ghost">{length(cards)}</span>
-                </div>
-              </div>
-
-              <div class="space-y-2">
+              <div class="divide-y divide-base-200">
                 <div
                   :for={prompt <- @crafting_prompts |> Enum.take(3)}
-                  class="flex items-center justify-between py-1.5 px-2 bg-base-200/50 rounded-lg"
+                  class="flex items-center justify-between py-2"
                 >
                   <span class="text-sm truncate mr-2">{prompt.title}</span>
                   <.workflow_badge type={prompt.workflow_type} />
@@ -105,25 +100,21 @@ defmodule DestilaWeb.DashboardLive do
           <%!-- Implementation Board Preview --%>
           <.link
             navigate={~p"/implementation"}
-            class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-all"
+            class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow"
           >
             <div class="card-body">
-              <div class="flex items-center justify-between mb-4">
-                <h2 class="card-title text-lg">Implementation</h2>
-                <.icon name="hero-rocket-launch" class="size-5 text-base-content/30" />
+              <h2 class="card-title text-lg mb-1">Implementation</h2>
+
+              <div class="flex gap-3 text-xs text-base-content/50 mb-3 flex-wrap">
+                <span :for={{col, cards} <- @implementation_summary}>
+                  {length(cards)} {column_label(col)}
+                </span>
               </div>
 
-              <div class="flex gap-4 mb-4 flex-wrap">
-                <div :for={{col, cards} <- @implementation_summary} class="flex items-center gap-1.5">
-                  <span class="text-xs text-base-content/50">{column_label(col)}</span>
-                  <span class="badge badge-sm badge-ghost">{length(cards)}</span>
-                </div>
-              </div>
-
-              <div class="space-y-2">
+              <div class="divide-y divide-base-200">
                 <div
                   :for={prompt <- @implementation_prompts |> Enum.take(3)}
-                  class="flex items-center justify-between py-1.5 px-2 bg-base-200/50 rounded-lg"
+                  class="flex items-center justify-between py-2"
                 >
                   <span class="text-sm truncate mr-2">{prompt.title}</span>
                   <.workflow_badge type={prompt.workflow_type} />

@@ -5,73 +5,142 @@ defmodule DestilaWeb.Layouts do
 
   attr :flash, :map, required: true
   attr :current_user, :map, default: nil
+  attr :page_title, :string, default: nil
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <div class="min-h-screen flex flex-col bg-base-100">
-      <header :if={@current_user} class="navbar bg-base-100 border-b border-base-300 px-6 h-16">
-        <div class="flex-1 flex items-center gap-8">
-          <.link navigate={~p"/"} class="text-lg font-bold tracking-tight hover:opacity-80">
-            Destila
-          </.link>
+    <div class="min-h-screen bg-base-100">
+      <.sidebar :if={@current_user} current_user={@current_user} page_title={@page_title} />
 
-          <nav class="flex items-center gap-1">
-            <.link
-              navigate={~p"/"}
-              class="btn btn-ghost btn-sm text-sm font-medium"
-            >
-              Dashboard
-            </.link>
-            <.link
-              navigate={~p"/crafting"}
-              class="btn btn-ghost btn-sm text-sm font-medium"
-            >
-              Prompt Crafting
-            </.link>
-            <.link
-              navigate={~p"/implementation"}
-              class="btn btn-ghost btn-sm text-sm font-medium"
-            >
-              Implementation
-            </.link>
-          </nav>
-        </div>
-
-        <div class="flex-none flex items-center gap-3">
-          <.link navigate={~p"/prompts/new"} class="btn btn-primary btn-sm">
-            <.icon name="hero-plus-micro" class="size-4" /> Create
-          </.link>
-
-          <.theme_toggle />
-
-          <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
-              <div class="bg-neutral text-neutral-content w-8 rounded-full">
-                <span class="text-xs">
-                  {String.first(@current_user.name)}
-                </span>
-              </div>
-            </div>
-            <ul
-              tabindex="0"
-              class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow-lg border border-base-300 mt-2"
-            >
-              <li class="menu-title text-xs">{@current_user.email}</li>
-              <li>
-                <.link href={~p"/logout"} class="text-sm">Sign out</.link>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </header>
-
-      <main class="flex-1">
+      <main class={[
+        "min-h-screen transition-[margin-left] duration-200",
+        @current_user && "ml-16 sidebar-open:ml-60"
+      ]}>
         {render_slot(@inner_block)}
       </main>
 
       <.flash_group flash={@flash} />
     </div>
+    """
+  end
+
+  attr :current_user, :map, required: true
+  attr :page_title, :string, default: nil
+
+  defp sidebar(assigns) do
+    ~H"""
+    <aside class="fixed left-0 top-0 h-screen w-16 sidebar-open:w-60 bg-base-200 border-r border-base-300 flex flex-col z-30 transition-[width] duration-200 ease-in-out overflow-hidden">
+      <%!-- Logo --%>
+      <div class="h-14 flex items-center px-2 shrink-0">
+        <.link navigate={~p"/"} class="flex items-center">
+          <div class="w-12 h-10 flex items-center justify-center shrink-0">
+            <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <span class="text-primary font-bold text-sm">D</span>
+            </div>
+          </div>
+          <span class="text-base font-bold tracking-tight whitespace-nowrap opacity-0 sidebar-open:opacity-100 transition-opacity duration-200">
+            Destila
+          </span>
+        </.link>
+      </div>
+
+      <%!-- Navigation --%>
+      <nav class="flex-1 flex flex-col gap-0.5 px-2 mt-1">
+        <.sidebar_item
+          navigate={~p"/crafting"}
+          icon="hero-beaker"
+          label="Prompt Crafting"
+          active={@page_title == "Prompt Crafting"}
+        />
+        <.sidebar_item
+          navigate={~p"/implementation"}
+          icon="hero-rocket-launch"
+          label="Implementation"
+          active={@page_title == "Implementation"}
+        />
+
+        <div class="my-2 mx-1 border-t border-base-300/50" />
+
+        <.sidebar_item navigate={~p"/prompts/new"} icon="hero-plus-circle" label="Create Prompt" />
+      </nav>
+
+      <%!-- Bottom --%>
+      <div class="shrink-0 border-t border-base-300/50 mx-2 pt-2 pb-3 space-y-1">
+        <%!-- User --%>
+        <div class="flex items-center rounded-lg">
+          <div class="w-12 h-10 flex items-center justify-center shrink-0">
+            <div class="w-8 h-8 rounded-full bg-neutral flex items-center justify-center text-neutral-content">
+              <span class="text-xs font-medium">{String.first(@current_user.name)}</span>
+            </div>
+          </div>
+          <div class="min-w-0 whitespace-nowrap opacity-0 sidebar-open:opacity-100 transition-opacity duration-200">
+            <p class="text-sm font-medium truncate">{@current_user.name}</p>
+            <.link
+              href={~p"/logout"}
+              class="text-xs text-base-content/50 hover:text-error transition-colors"
+            >
+              Sign out
+            </.link>
+          </div>
+        </div>
+
+        <%!-- Theme toggle --%>
+        <button
+          phx-click={JS.dispatch("phx:cycle-theme")}
+          class="flex items-center h-10 w-full rounded-lg text-base-content/60 hover:text-base-content hover:bg-base-300/50 cursor-pointer transition-colors"
+        >
+          <div class="w-12 flex items-center justify-center shrink-0 theme-indicator">
+            <.icon name="hero-computer-desktop-micro" class="theme-system size-5" />
+            <.icon name="hero-sun-micro" class="theme-light size-5" />
+            <.icon name="hero-moon-micro" class="theme-dark size-5" />
+          </div>
+          <span class="text-sm whitespace-nowrap opacity-0 sidebar-open:opacity-100 transition-opacity duration-200 theme-indicator">
+            <span class="theme-system">System</span>
+            <span class="theme-light">Light</span>
+            <span class="theme-dark">Dark</span>
+          </span>
+        </button>
+
+        <%!-- Sidebar toggle --%>
+        <button
+          phx-click={JS.dispatch("phx:toggle-sidebar")}
+          class="flex items-center justify-center w-full h-9 rounded-lg text-base-content/40 hover:text-base-content hover:bg-base-300/50 cursor-pointer transition-colors"
+        >
+          <.icon
+            name="hero-chevron-right-micro"
+            class="size-4 sidebar-open:rotate-180 transition-transform duration-200"
+          />
+        </button>
+      </div>
+    </aside>
+    """
+  end
+
+  attr :navigate, :string, required: true
+  attr :icon, :string, required: true
+  attr :label, :string, required: true
+  attr :active, :boolean, default: false
+
+  defp sidebar_item(assigns) do
+    ~H"""
+    <.link
+      navigate={@navigate}
+      class={[
+        "flex items-center h-10 rounded-lg transition-colors",
+        if(@active,
+          do: "bg-base-100 text-base-content font-medium shadow-sm",
+          else: "text-base-content/60 hover:text-base-content hover:bg-base-300/50"
+        )
+      ]}
+    >
+      <div class="w-12 flex items-center justify-center shrink-0">
+        <.icon name={@icon} class="size-5" />
+      </div>
+      <span class="text-sm whitespace-nowrap opacity-0 sidebar-open:opacity-100 transition-opacity duration-200">
+        {@label}
+      </span>
+    </.link>
     """
   end
 
@@ -107,38 +176,6 @@ defmodule DestilaWeb.Layouts do
         {gettext("Attempting to reconnect")}
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
-    </div>
-    """
-  end
-
-  def theme_toggle(assigns) do
-    ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
     </div>
     """
   end

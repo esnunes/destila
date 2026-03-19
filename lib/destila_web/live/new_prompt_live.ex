@@ -142,8 +142,8 @@ defmodule DestilaWeb.NewPromptLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
-      <div class="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+    <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
+      <div class="flex items-center justify-center min-h-screen">
         <div class="w-full max-w-lg px-6">
           <%!-- Step indicator --%>
           <div class="flex items-center justify-center gap-2 mb-8">
