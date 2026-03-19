@@ -48,7 +48,15 @@ defmodule DestilaWeb.DashboardLive do
 
   def render(assigns) do
     crafting_summary = board_summary(assigns.crafting_prompts, [:request, :distill, :done])
-    implementation_summary = board_summary(assigns.implementation_prompts, [:todo, :in_progress, :review, :qa, :impl_done])
+
+    implementation_summary =
+      board_summary(assigns.implementation_prompts, [
+        :todo,
+        :in_progress,
+        :review,
+        :qa,
+        :impl_done
+      ])
 
     assigns =
       assigns

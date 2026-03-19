@@ -174,7 +174,8 @@ defmodule Destila.Seeds do
       # Step 2: System asks single-select, user answers
       Store.add_message(partial_chat_prompt.id, %{
         role: :system,
-        content: "What type of feature is this? This helps us structure the prompt appropriately.",
+        content:
+          "What type of feature is this? This helps us structure the prompt appropriately.",
         input_type: :single_select,
         options: [
           %{label: "UI Enhancement", description: "Visual or interaction improvements"},
@@ -198,8 +199,7 @@ defmodule Destila.Seeds do
       # Step 3: System asks multi-select (this is the current step — user hasn't answered yet)
       Store.add_message(partial_chat_prompt.id, %{
         role: :system,
-        content:
-          "Which areas of the codebase will be affected? Select all that apply.",
+        content: "Which areas of the codebase will be affected? Select all that apply.",
         input_type: :multi_select,
         options: [
           %{label: "Frontend", description: "UI components, styles, client-side logic"},

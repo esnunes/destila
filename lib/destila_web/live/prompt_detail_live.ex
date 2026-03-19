@@ -277,7 +277,10 @@ defmodule DestilaWeb.PromptDetailLive do
         </div>
 
         <%!-- Completed state --%>
-        <div :if={@current_step.completed} class="border-t border-base-300 bg-base-200/50 p-4 text-center">
+        <div
+          :if={@current_step.completed}
+          class="border-t border-base-300 bg-base-200/50 p-4 text-center"
+        >
           <p class="text-sm text-base-content/50">
             Workflow complete
             <span :if={@prompt.board == :crafting && @prompt.column == :done}>

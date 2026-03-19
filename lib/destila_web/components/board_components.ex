@@ -26,7 +26,10 @@ defmodule DestilaWeb.BoardComponents do
         class="flex flex-col gap-2 min-h-[200px] p-2 bg-base-200/50 rounded-xl"
       >
         <.board_card :for={card <- @cards} card={card} />
-        <div :if={@cards == []} class="flex items-center justify-center h-24 text-base-content/30 text-sm">
+        <div
+          :if={@cards == []}
+          class="flex items-center justify-center h-24 text-base-content/30 text-sm"
+        >
           No prompts yet
         </div>
       </div>

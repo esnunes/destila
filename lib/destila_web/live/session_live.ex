@@ -20,7 +20,11 @@ defmodule DestilaWeb.SessionLive do
           </div>
 
           <form action={~p"/login"} method="post">
-            <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token_for("/login")} />
+            <input
+              type="hidden"
+              name="_csrf_token"
+              value={Plug.CSRFProtection.get_csrf_token_for("/login")}
+            />
 
             <fieldset class="fieldset">
               <label class="fieldset-label text-xs font-medium" for="email">Email</label>

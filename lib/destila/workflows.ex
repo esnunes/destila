@@ -15,7 +15,8 @@ defmodule Destila.Workflows do
       },
       %{
         step: 2,
-        content: "What type of feature is this? This helps us structure the prompt appropriately.",
+        content:
+          "What type of feature is this? This helps us structure the prompt appropriately.",
         input_type: :single_select,
         options: [
           %{label: "UI Enhancement", description: "Visual or interaction improvements"},
@@ -26,8 +27,7 @@ defmodule Destila.Workflows do
       },
       %{
         step: 3,
-        content:
-          "Which areas of the codebase will be affected? Select all that apply.",
+        content: "Which areas of the codebase will be affected? Select all that apply.",
         input_type: :multi_select,
         options: [
           %{label: "Frontend", description: "UI components, styles, client-side logic"},
@@ -57,12 +57,17 @@ defmodule Destila.Workflows do
       },
       %{
         step: 2,
-        content:
-          "What's the primary tech stack for this project?",
+        content: "What's the primary tech stack for this project?",
         input_type: :single_select,
         options: [
-          %{label: "Web App", description: "Full-stack web application with frontend and backend"},
-          %{label: "Mobile App", description: "iOS, Android, or cross-platform mobile application"},
+          %{
+            label: "Web App",
+            description: "Full-stack web application with frontend and backend"
+          },
+          %{
+            label: "Mobile App",
+            description: "iOS, Android, or cross-platform mobile application"
+          },
           %{label: "CLI Tool", description: "Command-line interface tool or utility"},
           %{label: "Library", description: "Reusable package or library for other developers"}
         ]

@@ -168,8 +168,19 @@ defmodule DestilaWeb.ChatComponents do
         phx-click="mock_upload"
         class="border-2 border-dashed border-base-300 rounded-xl p-8 w-full hover:border-primary hover:bg-base-200/50 transition-all cursor-pointer flex flex-col items-center gap-2"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="size-8 text-base-content/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="size-8 text-base-content/30"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+          />
         </svg>
         <span class="text-sm text-base-content/50">Click to upload (mocked)</span>
       </button>
