@@ -12,7 +12,7 @@ defmodule DestilaWeb.BoardComponents do
     <div class="flex flex-col min-w-[280px] max-w-[320px] w-full">
       <div class="flex items-center justify-between mb-3 px-1">
         <div class="flex items-center gap-2">
-          <h3 class="text-sm font-semibold text-base-content/70 uppercase tracking-wide">
+          <h3 class="text-xs font-medium text-base-content/50 uppercase">
             {column_label(@column)}
           </h3>
           <span class="badge badge-sm badge-ghost">{length(@cards)}</span>
@@ -44,7 +44,7 @@ defmodule DestilaWeb.BoardComponents do
     <.link
       navigate={"/prompts/#{@card.id}"}
       data-id={@card.id}
-      class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-base-content/20 transition-all cursor-pointer"
+      class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
     >
       <div class="card-body p-4 gap-2">
         <h4 class={[
@@ -54,10 +54,10 @@ defmodule DestilaWeb.BoardComponents do
           {@card.title}
         </h4>
 
-        <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-center justify-between gap-2">
           <.workflow_badge type={@card.workflow_type} />
-          <span :if={@card.repo_url} class="text-xs text-base-content/40 truncate max-w-[140px]">
-            {repo_short_name(@card.repo_url)}
+          <span class="text-xs text-base-content/40">
+            {@card.steps_completed}/{@card.steps_total}
           </span>
         </div>
 
@@ -90,17 +90,14 @@ defmodule DestilaWeb.BoardComponents do
     assigns = assign(assigns, :percentage, floor(assigns.completed / max(assigns.total, 1) * 100))
 
     ~H"""
-    <div class="flex items-center gap-2">
-      <div class="flex-1 h-1.5 bg-base-300 rounded-full overflow-hidden">
-        <div
-          class={[
-            "h-full rounded-full transition-all",
-            if(@percentage == 100, do: "bg-success", else: "bg-primary")
-          ]}
-          style={"width: #{@percentage}%"}
-        />
-      </div>
-      <span class="text-xs text-base-content/40">{@completed}/{@total}</span>
+    <div class="h-1 bg-base-300 rounded-full overflow-hidden">
+      <div
+        class={[
+          "h-full rounded-full transition-all",
+          if(@percentage == 100, do: "bg-success", else: "bg-primary")
+        ]}
+        style={"width: #{@percentage}%"}
+      />
     </div>
     """
   end
@@ -121,12 +118,4 @@ defmodule DestilaWeb.BoardComponents do
 
   defp workflow_badge_class(:feature_request), do: "badge-info"
   defp workflow_badge_class(:project), do: "badge-secondary"
-
-  defp repo_short_name(nil), do: ""
-
-  defp repo_short_name(url) do
-    url
-    |> String.replace(~r{^https?://github\.com/}, "")
-    |> String.trim_trailing("/")
-  end
 end

@@ -216,8 +216,8 @@ defmodule DestilaWeb.PromptDetailLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
-      <div class="flex flex-col h-[calc(100vh-4rem)]">
+    <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
+      <div class="flex flex-col h-screen">
         <%!-- Header --%>
         <div class="border-b border-base-300 bg-base-100 px-6 py-4">
           <div class="flex items-center justify-between">
@@ -271,11 +271,16 @@ defmodule DestilaWeb.PromptDetailLive do
             </div>
 
             <div class="flex items-center gap-3 ml-4">
-              <div class="w-32">
-                <.progress_indicator
-                  completed={@prompt.steps_completed}
-                  total={@prompt.steps_total}
-                />
+              <div class="flex items-center gap-2">
+                <div class="w-24">
+                  <.progress_indicator
+                    completed={@prompt.steps_completed}
+                    total={@prompt.steps_total}
+                  />
+                </div>
+                <span class="text-xs text-base-content/40">
+                  {@prompt.steps_completed}/{@prompt.steps_total}
+                </span>
               </div>
               <button
                 :if={@prompt.column == :done && @prompt.board == :crafting}

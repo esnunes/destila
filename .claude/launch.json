@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "phoenix",
+      "runtimeExecutable": "mise",
+      "runtimeArgs": ["x", "--", "mix", "phx.server"],
+      "port": 4000
+    }
+  ]
+}
