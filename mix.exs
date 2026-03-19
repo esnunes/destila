@@ -71,7 +71,8 @@ defmodule Destila.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup", "assets.build"],
+      setup: ["deps.get", "assets.setup", "assets.build", "git.hooks"],
+      "git.hooks": ["cmd git config core.hooksPath .githooks"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind destila", "esbuild destila"],
       "assets.deploy": [
