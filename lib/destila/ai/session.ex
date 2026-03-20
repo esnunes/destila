@@ -60,7 +60,7 @@ defmodule Destila.AI.Session do
   - `:is_error` — whether an error occurred
   - `:mcp_tool_uses` — list of MCP tool use blocks (e.g., ask_user_question)
 
-  Resets the inactivity timer on each call.
+  Resets the inactivity timer after each call completes.
   """
   def query(session, prompt, opts \\ []) do
     GenServer.call(session, {:query, prompt, opts}, :infinity)
@@ -108,12 +108,12 @@ defmodule Destila.AI.Session do
 
   @impl true
   def handle_call({:query, prompt, opts}, _from, state) do
-    state = reset_timer(state)
-
     result =
       state.claude_session
       |> ClaudeCode.stream(prompt, opts)
       |> collect_with_mcp()
+
+    state = reset_timer(state)
 
     reply =
       if result.is_error do
