@@ -101,6 +101,16 @@ custom classes must fully style the input
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
 
    - Instead of sleeping to synchronize before the next call, **always** use `_ = :sys.get_state/1` to ensure the process has handled prior messages
+
+### BDD feature / test linking
+
+- Gherkin feature files live in `features/`. Each LiveView test module links to its feature file via `@moduledoc` and each test links to a scenario via `@tag feature: "...", scenario: "..."`
+- Use `mix test --only feature:create_prompt_wizard` to run all tests for a feature, or `mix test --only "scenario:Scenario name here"` to run tests for a single scenario
+- When **modifying, adding, or removing** code that affects behavior described in a `.feature` file:
+  - Update the corresponding Gherkin scenarios to match the new behavior
+  - Update or add `@tag` annotations on tests so every scenario has at least one linked test
+  - Remove `@tag` references to scenarios that no longer exist
+- When **adding new tests**, always include `@tag feature: "...", scenario: "..."` linking them to the relevant Gherkin scenario
 <!-- phoenix:elixir-end -->
 
 <!-- phoenix:phoenix-start -->
