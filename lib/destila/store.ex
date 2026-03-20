@@ -42,6 +42,7 @@ defmodule Destila.Store do
           column: :request,
           steps_completed: 0,
           steps_total: 4,
+          phase_status: nil,
           position: System.unique_integer([:positive]),
           created_at: now,
           updated_at: now
@@ -93,6 +94,7 @@ defmodule Destila.Store do
           options: nil,
           selected: nil,
           step: 1,
+          message_type: nil,
           created_at: now
         },
         attrs

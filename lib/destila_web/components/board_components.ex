@@ -115,7 +115,9 @@ defmodule DestilaWeb.BoardComponents do
 
   defp workflow_label(:feature_request), do: "Feature Request"
   defp workflow_label(:project), do: "Project"
+  defp workflow_label(:chore_task), do: "Chore/Task"
 
   defp workflow_badge_class(:feature_request), do: "badge-info"
   defp workflow_badge_class(:project), do: "badge-secondary"
+  defp workflow_badge_class(:chore_task), do: "badge-warning"
 end

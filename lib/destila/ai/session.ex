@@ -8,6 +8,14 @@ defmodule Destila.AI.Session do
   use GenServer
 
   @default_timeout_ms :timer.minutes(5)
+  @default_allowed_tools [
+    "Read",
+    "Grep",
+    "Glob",
+    "Bash(git log:*)",
+    "Bash(git show:*)",
+    "mcp__destila__ask_user_question"
+  ]
 
   # Client API
 
@@ -47,6 +55,11 @@ defmodule Destila.AI.Session do
   @doc """
   Sends a prompt to the session and returns the result.
 
+  Returns `{:ok, result}` or `{:error, result}` where result includes:
+  - `:result` — final text from the AI
+  - `:is_error` — whether an error occurred
+  - `:mcp_tool_uses` — list of MCP tool use blocks (e.g., ask_user_question)
+
   Resets the inactivity timer on each call.
   """
   def query(session, prompt, opts \\ []) do
@@ -72,6 +85,10 @@ defmodule Destila.AI.Session do
   @impl true
   def init(opts) do
     {timeout_ms, claude_opts} = Keyword.pop(opts, :timeout_ms, @default_timeout_ms)
+    claude_opts = Keyword.put_new(claude_opts, :allowed_tools, @default_allowed_tools)
+
+    claude_opts =
+      Keyword.put_new(claude_opts, :mcp_servers, %{"destila" => Destila.AI.Tools})
 
     case ClaudeCode.start_link(claude_opts) do
       {:ok, claude_session} ->
@@ -96,7 +113,7 @@ defmodule Destila.AI.Session do
     result =
       state.claude_session
       |> ClaudeCode.stream(prompt, opts)
-      |> ClaudeCode.Stream.collect()
+      |> collect_with_mcp()
 
     reply =
       if result.is_error do
@@ -122,6 +139,65 @@ defmodule Destila.AI.Session do
   def terminate(_reason, state) do
     ClaudeCode.stop(state.claude_session)
     :ok
+  end
+
+  # Collects stream results like ClaudeCode.Stream.collect/1 but also captures
+  # MCPToolUseBlock entries which collect/1 ignores.
+  defp collect_with_mcp(stream) do
+    initial = %{
+      text: [],
+      mcp_tool_uses: [],
+      result: nil,
+      is_error: false,
+      session_id: nil
+    }
+
+    acc =
+      Enum.reduce(stream, initial, fn
+        %ClaudeCode.Message.AssistantMessage{message: message}, acc ->
+          {texts, mcp_tools} = extract_content(message.content)
+
+          %{
+            acc
+            | text: texts ++ acc.text,
+              mcp_tool_uses: mcp_tools ++ acc.mcp_tool_uses
+          }
+
+        %ClaudeCode.Message.ResultMessage{} = msg, acc ->
+          %{
+            acc
+            | result: msg.result,
+              is_error: msg.is_error,
+              session_id: msg.session_id
+          }
+
+        _, acc ->
+          acc
+      end)
+
+    %{
+      result: acc.result,
+      text: acc.text |> Enum.reverse() |> Enum.join(),
+      is_error: acc.is_error,
+      session_id: acc.session_id,
+      mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses)
+    }
+  end
+
+  defp extract_content(content) do
+    Enum.reduce(content, {[], []}, fn
+      %ClaudeCode.Content.TextBlock{text: text}, {texts, tools} ->
+        {[text | texts], tools}
+
+      %ClaudeCode.Content.MCPToolUseBlock{} = tool, {texts, tools} ->
+        {texts, [tool | tools]}
+
+      %ClaudeCode.Content.ToolUseBlock{name: "mcp__" <> _} = tool, {texts, tools} ->
+        {texts, [tool | tools]}
+
+      _, acc ->
+        acc
+    end)
   end
 
   defp schedule_timeout(timeout_ms) do

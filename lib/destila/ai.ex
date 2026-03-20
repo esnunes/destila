@@ -62,4 +62,5 @@ defmodule Destila.AI do
 
   defp workflow_type_label(:feature_request), do: "feature request"
   defp workflow_type_label(:project), do: "project"
+  defp workflow_type_label(:chore_task), do: "chore/task"
 end

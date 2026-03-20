@@ -27,11 +27,20 @@ defmodule DestilaWeb.NewPromptLive do
 
   def handle_event("set_repo", %{"repo_url" => repo_url}, socket) do
     url = if repo_url && repo_url != "", do: repo_url, else: nil
-    {:noreply, assign(socket, step: 3, repo_url: url)}
+
+    if url == nil && socket.assigns.workflow_type != :project do
+      {:noreply, put_flash(socket, :error, "Repository URL is required")}
+    else
+      {:noreply, assign(socket, step: 3, repo_url: url)}
+    end
+  end
+
+  def handle_event("skip_repo", _params, %{assigns: %{workflow_type: :project}} = socket) do
+    {:noreply, assign(socket, step: 3, repo_url: nil)}
   end
 
   def handle_event("skip_repo", _params, socket) do
-    {:noreply, assign(socket, step: 3, repo_url: nil)}
+    {:noreply, put_flash(socket, :error, "Repository URL is required")}
   end
 
   def handle_event("back", _params, socket) do
@@ -81,7 +90,8 @@ defmodule DestilaWeb.NewPromptLive do
         board: :crafting,
         column: :request,
         steps_completed: 1,
-        steps_total: Destila.Workflows.total_steps(workflow_type)
+        steps_total: Destila.Workflows.total_steps(workflow_type),
+        phase_status: if(workflow_type == :chore_task, do: :generating, else: nil)
       })
 
     # Add system message for step 1 (the question)
@@ -101,21 +111,24 @@ defmodule DestilaWeb.NewPromptLive do
       step: 1
     })
 
-    # Add system message for step 2 (so the chat picks up from here)
-    second_step = Enum.at(steps, 1)
+    # For static workflows, add the second system message so the chat picks up from there
+    # For AI-driven workflows (chore_task), skip — the AI will generate the next response
+    if workflow_type != :chore_task do
+      second_step = Enum.at(steps, 1)
 
-    Destila.Store.add_message(prompt.id, %{
-      role: :system,
-      content: second_step.content,
-      input_type: second_step.input_type,
-      options: second_step.options,
-      step: second_step.step
-    })
+      Destila.Store.add_message(prompt.id, %{
+        role: :system,
+        content: second_step.content,
+        input_type: second_step.input_type,
+        options: second_step.options,
+        step: second_step.step
+      })
+    end
 
     # Start an AI session and store its PID on the prompt
     session_opts =
       case action do
-        :continue -> []
+        :continue -> [timeout_ms: :timer.minutes(15)]
         :close -> [timeout_ms: :timer.seconds(30)]
       end
 
@@ -137,6 +150,11 @@ defmodule DestilaWeb.NewPromptLive do
           })
       end
 
+      # For AI-driven workflows on :continue, trigger the first AI response
+      if workflow_type == :chore_task && action == :continue do
+        trigger_ai_response(prompt_id, session, 1)
+      end
+
       if action == :close do
         Destila.AI.Session.stop(session)
         Destila.Store.update_prompt(prompt_id, %{ai_session: nil})
@@ -146,8 +164,113 @@ defmodule DestilaWeb.NewPromptLive do
     prompt
   end
 
+  defp trigger_ai_response(prompt_id, session, phase) do
+    prompt = Destila.Store.get_prompt(prompt_id)
+    messages = Destila.Store.list_messages(prompt_id)
+
+    system_prompt = Destila.Workflows.ChoreTaskPhases.system_prompt(phase, prompt)
+    conversation_context = Destila.Workflows.ChoreTaskPhases.build_conversation_context(messages)
+
+    query = system_prompt <> "\n\n" <> conversation_context
+
+    Destila.Store.update_prompt(prompt_id, %{phase_status: :generating})
+
+    case Destila.AI.Session.query(session, query) do
+      {:ok, result} ->
+        response_text =
+          if result.text != nil and result.text != "" do
+            result.text
+          else
+            result.result || ""
+          end
+
+        {content, message_type, new_phase_status} = parse_ai_response(response_text)
+        questions = extract_questions_from_tool_uses(result[:mcp_tool_uses])
+
+        content =
+          if questions != [] and (content == "" or content == "Waiting for your answer.") do
+            questions |> Enum.map(& &1.question) |> Enum.join("\n\n")
+          else
+            content
+          end
+
+        {input_type, options} =
+          case questions do
+            [] -> {:text, nil}
+            [q] -> {q.input_type, q.options}
+            _ -> {:questions, nil}
+          end
+
+        Destila.Store.add_message(prompt_id, %{
+          role: :system,
+          content: content,
+          input_type: input_type,
+          options: options,
+          questions: questions,
+          step: phase,
+          message_type: message_type
+        })
+
+        Destila.Store.update_prompt(prompt_id, %{phase_status: new_phase_status})
+
+      {:error, _} ->
+        Destila.Store.add_message(prompt_id, %{
+          role: :system,
+          content: "Something went wrong. Please try sending your message again.",
+          input_type: :text,
+          step: phase
+        })
+
+        Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
+    end
+  end
+
+  defp parse_ai_response(text) do
+    cond do
+      String.contains?(text, "<<SKIP_PHASE>>") ->
+        content = String.replace(text, "<<SKIP_PHASE>>", "") |> String.trim()
+        {content, :skip_phase, :conversing}
+
+      String.contains?(text, "<<READY_TO_ADVANCE>>") ->
+        content = String.replace(text, "<<READY_TO_ADVANCE>>", "") |> String.trim()
+        {content, :phase_advance, :advance_suggested}
+
+      true ->
+        {String.trim(text), nil, :conversing}
+    end
+  end
+
+  defp extract_questions_from_tool_uses(nil), do: []
+  defp extract_questions_from_tool_uses([]), do: []
+
+  defp extract_questions_from_tool_uses(mcp_tool_uses) do
+    mcp_tool_uses
+    |> Enum.filter(fn tool ->
+      tool.name in ["ask_user_question", "mcp__destila__ask_user_question"]
+    end)
+    |> Enum.flat_map(fn %{input: input} ->
+      questions = input["questions"] || [input]
+
+      Enum.map(questions, fn q ->
+        multi_select = q["multi_select"] == true
+
+        %{
+          question: q["question"] || "",
+          title: q["title"],
+          input_type: if(multi_select, do: :multi_select, else: :single_select),
+          options:
+            (q["options"] || [])
+            |> Enum.map(fn opt ->
+              %{label: opt["label"] || "", description: opt["description"]}
+            end)
+        }
+      end)
+    end)
+  end
+
   defp default_title(:feature_request), do: "New Feature Request"
   defp default_title(:project), do: "New Project"
+  defp default_title(:chore_task), do: "New Chore/Task"
 
   defp initial_idea_question(workflow_type) do
     steps = Destila.Workflows.steps(workflow_type)
@@ -200,7 +323,7 @@ defmodule DestilaWeb.NewPromptLive do
               <p class="text-sm text-base-content/50 mt-1">Choose a workflow type to get started</p>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-3 gap-4">
               <button
                 phx-click="select_type"
                 phx-value-type="feature_request"
@@ -211,6 +334,20 @@ defmodule DestilaWeb.NewPromptLive do
                   <h3 class="font-semibold">Feature Request</h3>
                   <p class="text-xs text-base-content/50">
                     Describe a new feature or enhancement for an existing project
+                  </p>
+                </div>
+              </button>
+
+              <button
+                phx-click="select_type"
+                phx-value-type="chore_task"
+                class="card bg-base-100 border-2 border-base-300 hover:border-primary transition-colors cursor-pointer text-left"
+              >
+                <div class="card-body p-5">
+                  <.icon name="hero-wrench-screwdriver" class="size-8 text-warning mb-2" />
+                  <h3 class="font-semibold">Chore / Task</h3>
+                  <p class="text-xs text-base-content/50">
+                    Straightforward coding tasks, bug fixes, or refactors
                   </p>
                 </div>
               </button>
@@ -236,14 +373,18 @@ defmodule DestilaWeb.NewPromptLive do
             <div class="text-center mb-6">
               <h2 class="text-xl font-bold">Link a repository</h2>
               <p class="text-sm text-base-content/50 mt-1">
-                Paste a repository URL to give context, or skip for new projects
+                <%= if @workflow_type == :project do %>
+                  Paste a repository URL to give context, or skip for new projects
+                <% else %>
+                  Paste a repository URL to give context for your task
+                <% end %>
               </p>
             </div>
 
             <form phx-submit="set_repo" class="space-y-4">
               <fieldset class="fieldset">
                 <label class="fieldset-label text-xs font-medium" for="repo_url">
-                  Repository URL
+                  Repository URL <span :if={@workflow_type != :project} class="text-error">*</span>
                 </label>
                 <input
                   type="url"
@@ -258,7 +399,12 @@ defmodule DestilaWeb.NewPromptLive do
                 <button type="submit" class="btn btn-primary flex-1">
                   Continue
                 </button>
-                <button type="button" phx-click="skip_repo" class="btn btn-ghost flex-1">
+                <button
+                  :if={@workflow_type == :project}
+                  type="button"
+                  phx-click="skip_repo"
+                  class="btn btn-ghost flex-1"
+                >
                   Skip
                 </button>
               </div>
