@@ -185,6 +185,13 @@ a, button, .card, .btn, input {
   text-decoration: underline;
 }
 
+/* Collapsible phase sections */
+.phase-section > summary::-webkit-details-marker { display: none; }
+.phase-section .phase-chevron { transform: rotate(-90deg); transition: transform 0.2s; }
+.phase-section[open] .phase-chevron { transform: rotate(0deg); }
+.phase-section.first-phase > summary { margin-top: 0; }
+.phase-section:not([open]) > summary { margin-bottom: 0; }
+
 /* SortableJS ghost styling */
 .sortable-ghost {
   opacity: 0.4;

@@ -664,6 +664,22 @@ defmodule DestilaWeb.PromptDetailLive do
 
   defp phase_name(phase), do: ChoreTaskPhases.phase_name(phase)
 
+  defp phase_groups(messages) do
+    {groups, acc} =
+      Enum.reduce(messages, {[], []}, fn msg, {groups, acc} ->
+        if msg.message_type == :phase_divider and acc != [] do
+          {groups ++ [Enum.reverse(acc)], [msg]}
+        else
+          {groups, [msg | acc]}
+        end
+      end)
+
+    case acc do
+      [] -> groups
+      _ -> groups ++ [Enum.reverse(acc)]
+    end
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
@@ -768,11 +784,34 @@ defmodule DestilaWeb.PromptDetailLive do
         <%!-- Chat area --%>
         <div class="flex-1 overflow-y-auto px-6 py-6" id="chat-messages" phx-hook="ScrollBottom">
           <div class="max-w-2xl mx-auto">
-            <.chat_message
-              :for={message <- @messages}
-              message={message}
-              prompt={@prompt}
-            />
+            <%= if ai_workflow?(@prompt) do %>
+              <% current_phase = max(@prompt.steps_completed, 1) %>
+              <%= for group <- phase_groups(@messages) do %>
+                <% first = List.first(group) %>
+                <% phase = first.step %>
+                <% divider = if(first.message_type == :phase_divider, do: first) %>
+                <% content = if(divider, do: tl(group), else: group) %>
+                <details
+                  class={["phase-section", phase == 1 && "first-phase"]}
+                  open={phase >= current_phase}
+                >
+                  <summary class="flex items-center gap-3 my-6 cursor-pointer group list-none">
+                    <div class="flex-1 h-px bg-base-300" />
+                    <span class="flex items-center gap-1.5 text-xs font-medium text-base-content/40 uppercase tracking-wide group-hover:text-base-content/60 transition-colors">
+                      {if(divider, do: divider.content, else: "Phase 1 — #{phase_name(1)}")}
+                      <.icon
+                        name="hero-chevron-down-micro"
+                        class="size-3 phase-chevron"
+                      />
+                    </span>
+                    <div class="flex-1 h-px bg-base-300" />
+                  </summary>
+                  <.chat_message :for={msg <- content} message={msg} prompt={@prompt} />
+                </details>
+              <% end %>
+            <% else %>
+              <.chat_message :for={message <- @messages} message={message} prompt={@prompt} />
+            <% end %>
 
             <%!-- Typing indicator --%>
             <.chat_typing_indicator :if={@prompt[:phase_status] == :generating} />
@@ -825,15 +864,18 @@ defmodule DestilaWeb.PromptDetailLive do
         <%!-- Completed state --%>
         <div
           :if={@current_step.completed}
-          class="border-t border-base-300 bg-base-200/50 p-4 text-center"
+          class="border-t border-base-300 bg-base-200/50 px-4 py-3"
         >
-          <p class="text-sm text-base-content/50">
-            Workflow complete
-            <span :if={@prompt.board == :crafting && @prompt.column == :done}>
-              &mdash; ready to send to Implementation Board
-            </span>
-            <span :if={@prompt.board == :implementation}>
-              &mdash; moved to Implementation Board
+          <p class="text-sm text-base-content/50 flex items-center justify-center gap-2">
+            <.icon name="hero-check-circle-solid" class="size-4 text-success" />
+            <span>
+              Workflow complete
+              <span :if={@prompt.board == :crafting && @prompt.column == :done}>
+                &mdash; ready to send to Implementation Board
+              </span>
+              <span :if={@prompt.board == :implementation}>
+                &mdash; moved to Implementation Board
+              </span>
             </span>
           </p>
         </div>
