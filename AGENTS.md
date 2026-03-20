@@ -1,5 +1,12 @@
 This is a web application written using the Phoenix web framework.
 
+## Running the server
+
+- Start the server with `elixir --sname destila -S mix phx.server` — this enables remote shell access
+- To connect a remote shell for debugging or live data changes: `iex --sname debug --remsh destila@$(hostname -s)`
+- From the remote shell you can inspect/modify ETS data (`Destila.Store`), call application functions, and evaluate arbitrary code in the running VM
+- For one-off RPC calls without an interactive shell, use: `elixir --sname tmp -e 'Node.connect(:"destila@<hostname>"); :rpc.call(:"destila@<hostname>", Module, :function, [args])'`
+
 ## Project guidelines
 
 - Use `mix precommit` alias when you are done with all changes and fix any pending issues

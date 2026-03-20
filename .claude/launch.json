@@ -4,7 +4,7 @@
     {
       "name": "phoenix",
       "runtimeExecutable": "mise",
-      "runtimeArgs": ["x", "--", "mix", "phx.server"],
+      "runtimeArgs": ["x", "--", "elixir", "--sname", "destila", "-S", "mix", "phx.server"],
       "port": 4000
     }
   ]

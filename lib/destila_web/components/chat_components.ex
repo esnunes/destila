@@ -7,6 +7,7 @@ defmodule DestilaWeb.ChatComponents do
   defp markdown_to_html(text) when is_binary(text) do
     text
     |> Earmark.as_html!(code_class_prefix: "language-", smartypants: false)
+    |> HtmlSanitizeEx.markdown_html()
   end
 
   defp markdown_to_html(_), do: ""
@@ -76,18 +77,134 @@ defmodule DestilaWeb.ChatComponents do
         D
       </div>
       <div class="max-w-[80%]">
-        <div class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden">
-          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20">
+        <div
+          id={"prompt-card-#{@message.id}"}
+          class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden"
+          phx-hook=".PromptCard"
+          data-content={@message.content}
+        >
+          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2">
             <span class="text-xs font-medium text-primary uppercase tracking-wide">
               Implementation Prompt
             </span>
+            <div class="flex items-center gap-1">
+              <div role="tablist" class="flex rounded-lg bg-base-300/50 p-0.5">
+                <button
+                  role="tab"
+                  aria-selected="true"
+                  data-view="rendered"
+                  class="prompt-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors bg-base-100 text-base-content shadow-sm"
+                >
+                  Rendered
+                </button>
+                <button
+                  role="tab"
+                  aria-selected="false"
+                  data-view="markdown"
+                  class="prompt-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors text-base-content/50 hover:text-base-content"
+                >
+                  Markdown
+                </button>
+              </div>
+              <button
+                class="prompt-copy-btn ml-1 p-1 rounded-md hover:bg-base-300/50 transition-colors"
+                aria-label="Copy markdown to clipboard"
+              >
+                <.icon name="hero-clipboard-document-micro" class="size-4 text-base-content/50" />
+              </button>
+            </div>
           </div>
-          <div class="px-4 py-3 text-sm text-base-content prose prose-sm max-w-none">
+          <div data-rendered class="px-4 py-3 text-sm text-base-content prose prose-sm max-w-none">
             {raw(markdown_to_html(@message.content))}
+          </div>
+          <div data-markdown class="hidden px-4 py-3">
+            <pre class="text-sm font-mono text-base-content whitespace-pre-wrap break-words bg-base-300/30 rounded-lg p-3 overflow-x-auto"><code>{@message.content}</code></pre>
           </div>
         </div>
       </div>
     </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".PromptCard">
+      export default {
+        mounted() {
+          this.activeView = "rendered"
+          this.lastContent = this.el.dataset.content
+
+          this.el.querySelectorAll(".prompt-tab").forEach(tab => {
+            tab.addEventListener("click", () => this.switchView(tab.dataset.view))
+          })
+
+          this.el.querySelector(".prompt-copy-btn").addEventListener("click", () => this.copyMarkdown())
+        },
+
+        updated() {
+          const newContent = this.el.dataset.content
+          if (newContent !== this.lastContent) {
+            this.lastContent = newContent
+            this.activeView = "rendered"
+          }
+          this.applyView()
+        },
+
+        switchView(view) {
+          this.activeView = view
+          this.applyView()
+        },
+
+        applyView() {
+          const rendered = this.el.querySelector("[data-rendered]")
+          const markdown = this.el.querySelector("[data-markdown]")
+          const tabs = this.el.querySelectorAll(".prompt-tab")
+
+          if (this.activeView === "markdown") {
+            rendered.classList.add("hidden")
+            markdown.classList.remove("hidden")
+          } else {
+            rendered.classList.remove("hidden")
+            markdown.classList.add("hidden")
+          }
+
+          tabs.forEach(tab => {
+            const isActive = tab.dataset.view === this.activeView
+            tab.setAttribute("aria-selected", isActive)
+            if (isActive) {
+              tab.classList.add("bg-base-100", "text-base-content", "shadow-sm")
+              tab.classList.remove("text-base-content/50")
+            } else {
+              tab.classList.remove("bg-base-100", "text-base-content", "shadow-sm")
+              tab.classList.add("text-base-content/50")
+            }
+          })
+        },
+
+        async copyMarkdown() {
+          const content = this.el.dataset.content
+          const btn = this.el.querySelector(".prompt-copy-btn")
+          try {
+            await navigator.clipboard.writeText(content)
+            this.showCopyFeedback(btn, true)
+          } catch {
+            this.showCopyFeedback(btn, false)
+          }
+        },
+
+        showCopyFeedback(btn, success) {
+          const icon = btn.querySelector("[class*='hero-']")
+          const original = icon.className
+          if (success) {
+            icon.className = icon.className.replace("hero-clipboard-document-micro", "hero-check-micro")
+            btn.setAttribute("aria-label", "Copied!")
+          } else {
+            icon.className = icon.className.replace("hero-clipboard-document-micro", "hero-x-mark-micro")
+            btn.setAttribute("aria-label", "Copy failed")
+          }
+          clearTimeout(this._feedbackTimer)
+          this._feedbackTimer = setTimeout(() => {
+            icon.className = original
+            btn.setAttribute("aria-label", "Copy markdown to clipboard")
+          }, 2000)
+        }
+      }
+    </script>
     """
   end
 

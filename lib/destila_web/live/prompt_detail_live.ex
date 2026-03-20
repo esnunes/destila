@@ -367,6 +367,13 @@ defmodule DestilaWeb.PromptDetailLive do
               end
 
             {content, message_type, new_phase_status} = parse_ai_response(response_text)
+
+            # In the final phase, normal AI responses are generated prompts
+            message_type =
+              if phase == prompt.steps_total and message_type == nil,
+                do: :generated_prompt,
+                else: message_type
+
             questions = extract_questions_from_tool_uses(result[:mcp_tool_uses])
 
             # Use question texts from tool if AI text is empty/generic

@@ -61,7 +61,8 @@ defmodule Destila.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:claude_code, "~> 0.32"},
-      {:earmark, "~> 1.4"}
+      {:earmark, "~> 1.4"},
+      {:html_sanitize_ex, "~> 1.4"}
     ]
   end
 

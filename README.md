@@ -4,9 +4,19 @@ To start your Phoenix server:
 
 * Run `mix setup` to install and setup dependencies
 * Set the required environment variables (see below)
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+* Start Phoenix endpoint with `elixir --sname destila -S mix phx.server`
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+
+### Remote shell
+
+The server starts as a named Erlang node (`destila@<hostname>`), which allows connecting a remote shell for debugging and live data inspection:
+
+```sh
+iex --sname debug --remsh destila@$(hostname -s)
+```
+
+From the remote shell you can inspect and modify ETS data, call application functions, etc.
 
 ## Authentication
 
