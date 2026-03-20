@@ -48,7 +48,7 @@ defmodule DestilaWeb.NewPromptLive do
 
   def handle_event("save_and_continue", %{"initial_idea" => idea}, socket)
       when idea != "" do
-    prompt = create_prompt_with_idea(socket, idea)
+    prompt = create_prompt_with_idea(socket, idea, :continue)
     {:noreply, push_navigate(socket, to: ~p"/prompts/#{prompt.id}")}
   end
 
@@ -60,14 +60,14 @@ defmodule DestilaWeb.NewPromptLive do
     idea = socket.assigns.initial_idea
 
     if idea != "" do
-      create_prompt_with_idea(socket, idea)
+      create_prompt_with_idea(socket, idea, :close)
       {:noreply, push_navigate(socket, to: socket.assigns.return_to)}
     else
       {:noreply, put_flash(socket, :error, "Please describe your initial idea")}
     end
   end
 
-  defp create_prompt_with_idea(socket, idea) do
+  defp create_prompt_with_idea(socket, idea, action) do
     workflow_type = socket.assigns.workflow_type
     steps = Destila.Workflows.steps(workflow_type)
     first_step = List.first(steps)
@@ -112,11 +112,21 @@ defmodule DestilaWeb.NewPromptLive do
       step: second_step.step
     })
 
+    # Start an AI session and store its PID on the prompt
+    session_opts =
+      case action do
+        :continue -> []
+        :close -> [timeout_ms: :timer.seconds(30)]
+      end
+
+    {:ok, session} = Destila.AI.Session.start_link(session_opts)
+    Destila.Store.update_prompt(prompt.id, %{ai_session: session})
+
     # Generate title asynchronously
     prompt_id = prompt.id
 
     Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
-      case Destila.AI.generate_title(workflow_type, idea) do
+      case Destila.AI.generate_title(session, workflow_type, idea) do
         {:ok, title} ->
           Destila.Store.update_prompt(prompt_id, %{title: title, title_generating: false})
 
@@ -125,6 +135,11 @@ defmodule DestilaWeb.NewPromptLive do
             title: default_title(workflow_type),
             title_generating: false
           })
+      end
+
+      if action == :close do
+        Destila.AI.Session.stop(session)
+        Destila.Store.update_prompt(prompt_id, %{ai_session: nil})
       end
     end)
 

@@ -13,6 +13,7 @@ defmodule Destila.Application do
       {Phoenix.PubSub, name: Destila.PubSub},
       Destila.Store,
       {Task.Supervisor, name: Destila.TaskSupervisor},
+      {DynamicSupervisor, name: Destila.AI.SessionSupervisor, strategy: :one_for_one},
       DestilaWeb.Endpoint
     ]
 
