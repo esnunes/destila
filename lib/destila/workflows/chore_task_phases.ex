@@ -5,13 +5,13 @@ defmodule Destila.Workflows.ChoreTaskPhases do
   Each phase is a multi-turn AI conversation. The AI uses markers to signal
   phase transitions:
   - `<<READY_TO_ADVANCE>>` — AI suggests advancing to the next phase
-  - `<<SKIP_PHASE>>` — AI determines phase can be skipped (Phase 3 only)
+  - `<<SKIP_PHASE>>` — AI determines phase can be skipped (Phase 2 only)
   """
 
   @phase_names %{
     1 => "Task Description",
-    2 => "Technical Concerns",
-    3 => "Gherkin Review",
+    2 => "Gherkin Review",
+    3 => "Technical Concerns",
     4 => "Prompt Generation"
   }
 
@@ -62,7 +62,30 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     """ <> @tool_instructions
   end
 
-  def system_prompt(2, _prompt) do
+  def system_prompt(2, prompt) do
+    repo_url = prompt[:repo_url] || "unknown"
+
+    """
+    You are reviewing Gherkin feature files for a coding task. The repository is at #{repo_url}.
+
+    Use your tools to browse the repository and find existing .feature files. Then:
+
+    1. If .feature files exist, review them against the task discussed.
+       - If changes are needed, propose specific additions, modifications, or removals.
+       - Discuss with the user until they agree on the changes.
+       - When done, end your message with <<READY_TO_ADVANCE>>
+
+    2. If no .feature files exist in the repository:
+       - Ask the user if they want to define new Gherkin scenarios for this task.
+       - If yes, help them draft scenarios and end with <<READY_TO_ADVANCE>>
+       - If no, end your message with <<SKIP_PHASE>>
+
+    3. If the task doesn't require Gherkin changes:
+       - Explain why and end your message with <<SKIP_PHASE>>
+    """ <> @tool_instructions
+  end
+
+  def system_prompt(3, _prompt) do
     """
     You are exploring technical concerns for a coding task. Based on the prior conversation, \
     ask about the technical approach to implementing this task.
@@ -79,29 +102,6 @@ defmodule Destila.Workflows.ChoreTaskPhases do
 
     When the technical approach is sufficiently clear, \
     end your message with <<READY_TO_ADVANCE>>
-    """ <> @tool_instructions
-  end
-
-  def system_prompt(3, prompt) do
-    repo_url = prompt[:repo_url] || "unknown"
-
-    """
-    You are reviewing Gherkin feature files for a coding task. The repository is at #{repo_url}.
-
-    Use your tools to browse the repository and find existing .feature files. Then:
-
-    1. If .feature files exist, review them against the task and technical approach discussed.
-       - If changes are needed, propose specific additions, modifications, or removals.
-       - Discuss with the user until they agree on the changes.
-       - When done, end your message with <<READY_TO_ADVANCE>>
-
-    2. If no .feature files exist in the repository:
-       - Ask the user if they want to define new Gherkin scenarios for this task.
-       - If yes, help them draft scenarios and end with <<READY_TO_ADVANCE>>
-       - If no, end your message with <<SKIP_PHASE>>
-
-    3. If the task doesn't require Gherkin changes:
-       - Explain why and end your message with <<SKIP_PHASE>>
     """ <> @tool_instructions
   end
 
