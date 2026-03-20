@@ -144,8 +144,11 @@ defmodule DestilaWeb.PromptDetailLive do
         phase_status: :generating
       })
 
-      # Trigger AI response for the new phase
-      spawn_ai_query(prompt.id, next_phase)
+      # Trigger AI response for the new phase — send phase system prompt only
+      # (session already has full conversation history)
+      updated_prompt = Destila.Store.get_prompt(prompt.id)
+      phase_prompt = ChoreTaskPhases.system_prompt(next_phase, updated_prompt)
+      spawn_ai_query(prompt.id, next_phase, phase_prompt)
 
       {:noreply, refresh_state(socket)}
     end
@@ -279,26 +282,24 @@ defmodule DestilaWeb.PromptDetailLive do
       # Set generating status
       Destila.Store.update_prompt(prompt.id, %{phase_status: :generating})
 
-      # Spawn async AI query
-      spawn_ai_query(prompt.id, phase)
+      # Spawn async AI query — pass user's message directly (session has context)
+      spawn_ai_query(prompt.id, phase, content)
 
       {:noreply, refresh_state(socket)}
     end
   end
 
-  defp spawn_ai_query(prompt_id, phase) do
+  # query_text: the text to send to the AI session.
+  # - For user messages: the user's message text (session already has conversation history)
+  # - For phase transitions: the phase system prompt (to set new AI instructions)
+  # - For session resumption: system prompt + full conversation context
+  defp spawn_ai_query(prompt_id, phase, query_text) do
     Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
       prompt = Destila.Store.get_prompt(prompt_id)
       session = prompt[:ai_session]
 
       if session && Process.alive?(session) do
-        messages = Destila.Store.list_messages(prompt_id)
-        system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
-        context = ChoreTaskPhases.build_conversation_context(messages)
-
-        query = system_prompt <> "\n\n" <> context
-
-        case Destila.AI.Session.query(session, query) do
+        case Destila.AI.Session.query(session, query_text) do
           {:ok, result} ->
             response_text = result.result || ""
             {content, message_type, new_phase_status} = parse_ai_response(response_text)
@@ -363,35 +364,10 @@ defmodule DestilaWeb.PromptDetailLive do
       phase_status: :generating
     })
 
-    # Trigger AI for the next phase
+    # Trigger AI for the next phase — send phase system prompt only
     prompt = Destila.Store.get_prompt(prompt_id)
-    session = prompt[:ai_session]
-
-    if session && Process.alive?(session) do
-      messages = Destila.Store.list_messages(prompt_id)
-      system_prompt = ChoreTaskPhases.system_prompt(next_phase, prompt)
-      context = ChoreTaskPhases.build_conversation_context(messages)
-      query = system_prompt <> "\n\n" <> context
-
-      case Destila.AI.Session.query(session, query) do
-        {:ok, result} ->
-          response_text = result.result || ""
-          {content, message_type, new_phase_status} = parse_ai_response(response_text)
-
-          Destila.Store.add_message(prompt_id, %{
-            role: :system,
-            content: content,
-            input_type: :text,
-            step: next_phase,
-            message_type: message_type
-          })
-
-          Destila.Store.update_prompt(prompt_id, %{phase_status: new_phase_status})
-
-        {:error, _} ->
-          Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
-      end
-    end
+    phase_prompt = ChoreTaskPhases.system_prompt(next_phase, prompt)
+    spawn_ai_query(prompt_id, next_phase, phase_prompt)
   end
 
   defp restart_ai_session(prompt_id) do
@@ -415,23 +391,29 @@ defmodule DestilaWeb.PromptDetailLive do
 
         if last_msg && last_msg.role == :user && prompt[:phase_status] != :generating do
           Destila.Store.update_prompt(prompt.id, %{phase_status: :generating})
-          spawn_ai_query(prompt.id, prompt.steps_completed)
+          # Session is alive, just send the user's latest message
+          spawn_ai_query(prompt.id, prompt.steps_completed, last_msg.content)
         end
 
         socket
 
       true ->
-        # Session dead or nil — restart with context
+        # Session dead or nil — restart with full context
         case Destila.AI.Session.start_link(timeout_ms: :timer.minutes(15)) do
           {:ok, new_session} ->
             Destila.Store.update_prompt(prompt.id, %{ai_session: new_session})
 
-            # If there's a pending user message, trigger AI response
+            # If there's a pending user message, trigger AI response with full context
             last_msg = List.last(messages)
 
             if last_msg && last_msg.role == :user do
+              phase = prompt.steps_completed
+              system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
+              context = ChoreTaskPhases.build_conversation_context(messages)
+              query = system_prompt <> "\n\n" <> context
+
               Destila.Store.update_prompt(prompt.id, %{phase_status: :generating})
-              spawn_ai_query(prompt.id, prompt.steps_completed)
+              spawn_ai_query(prompt.id, phase, query)
             end
 
             socket
