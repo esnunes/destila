@@ -61,6 +61,28 @@ defmodule Destila.Seeds do
       position: 4
     })
 
+    insert_prompt(%{
+      title: "Fix flaky test in user registration flow",
+      workflow_type: :chore_task,
+      repo_url: "https://github.com/acme/webapp",
+      board: :crafting,
+      column: :request,
+      steps_completed: 0,
+      steps_total: 4,
+      position: 6
+    })
+
+    insert_prompt(%{
+      title: "Refactor payment gateway error handling",
+      workflow_type: :chore_task,
+      repo_url: "https://github.com/acme/payments",
+      board: :crafting,
+      column: :distill,
+      steps_completed: 1,
+      steps_total: 4,
+      position: 7
+    })
+
     # Done column
     insert_prompt(%{
       title: "Implement webhook retry logic",

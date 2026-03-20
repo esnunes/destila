@@ -88,8 +88,21 @@ defmodule Destila.Workflows do
     ]
   end
 
+  def steps(:chore_task) do
+    [
+      %{
+        step: 1,
+        content:
+          "Let's work on your task. Describe what you need done — the more context you provide, the better I can help clarify and refine the approach.",
+        input_type: :text,
+        options: nil
+      }
+    ]
+  end
+
   def total_steps(:feature_request), do: 4
   def total_steps(:project), do: 3
+  def total_steps(:chore_task), do: 4
 
   def completion_message(:feature_request) do
     "Your feature request prompt is ready! I've gathered all the details needed to create a comprehensive, actionable prompt for your coding agent. You can now move this to the Implementation Board to start building."
@@ -97,5 +110,9 @@ defmodule Destila.Workflows do
 
   def completion_message(:project) do
     "Your project prompt is complete! I've captured your project vision, tech stack, and scope. This prompt is ready to guide a coding agent through the initial implementation. Move it to the Implementation Board when you're ready."
+  end
+
+  def completion_message(:chore_task) do
+    "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed. Move it to the Implementation Board when you're ready."
   end
 end

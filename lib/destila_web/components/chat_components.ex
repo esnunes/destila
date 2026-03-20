@@ -1,7 +1,87 @@
 defmodule DestilaWeb.ChatComponents do
   use Phoenix.Component
 
+  import DestilaWeb.CoreComponents, only: [icon: 1]
+
   attr :message, :map, required: true
+  attr :prompt, :map, default: %{}
+
+  def chat_message(%{message: %{message_type: :phase_divider}} = assigns) do
+    ~H"""
+    <div class="flex items-center gap-3 my-6">
+      <div class="flex-1 h-px bg-base-300" />
+      <span class="text-xs font-medium text-base-content/40 uppercase tracking-wide">
+        {@message.content}
+      </span>
+      <div class="flex-1 h-px bg-base-300" />
+    </div>
+    """
+  end
+
+  def chat_message(%{message: %{message_type: :phase_advance}} = assigns) do
+    next_phase = (assigns.prompt[:steps_completed] || 1) + 1
+
+    assigns = assign(assigns, :next_phase, next_phase)
+
+    assigns =
+      assign(assigns, :next_phase_name, Destila.Workflows.ChoreTaskPhases.phase_name(next_phase))
+
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="max-w-[80%]">
+        <div class="rounded-2xl px-4 py-3 text-sm bg-base-200 text-base-content">
+          <p class="whitespace-pre-wrap">{@message.content}</p>
+        </div>
+
+        <%= if @prompt[:phase_status] == :advance_suggested do %>
+          <div class="flex gap-2 mt-2">
+            <button
+              phx-click="confirm_advance"
+              class="btn btn-primary btn-sm"
+            >
+              Continue to Phase {@next_phase}
+              <span :if={@next_phase_name} class="hidden sm:inline">
+                — {@next_phase_name}
+              </span>
+              <.icon name="hero-arrow-right-micro" class="size-3.5" />
+            </button>
+            <button
+              phx-click="decline_advance"
+              class="btn btn-ghost btn-sm"
+            >
+              I have more to add
+            </button>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  def chat_message(%{message: %{message_type: :generated_prompt}} = assigns) do
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="max-w-[80%]">
+        <div class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden">
+          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20">
+            <span class="text-xs font-medium text-primary uppercase tracking-wide">
+              Implementation Prompt
+            </span>
+          </div>
+          <div class="px-4 py-3 text-sm text-base-content">
+            <p class="whitespace-pre-wrap">{@message.content}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
 
   def chat_message(assigns) do
     ~H"""
@@ -42,13 +122,31 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
+  def chat_typing_indicator(assigns) do
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="rounded-2xl px-4 py-3 bg-base-200">
+        <div class="flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-base-content/30 animate-bounce [animation-delay:0ms]" />
+          <span class="w-2 h-2 rounded-full bg-base-content/30 animate-bounce [animation-delay:150ms]" />
+          <span class="w-2 h-2 rounded-full bg-base-content/30 animate-bounce [animation-delay:300ms]" />
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   attr :input_type, :atom, required: true
   attr :options, :list, default: nil
+  attr :disabled, :boolean, default: false
 
   def chat_input(assigns) do
     ~H"""
     <div class="border-t border-base-300 bg-base-100 p-4">
-      <.text_input :if={@input_type == :text} />
+      <.text_input :if={@input_type == :text} disabled={@disabled} />
       <.single_select_input :if={@input_type == :single_select} options={@options || []} />
       <.multi_select_input :if={@input_type == :multi_select} options={@options || []} />
       <.file_upload_input :if={@input_type == :file_upload} />
@@ -56,22 +154,28 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
+  attr :disabled, :boolean, default: false
+
   def text_input(assigns) do
     ~H"""
     <form phx-submit="send_text" class="flex gap-2">
       <input
         type="text"
         name="content"
-        placeholder="Type your response..."
-        class="input input-bordered flex-1"
-        autofocus
+        placeholder={if @disabled, do: "AI is thinking...", else: "Type your response..."}
+        class={[
+          "input input-bordered flex-1",
+          @disabled && "opacity-50"
+        ]}
+        autofocus={!@disabled}
         autocomplete="off"
+        disabled={@disabled}
       />
-      <button type="submit" class="btn btn-primary">
+      <button type="submit" class="btn btn-primary" disabled={@disabled}>
         Send
       </button>
     </form>
-    <p class="text-xs text-base-content/30 mt-2">Press Enter to send</p>
+    <p :if={!@disabled} class="text-xs text-base-content/30 mt-2">Press Enter to send</p>
     """
   end
 
