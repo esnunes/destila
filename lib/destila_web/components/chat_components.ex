@@ -1,7 +1,15 @@
 defmodule DestilaWeb.ChatComponents do
   use Phoenix.Component
 
+  import Phoenix.HTML, only: [raw: 1]
   import DestilaWeb.CoreComponents, only: [icon: 1]
+
+  defp markdown_to_html(text) when is_binary(text) do
+    text
+    |> Earmark.as_html!(code_class_prefix: "language-", smartypants: false)
+  end
+
+  defp markdown_to_html(_), do: ""
 
   attr :message, :map, required: true
   attr :prompt, :map, default: %{}
@@ -32,8 +40,8 @@ defmodule DestilaWeb.ChatComponents do
         D
       </div>
       <div class="max-w-[80%]">
-        <div class="rounded-2xl px-4 py-3 text-sm bg-base-200 text-base-content">
-          <p class="whitespace-pre-wrap">{@message.content}</p>
+        <div class="rounded-2xl px-4 py-3 text-sm bg-base-200 text-base-content prose prose-sm max-w-none">
+          {raw(markdown_to_html(@message.content))}
         </div>
 
         <%= if @prompt[:phase_status] == :advance_suggested do %>
@@ -74,8 +82,8 @@ defmodule DestilaWeb.ChatComponents do
               Implementation Prompt
             </span>
           </div>
-          <div class="px-4 py-3 text-sm text-base-content">
-            <p class="whitespace-pre-wrap">{@message.content}</p>
+          <div class="px-4 py-3 text-sm text-base-content prose prose-sm max-w-none">
+            {raw(markdown_to_html(@message.content))}
           </div>
         </div>
       </div>
@@ -100,13 +108,23 @@ defmodule DestilaWeb.ChatComponents do
       </div>
 
       <div class={[
-        "max-w-[80%] rounded-2xl px-4 py-3 text-sm",
+        "rounded-2xl px-4 py-3 text-sm",
+        if(@message[:input_type] in [:single_select, :multi_select, :questions],
+          do: "flex-1",
+          else: "max-w-[80%]"
+        ),
         if(@message.role == :system,
           do: "bg-base-200 text-base-content",
           else: "bg-primary text-primary-content"
         )
       ]}>
-        <p class="whitespace-pre-wrap">{@message.content}</p>
+        <%= if @message.role == :system do %>
+          <div class="prose prose-sm max-w-none">
+            {raw(markdown_to_html(@message.content))}
+          </div>
+        <% else %>
+          <p class="whitespace-pre-wrap">{@message.content}</p>
+        <% end %>
 
         <%!-- Show selected options for user responses --%>
         <div :if={@message.selected && @message.selected != []} class="mt-2 flex flex-wrap gap-1">
@@ -142,10 +160,14 @@ defmodule DestilaWeb.ChatComponents do
   attr :input_type, :atom, required: true
   attr :options, :list, default: nil
   attr :disabled, :boolean, default: false
+  attr :inline, :boolean, default: false
 
   def chat_input(assigns) do
     ~H"""
-    <div class="border-t border-base-300 bg-base-100 p-4">
+    <div class={[
+      "p-4",
+      if(@inline, do: "bg-transparent", else: "border-t border-base-300 bg-base-100")
+    ]}>
       <.text_input :if={@input_type == :text} disabled={@disabled} />
       <.single_select_input :if={@input_type == :single_select} options={@options || []} />
       <.multi_select_input :if={@input_type == :multi_select} options={@options || []} />
@@ -299,6 +321,135 @@ defmodule DestilaWeb.ChatComponents do
         />
         <button type="submit" class="btn btn-sm btn-ghost">Send</button>
       </form>
+    </div>
+    """
+  end
+
+  attr :questions, :list, required: true
+  attr :answers, :map, required: true
+
+  def multi_question_input(assigns) do
+    total = length(assigns.questions)
+    answered = map_size(assigns.answers)
+    all_answered = answered == total
+
+    assigns =
+      assigns
+      |> assign(:total, total)
+      |> assign(:answered_count, answered)
+      |> assign(:all_answered, all_answered)
+
+    ~H"""
+    <div class="space-y-4 py-2">
+      <div :for={{q, idx} <- Enum.with_index(@questions)} class="space-y-2">
+        <%!-- Answered question: show locked-in state --%>
+        <%= if Map.has_key?(@answers, idx) do %>
+          <div class="rounded-lg border border-base-300/50 bg-base-200/30 p-3 space-y-1">
+            <div class="flex items-center gap-2">
+              <.icon name="hero-check-circle-solid" class="size-4 text-success flex-shrink-0" />
+              <p class="text-xs font-medium text-base-content/50 uppercase tracking-wide">
+                {q.title}
+              </p>
+            </div>
+            <p class="text-sm text-base-content/70 pl-6">{@answers[idx]}</p>
+          </div>
+        <% else %>
+          <%!-- Current unanswered question: show interactive --%>
+          <%= if map_size(@answers) == idx do %>
+            <div class="space-y-2">
+              <p class="text-xs text-base-content/50 font-medium uppercase tracking-wide">
+                {q.title}
+                <span class="text-base-content/30 ml-1">({idx + 1}/{@total})</span>
+              </p>
+              <p class="text-sm font-medium text-base-content">{q.question}</p>
+
+              <%= if q.input_type == :single_select do %>
+                <div class="grid gap-2">
+                  <button
+                    :for={opt <- q.options}
+                    phx-click="answer_question"
+                    phx-value-index={idx}
+                    phx-value-answer={opt.label}
+                    class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-sm transition-all cursor-pointer text-left"
+                  >
+                    <div class="card-body p-3 flex-row items-center gap-3">
+                      <div class="w-4 h-4 rounded-full border-2 border-base-300 flex-shrink-0" />
+                      <div>
+                        <span class="text-sm font-medium">{opt.label}</span>
+                        <p :if={opt[:description]} class="text-xs text-base-content/50">
+                          {opt.description}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+                <form phx-submit="answer_question" class="flex gap-2">
+                  <input type="hidden" name="index" value={idx} />
+                  <input
+                    type="text"
+                    name="answer"
+                    placeholder="Other (type your own)..."
+                    class="input input-bordered input-sm flex-1"
+                    autocomplete="off"
+                  />
+                  <button type="submit" class="btn btn-sm btn-ghost">Send</button>
+                </form>
+              <% else %>
+                <form phx-submit="confirm_multi_answer" class="space-y-2">
+                  <input type="hidden" name="index" value={idx} />
+                  <div class="grid gap-2">
+                    <label
+                      :for={opt <- q.options}
+                      class="card bg-base-100 border border-base-300 hover:border-primary transition-all cursor-pointer"
+                    >
+                      <div class="card-body p-3 flex-row items-center gap-3">
+                        <input
+                          type="checkbox"
+                          name="selected[]"
+                          value={opt.label}
+                          class="checkbox checkbox-sm checkbox-primary"
+                        />
+                        <div>
+                          <span class="text-sm font-medium">{opt.label}</span>
+                          <p :if={opt[:description]} class="text-xs text-base-content/50">
+                            {opt.description}
+                          </p>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                  <input
+                    type="text"
+                    name="other"
+                    placeholder="Other (type your own)..."
+                    class="input input-bordered input-sm w-full"
+                    autocomplete="off"
+                  />
+                  <button type="submit" class="btn btn-primary btn-sm w-full">
+                    Confirm
+                  </button>
+                </form>
+              <% end %>
+            </div>
+          <% else %>
+            <%!-- Future unanswered question: show dimmed preview --%>
+            <div class="rounded-lg border border-base-300/30 bg-base-200/10 p-3 opacity-40">
+              <p class="text-xs font-medium text-base-content/40 uppercase tracking-wide">
+                {q.title}
+                <span class="text-base-content/20 ml-1">({idx + 1}/{@total})</span>
+              </p>
+              <p class="text-sm text-base-content/40 mt-1">{q.question}</p>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+
+      <%!-- Submit all when done --%>
+      <%= if @all_answered do %>
+        <button phx-click="submit_all_answers" class="btn btn-primary w-full">
+          Submit All Answers
+        </button>
+      <% end %>
     </div>
     """
   end

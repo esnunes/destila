@@ -22,6 +22,21 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     @phase_names[phase]
   end
 
+  def phase_name(_phase), do: nil
+
+  @tool_instructions """
+
+  ## Asking Questions
+
+  When asking questions with clear, discrete options, use the \
+  `mcp__destila__ask_user_question` tool to present structured choices. \
+  The tool accepts a `questions` array — batch all your independent questions \
+  in a single call. The user will see clickable buttons for each question. \
+  An 'Other' free-text input is always available automatically — do not include it.
+
+  For open-ended questions without clear options, just ask in plain text.
+  """
+
   @doc """
   Returns the AI system prompt for a given phase and prompt context.
   """
@@ -30,15 +45,19 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     You are helping clarify a coding task. The user has described their initial idea. \
     Your job is to ask focused questions to understand exactly what they want and how it should work.
 
-    Ask one question at a time. Focus on:
+    Focus on:
     - What the expected behavior should be
     - What the current behavior is (if it's a fix)
     - Edge cases or constraints
     - Who or what is affected
 
+    You may batch multiple independent questions in a single response when their answers \
+    do not depend on each other. Never batch questions where the answer to one would change \
+    the options of another.
+
     Keep your questions concise and specific. When you believe you have a clear understanding \
     of the task, end your message with <<READY_TO_ADVANCE>>
-    """
+    """ <> @tool_instructions
   end
 
   def system_prompt(2, _prompt) do
@@ -52,9 +71,13 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     - Dependencies or integrations affected
     - Testing strategy
 
-    Ask one question at a time. When the technical approach is sufficiently clear, \
+    You may batch multiple independent questions in a single response when their answers \
+    do not depend on each other. Never batch questions where the answer to one would change \
+    the options of another.
+
+    When the technical approach is sufficiently clear, \
     end your message with <<READY_TO_ADVANCE>>
-    """
+    """ <> @tool_instructions
   end
 
   def system_prompt(3, prompt) do
@@ -77,7 +100,7 @@ defmodule Destila.Workflows.ChoreTaskPhases do
 
     3. If the task doesn't require Gherkin changes:
        - Explain why and end your message with <<SKIP_PHASE>>
-    """
+    """ <> @tool_instructions
   end
 
   def system_prompt(4, _prompt) do

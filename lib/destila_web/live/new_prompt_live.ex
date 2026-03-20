@@ -91,7 +91,7 @@ defmodule DestilaWeb.NewPromptLive do
         column: :request,
         steps_completed: 1,
         steps_total: Destila.Workflows.total_steps(workflow_type),
-        phase_status: if(workflow_type == :chore_task, do: :conversing, else: nil)
+        phase_status: if(workflow_type == :chore_task, do: :generating, else: nil)
       })
 
     # Add system message for step 1 (the question)
@@ -128,7 +128,7 @@ defmodule DestilaWeb.NewPromptLive do
     # Start an AI session and store its PID on the prompt
     session_opts =
       case action do
-        :continue -> []
+        :continue -> [timeout_ms: :timer.minutes(15)]
         :close -> [timeout_ms: :timer.seconds(30)]
       end
 
@@ -177,13 +177,36 @@ defmodule DestilaWeb.NewPromptLive do
 
     case Destila.AI.Session.query(session, query) do
       {:ok, result} ->
-        response_text = result.result || ""
+        response_text =
+          if result.text != nil and result.text != "" do
+            result.text
+          else
+            result.result || ""
+          end
+
         {content, message_type, new_phase_status} = parse_ai_response(response_text)
+        questions = extract_questions_from_tool_uses(result[:mcp_tool_uses])
+
+        content =
+          if questions != [] and (content == "" or content == "Waiting for your answer.") do
+            questions |> Enum.map(& &1.question) |> Enum.join("\n\n")
+          else
+            content
+          end
+
+        {input_type, options} =
+          case questions do
+            [] -> {:text, nil}
+            [q] -> {q.input_type, q.options}
+            _ -> {:questions, nil}
+          end
 
         Destila.Store.add_message(prompt_id, %{
           role: :system,
           content: content,
-          input_type: :text,
+          input_type: input_type,
+          options: options,
+          questions: questions,
           step: phase,
           message_type: message_type
         })
@@ -215,6 +238,34 @@ defmodule DestilaWeb.NewPromptLive do
       true ->
         {String.trim(text), nil, :conversing}
     end
+  end
+
+  defp extract_questions_from_tool_uses(nil), do: []
+  defp extract_questions_from_tool_uses([]), do: []
+
+  defp extract_questions_from_tool_uses(mcp_tool_uses) do
+    mcp_tool_uses
+    |> Enum.filter(fn tool ->
+      tool.name in ["ask_user_question", "mcp__destila__ask_user_question"]
+    end)
+    |> Enum.flat_map(fn %{input: input} ->
+      questions = input["questions"] || [input]
+
+      Enum.map(questions, fn q ->
+        multi_select = q["multi_select"] == true
+
+        %{
+          question: q["question"] || "",
+          title: q["title"],
+          input_type: if(multi_select, do: :multi_select, else: :single_select),
+          options:
+            (q["options"] || [])
+            |> Enum.map(fn opt ->
+              %{label: opt["label"] || "", description: opt["description"]}
+            end)
+        }
+      end)
+    end)
   end
 
   defp default_title(:feature_request), do: "New Feature Request"
