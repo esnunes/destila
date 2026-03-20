@@ -50,6 +50,8 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     - What the current behavior is (if it's a fix)
     - Edge cases or constraints
     - Who or what is affected
+    - Use codebase knowledge to ask better questions, but do not include implementation \
+      details - technical details will be gathered in a later step
 
     You may batch multiple independent questions in a single response when their answers \
     do not depend on each other. Never batch questions where the answer to one would change \
