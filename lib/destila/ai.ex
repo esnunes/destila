@@ -1,16 +1,18 @@
 defmodule Destila.AI do
   @moduledoc """
-  AI-powered utilities using the Claude Agent SDK.
+  AI-powered utilities using the Claude Code SDK.
   """
-
-  alias ClaudeAgentSDK.Options
 
   @doc """
   Generates a concise title for a prompt based on the workflow type and the user's initial idea.
 
+  Accepts an optional `Destila.AI.Session` pid as the first argument. When provided,
+  the query runs through the existing session (preserving conversation context).
+  When omitted, a one-off `ClaudeCode.query/2` call is used.
+
   Returns `{:ok, title}` on success or `{:error, reason}` on failure.
   """
-  def generate_title(workflow_type, idea) do
+  def generate_title(session \\ nil, workflow_type, idea) do
     type_label = workflow_type_label(workflow_type)
 
     prompt =
@@ -18,35 +20,44 @@ defmodule Destila.AI do
         "The user described their idea as: #{idea}\n\n" <>
         "Respond with only the title, no quotes, no punctuation at the end, no explanation."
 
-    opts = %Options{
-      model: "haiku",
-      system_prompt:
-        "You are a title generator. You produce short, descriptive titles. " <>
-          "Respond with only the title text, nothing else.",
-      max_turns: 1
-    }
+    case do_query(session, prompt) do
+      {:ok, text} ->
+        title = String.trim(text)
 
-    try do
-      title =
-        ClaudeAgentSDK.query(prompt, opts)
-        |> Enum.reduce(nil, fn msg, acc ->
-          case msg.type do
-            :assistant ->
-              ClaudeAgentSDK.ContentExtractor.extract_text(msg) || acc
+        if title != "" do
+          {:ok, title}
+        else
+          {:error, :empty_response}
+        end
 
-            _ ->
-              acc
-          end
-        end)
-
-      if title && title != "" do
-        {:ok, String.trim(title)}
-      else
-        {:error, :empty_response}
-      end
-    rescue
-      e -> {:error, Exception.message(e)}
+      {:error, reason} ->
+        {:error, reason}
     end
+  end
+
+  defp do_query(nil, prompt) do
+    opts = [
+      model: "haiku",
+      system_prompt: system_prompt(),
+      max_turns: 1
+    ]
+
+    case ClaudeCode.query(prompt, opts) do
+      {:ok, result} -> {:ok, to_string(result)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp do_query(session, prompt) do
+    case Destila.AI.Session.query(session, prompt) do
+      {:ok, result} -> {:ok, result.result || ""}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp system_prompt do
+    "You are a title generator. You produce short, descriptive titles. " <>
+      "Respond with only the title text, nothing else."
   end
 
   defp workflow_type_label(:feature_request), do: "feature request"

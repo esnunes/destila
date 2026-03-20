@@ -60,7 +60,7 @@ defmodule Destila.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:claude_agent_sdk, "~> 0.16.0"}
+      {:claude_code, "~> 0.32"}
     ]
   end
 
