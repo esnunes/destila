@@ -22,7 +22,15 @@ defmodule DestilaWeb.NewPromptLiveTest do
 
     # Log in to establish session
     conn = post(conn, "/login", %{"email" => "test@example.com"})
-    {:ok, conn: conn}
+
+    # Create a test project for selection tests
+    project =
+      Destila.Store.create_project(%{
+        name: "Test Project",
+        git_repo_url: "https://github.com/test/repo"
+      })
+
+    {:ok, conn: conn, project: project}
   end
 
   describe "step 1 - workflow type selection" do
@@ -40,63 +48,100 @@ defmodule DestilaWeb.NewPromptLiveTest do
     end
   end
 
-  describe "step 2 - repository URL" do
+  describe "step 2 - project selection" do
     @tag feature: @feature, scenario: "Complete the wizard with Save & Continue"
-    test "shows repository URL input after selecting a workflow type", %{conn: conn} do
+    test "shows project selection after selecting a workflow type", %{
+      conn: conn,
+      project: project
+    } do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='feature_request']") |> render_click()
 
-      assert has_element?(view, "#repo_url")
+      assert has_element?(view, "#project-#{project.id}")
     end
 
-    @tag feature: @feature, scenario: "Repository URL can only be skipped for Project type"
+    @tag feature: @feature, scenario: "Project is required for non-Project workflow types"
     test "skip button is not available for non-Project types", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='feature_request']") |> render_click()
 
-      refute has_element?(view, "button[phx-click='skip_repo']")
+      refute has_element?(view, "#skip-project-btn")
     end
 
-    @tag feature: @feature, scenario: "Repository URL can only be skipped for Project type"
-    test "shows error when continuing without a URL for non-Project type", %{conn: conn} do
+    @tag feature: @feature, scenario: "Project is required for non-Project workflow types"
+    test "shows error when continuing without selecting a project", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='chore_task']") |> render_click()
-      view |> form("form", %{"repo_url" => ""}) |> render_submit()
+      view |> element("#continue-project-btn") |> render_click()
 
-      assert has_element?(view, "#repo_url")
-      assert render(view) =~ "Repository URL is required"
+      assert render(view) =~ "Please select a project"
     end
 
-    @tag feature: @feature, scenario: "Skip repository URL for Project type"
+    @tag feature: @feature, scenario: "Skip project for Project workflow type"
     test "skip button is available for Project type", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='project']") |> render_click()
 
-      assert has_element?(view, "button[phx-click='skip_repo']")
+      assert has_element?(view, "#skip-project-btn")
     end
 
-    @tag feature: @feature, scenario: "Skip repository URL for Project type"
-    test "skipping repo URL for Project advances to step 3", %{conn: conn} do
+    @tag feature: @feature, scenario: "Skip project for Project workflow type"
+    test "skipping project for Project type advances to step 3", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='project']") |> render_click()
-      view |> element("button[phx-click='skip_repo']") |> render_click()
+      view |> element("#skip-project-btn") |> render_click()
 
       assert has_element?(view, "#initial_idea")
+    end
+
+    @tag feature: @feature, scenario: "Complete the wizard with Save & Continue"
+    test "selecting a project and continuing advances to step 3", %{conn: conn, project: project} do
+      {:ok, view, _html} = live(conn, ~p"/prompts/new")
+
+      view |> element("button[phx-value-type='feature_request']") |> render_click()
+      view |> element("#project-#{project.id}") |> render_click()
+      view |> element("#continue-project-btn") |> render_click()
+
+      assert has_element?(view, "#initial_idea")
+    end
+
+    @tag feature: @feature, scenario: "Create a new project inline during step 2"
+    test "inline project creation creates and selects the project", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prompts/new")
+
+      view |> element("button[phx-value-type='feature_request']") |> render_click()
+      view |> element("#create-new-project-btn") |> render_click()
+
+      assert has_element?(view, "#inline-project-form")
+
+      view
+      |> form("#inline-project-form", %{
+        "name" => "New Inline Project",
+        "git_repo_url" => "https://github.com/new/repo"
+      })
+      |> render_submit()
+
+      # Should be back on select view with new project selected
+      assert render(view) =~ "New Inline Project"
     end
   end
 
   describe "step 3 - initial idea" do
     @tag feature: @feature, scenario: "Complete the wizard with Save & Continue"
-    test "shows initial idea textarea after completing repo URL step", %{conn: conn} do
+    test "shows initial idea textarea after completing project step", %{
+      conn: conn,
+      project: project
+    } do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='feature_request']") |> render_click()
-      view |> form("form", %{"repo_url" => "https://github.com/owner/repo"}) |> render_submit()
+      view |> element("#project-#{project.id}") |> render_click()
+      view |> element("#continue-project-btn") |> render_click()
 
       assert has_element?(view, "#initial_idea")
     end
@@ -106,7 +151,7 @@ defmodule DestilaWeb.NewPromptLiveTest do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='project']") |> render_click()
-      view |> element("button[phx-click='skip_repo']") |> render_click()
+      view |> element("#skip-project-btn") |> render_click()
       view |> form("#initial-idea-form", %{"initial_idea" => ""}) |> render_submit()
 
       assert has_element?(view, "#initial_idea")
@@ -114,11 +159,15 @@ defmodule DestilaWeb.NewPromptLiveTest do
     end
 
     @tag feature: @feature, scenario: "Complete the wizard with Save & Continue"
-    test "save & continue creates prompt and redirects to detail page", %{conn: conn} do
+    test "save & continue creates prompt and redirects to detail page", %{
+      conn: conn,
+      project: project
+    } do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='feature_request']") |> render_click()
-      view |> form("form", %{"repo_url" => "https://github.com/owner/repo"}) |> render_submit()
+      view |> element("#project-#{project.id}") |> render_click()
+      view |> element("#continue-project-btn") |> render_click()
 
       view
       |> form("#initial-idea-form", %{"initial_idea" => "Add PDF export for reports"})
@@ -133,7 +182,7 @@ defmodule DestilaWeb.NewPromptLiveTest do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='project']") |> render_click()
-      view |> element("button[phx-click='skip_repo']") |> render_click()
+      view |> element("#skip-project-btn") |> render_click()
 
       view
       |> form("#initial-idea-form", %{"initial_idea" => "A task management app"})
@@ -152,7 +201,8 @@ defmodule DestilaWeb.NewPromptLiveTest do
 
       view |> element("button[phx-value-type='feature_request']") |> render_click()
 
-      assert has_element?(view, "#repo_url")
+      assert has_element?(view, "#project-list") or
+               has_element?(view, "#create-first-project-btn")
 
       view |> element("button[phx-click='back']") |> render_click()
 
@@ -166,13 +216,13 @@ defmodule DestilaWeb.NewPromptLiveTest do
       {:ok, view, _html} = live(conn, ~p"/prompts/new")
 
       view |> element("button[phx-value-type='project']") |> render_click()
-      view |> element("button[phx-click='skip_repo']") |> render_click()
+      view |> element("#skip-project-btn") |> render_click()
 
       assert has_element?(view, "#initial_idea")
 
-      view |> element("button[phx-click='back_to_repo']") |> render_click()
+      view |> element("button[phx-click='back_to_project']") |> render_click()
 
-      assert has_element?(view, "#repo_url")
+      assert has_element?(view, "#continue-project-btn")
     end
   end
 end

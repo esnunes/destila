@@ -29,11 +29,16 @@ defmodule DestilaWeb.ProjectsLive do
   end
 
   def handle_event("cancel", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:creating, false)
-     |> assign(:editing_project_id, nil)
-     |> assign(:delete_confirming_id, nil)}
+    # Re-stream affected projects so stream items re-render
+    socket =
+      socket
+      |> maybe_restream_project(socket.assigns.editing_project_id)
+      |> maybe_restream_project(socket.assigns.delete_confirming_id)
+      |> assign(:creating, false)
+      |> assign(:editing_project_id, nil)
+      |> assign(:delete_confirming_id, nil)
+
+    {:noreply, socket}
   end
 
   def handle_event("create_project", params, socket) do
@@ -64,6 +69,7 @@ defmodule DestilaWeb.ProjectsLive do
 
       {:noreply,
        socket
+       |> stream_insert(:projects, project)
        |> assign(:editing_project_id, id)
        |> assign(:creating, false)
        |> assign(:form, form)}
@@ -90,6 +96,15 @@ defmodule DestilaWeb.ProjectsLive do
   end
 
   def handle_event("confirm_delete", %{"id" => id}, socket) do
+    project = Destila.Store.get_project(id)
+
+    socket =
+      if project do
+        stream_insert(socket, :projects, project)
+      else
+        socket
+      end
+
     {:noreply, assign(socket, :delete_confirming_id, id)}
   end
 
@@ -101,6 +116,7 @@ defmodule DestilaWeb.ProjectsLive do
       {:error, :has_linked_prompts} ->
         {:noreply,
          socket
+         |> maybe_restream_project(id)
          |> assign(:delete_confirming_id, nil)
          |> put_flash(:error, "Cannot delete project while it is linked to prompts")}
 
@@ -141,6 +157,15 @@ defmodule DestilaWeb.ProjectsLive do
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   # Helpers
+
+  defp maybe_restream_project(socket, nil), do: socket
+
+  defp maybe_restream_project(socket, project_id) do
+    case Destila.Store.get_project(project_id) do
+      nil -> socket
+      project -> stream_insert(socket, :projects, project)
+    end
+  end
 
   defp new_form do
     to_form(%{"name" => "", "git_repo_url" => "", "local_folder" => ""})
