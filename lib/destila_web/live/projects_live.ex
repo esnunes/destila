@@ -191,8 +191,15 @@ defmodule DestilaWeb.ProjectsLive do
   end
 
   defp linked_prompt_count(project_id) do
-    Destila.Store.list_prompts()
-    |> Enum.count(&(&1[:project_id] == project_id))
+    count =
+      Destila.Store.list_prompts()
+      |> Enum.count(&(&1[:project_id] == project_id))
+
+    case count do
+      0 -> "No prompts"
+      1 -> "1 prompt"
+      n -> "#{n} prompts"
+    end
   end
 
   def render(assigns) do
@@ -219,8 +226,11 @@ defmodule DestilaWeb.ProjectsLive do
         >
           <div class="card-body">
             <h3 class="text-sm font-semibold mb-3">New Project</h3>
-            <.project_form form={@form} submit_event="create_project" submit_label="Create" />
-            <button phx-click="cancel" class="btn btn-ghost btn-sm mt-2">Cancel</button>
+            <.project_form form={@form} submit_event="create_project" submit_label="Create">
+              <button phx-click="cancel" type="button" class="btn btn-ghost btn-sm flex-1">
+                Cancel
+              </button>
+            </.project_form>
           </div>
         </div>
 
@@ -242,38 +252,47 @@ defmodule DestilaWeb.ProjectsLive do
           <div
             :for={{id, project} <- @streams.projects}
             id={id}
-            class="card bg-base-100 shadow-sm mb-3"
+            class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow mb-3"
           >
             <%!-- Edit form --%>
             <div :if={@editing_project_id == project.id} class="card-body">
               <h3 class="text-sm font-semibold mb-3">Edit Project</h3>
-              <.project_form form={@form} submit_event="update_project" submit_label="Save" />
-              <button phx-click="cancel" class="btn btn-ghost btn-sm mt-2">Cancel</button>
+              <.project_form form={@form} submit_event="update_project" submit_label="Save">
+                <button phx-click="cancel" type="button" class="btn btn-ghost btn-sm flex-1">
+                  Cancel
+                </button>
+              </.project_form>
             </div>
 
             <%!-- Display --%>
-            <div :if={@editing_project_id != project.id} class="card-body">
+            <div :if={@editing_project_id != project.id} class="card-body p-4 gap-2">
               <div class="flex items-start justify-between">
                 <div class="min-w-0 flex-1">
-                  <h3 class="font-semibold">{project.name}</h3>
+                  <h4 class="text-sm font-medium leading-tight">{project.name}</h4>
                   <div class="flex flex-col gap-0.5 mt-1">
-                    <span :if={project.git_repo_url} class="text-xs text-base-content/40 truncate">
-                      <.icon name="hero-link-micro" class="size-3 inline" /> {project.git_repo_url}
+                    <span
+                      :if={project.git_repo_url}
+                      class="text-xs text-base-content/40 truncate"
+                    >
+                      <.icon name="hero-link-micro" class="size-3.5 inline" />
+                      {project.git_repo_url}
                     </span>
                     <span :if={project.local_folder} class="text-xs text-base-content/40 truncate">
-                      <.icon name="hero-folder-micro" class="size-3 inline" /> {project.local_folder}
+                      <.icon name="hero-folder-micro" class="size-3.5 inline" />
+                      {project.local_folder}
                     </span>
                   </div>
-                  <span class="text-xs text-base-content/30 mt-1">
-                    {linked_prompt_count(project.id)} linked prompt(s)
-                  </span>
                 </div>
 
                 <div class="flex items-center gap-1 ml-4 shrink-0">
+                  <span class="text-xs text-base-content/40">
+                    {linked_prompt_count(project.id)}
+                  </span>
+
                   <button
                     phx-click="edit_project"
                     phx-value-id={project.id}
-                    class="btn btn-ghost btn-xs"
+                    class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 transition-opacity"
                     id={"edit-project-#{project.id}"}
                   >
                     <.icon name="hero-pencil-micro" class="size-4" />
@@ -286,7 +305,7 @@ defmodule DestilaWeb.ProjectsLive do
                       class="btn btn-error btn-xs"
                       id={"confirm-delete-#{project.id}"}
                     >
-                      Confirm
+                      Delete
                     </button>
                     <button phx-click="cancel" class="btn btn-ghost btn-xs">
                       Cancel
@@ -295,7 +314,7 @@ defmodule DestilaWeb.ProjectsLive do
                     <button
                       phx-click="confirm_delete"
                       phx-value-id={project.id}
-                      class="btn btn-ghost btn-xs text-error/60 hover:text-error"
+                      class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 transition-opacity text-error/60 hover:text-error"
                       id={"delete-project-#{project.id}"}
                     >
                       <.icon name="hero-trash-micro" class="size-4" />
@@ -314,6 +333,7 @@ defmodule DestilaWeb.ProjectsLive do
   attr :form, :any, required: true
   attr :submit_event, :string, required: true
   attr :submit_label, :string, required: true
+  slot :inner_block
 
   defp project_form(assigns) do
     ~H"""
@@ -360,9 +380,12 @@ defmodule DestilaWeb.ProjectsLive do
         />
       </fieldset>
 
-      <button type="submit" class="btn btn-primary btn-sm w-full">
-        {@submit_label}
-      </button>
+      <div class="flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm flex-1">
+          {@submit_label}
+        </button>
+        {render_slot(@inner_block)}
+      </div>
     </form>
     """
   end
