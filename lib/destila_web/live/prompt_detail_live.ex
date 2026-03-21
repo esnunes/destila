@@ -420,17 +420,29 @@ defmodule DestilaWeb.PromptDetailLive do
             Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
         end
       else
-        # Session is dead — try to restart
-        restart_ai_session(prompt_id)
+        # Session is dead — restart and replay with full context
+        case Destila.AI.Session.start_link(timeout_ms: :timer.minutes(15)) do
+          {:ok, new_session} ->
+            Destila.Store.update_prompt(prompt_id, %{ai_session: new_session})
 
-        Destila.Store.add_message(prompt_id, %{
-          role: :system,
-          content: "Session was refreshed. Please send your message again.",
-          input_type: :text,
-          step: phase
-        })
+            prompt = Destila.Store.get_prompt(prompt_id)
+            messages = Destila.Store.list_messages(prompt_id)
+            system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
+            context = ChoreTaskPhases.build_conversation_context(messages)
+            query = system_prompt <> "\n\n" <> context
 
-        Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
+            spawn_ai_query(prompt_id, phase, query)
+
+          {:error, _} ->
+            Destila.Store.add_message(prompt_id, %{
+              role: :system,
+              content: "Something went wrong. Please try sending your message again.",
+              input_type: :text,
+              step: phase
+            })
+
+            Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
+        end
       end
     end)
   end
@@ -458,16 +470,6 @@ defmodule DestilaWeb.PromptDetailLive do
     prompt = Destila.Store.get_prompt(prompt_id)
     phase_prompt = ChoreTaskPhases.system_prompt(next_phase, prompt)
     spawn_ai_query(prompt_id, next_phase, phase_prompt)
-  end
-
-  defp restart_ai_session(prompt_id) do
-    case Destila.AI.Session.start_link(timeout_ms: :timer.minutes(15)) do
-      {:ok, session} ->
-        Destila.Store.update_prompt(prompt_id, %{ai_session: session})
-
-      {:error, _} ->
-        :ok
-    end
   end
 
   defp ensure_ai_session(socket, prompt, messages) do
