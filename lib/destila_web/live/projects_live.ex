@@ -198,14 +198,9 @@ defmodule DestilaWeb.ProjectsLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
-      <div class="max-w-3xl mx-auto px-6 py-10">
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h1 class="text-2xl font-bold">Projects</h1>
-            <p class="text-sm text-base-content/50 mt-1">
-              Manage codebases that prompts operate against
-            </p>
-          </div>
+      <div class="p-6 lg:p-8 max-w-3xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+          <h1 class="text-2xl font-bold tracking-tight">Projects</h1>
           <button
             :if={!@creating}
             phx-click="new_project"
@@ -219,11 +214,11 @@ defmodule DestilaWeb.ProjectsLive do
         <%!-- Create form --%>
         <div
           :if={@creating}
-          class="card bg-base-200 border border-base-300 mb-6"
+          class="card bg-base-100 shadow-sm mb-4"
           id="create-project-card"
         >
-          <div class="card-body p-5">
-            <h3 class="font-semibold mb-3">New Project</h3>
+          <div class="card-body">
+            <h3 class="text-sm font-semibold mb-3">New Project</h3>
             <.project_form form={@form} submit_event="create_project" submit_label="Create" />
             <button phx-click="cancel" class="btn btn-ghost btn-sm mt-2">Cancel</button>
           </div>
@@ -231,9 +226,9 @@ defmodule DestilaWeb.ProjectsLive do
 
         <%!-- Project list --%>
         <div id="projects" phx-update="stream">
-          <div class="hidden only:block text-center py-16" id="projects-empty">
-            <.icon name="hero-folder" class="size-16 text-base-content/10 mx-auto mb-4" />
-            <p class="text-base-content/40 mb-4">No projects yet</p>
+          <div class="hidden only:block text-center py-12" id="projects-empty">
+            <.icon name="hero-folder" class="size-10 text-base-content/20 mx-auto mb-3" />
+            <p class="text-sm text-base-content/30 mb-4">No projects yet</p>
             <button
               :if={!@creating}
               phx-click="new_project"
@@ -247,17 +242,17 @@ defmodule DestilaWeb.ProjectsLive do
           <div
             :for={{id, project} <- @streams.projects}
             id={id}
-            class="card bg-base-100 border border-base-300 mb-3"
+            class="card bg-base-100 shadow-sm mb-3"
           >
             <%!-- Edit form --%>
-            <div :if={@editing_project_id == project.id} class="card-body p-5">
-              <h3 class="font-semibold mb-3">Edit Project</h3>
+            <div :if={@editing_project_id == project.id} class="card-body">
+              <h3 class="text-sm font-semibold mb-3">Edit Project</h3>
               <.project_form form={@form} submit_event="update_project" submit_label="Save" />
               <button phx-click="cancel" class="btn btn-ghost btn-sm mt-2">Cancel</button>
             </div>
 
             <%!-- Display --%>
-            <div :if={@editing_project_id != project.id} class="card-body p-5">
+            <div :if={@editing_project_id != project.id} class="card-body">
               <div class="flex items-start justify-between">
                 <div class="min-w-0 flex-1">
                   <h3 class="font-semibold">{project.name}</h3>

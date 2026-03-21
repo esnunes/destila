@@ -429,8 +429,8 @@ defmodule DestilaWeb.NewPromptLive do
 
               <%= if @projects == [] do %>
                 <div class="text-center py-8">
-                  <.icon name="hero-folder" class="size-12 text-base-content/20 mx-auto mb-3" />
-                  <p class="text-sm text-base-content/50 mb-4">No projects yet</p>
+                  <.icon name="hero-folder" class="size-10 text-base-content/20 mx-auto mb-3" />
+                  <p class="text-sm text-base-content/30 mb-4">No projects yet</p>
                   <button
                     phx-click="show_create_project"
                     class="btn btn-primary"
@@ -450,7 +450,7 @@ defmodule DestilaWeb.NewPromptLive do
                       "w-full text-left p-3 rounded-lg border-2 transition-colors cursor-pointer",
                       if(@project_id == project.id,
                         do: "border-primary bg-primary/5",
-                        else: "border-base-300 hover:border-base-content/20"
+                        else: "border-base-300 hover:border-primary"
                       )
                     ]}
                   >
