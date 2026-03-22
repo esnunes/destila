@@ -103,10 +103,12 @@ defmodule Destila.Messages do
     cond do
       String.contains?(text, "<<SKIP_PHASE>>") ->
         content = String.replace(text, "<<SKIP_PHASE>>", "") |> String.trim()
+        content = if content == "", do: "Skipping this phase.", else: content
         {content, :skip_phase}
 
       String.contains?(text, "<<READY_TO_ADVANCE>>") ->
         content = String.replace(text, "<<READY_TO_ADVANCE>>", "") |> String.trim()
+        content = if content == "", do: "Ready to move to the next phase.", else: content
         {content, :phase_advance}
 
       phase == prompt.steps_total ->
