@@ -549,6 +549,7 @@ defmodule DestilaWeb.NewPromptLive do
                     value={@project_form["name"].value}
                     placeholder="My Project"
                     aria-invalid={@errors[:name] && "true"}
+                    phx-mounted={JS.focus()}
                     class={[
                       "input input-bordered w-full",
                       @errors[:name] && "input-error"
