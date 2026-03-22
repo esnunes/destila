@@ -28,7 +28,7 @@ defmodule DestilaWeb.ChatComponents do
   end
 
   def chat_message(%{message: %{message_type: :phase_advance}} = assigns) do
-    next_phase = (assigns.prompt[:steps_completed] || 1) + 1
+    next_phase = (assigns.prompt.steps_completed || 1) + 1
 
     assigns = assign(assigns, :next_phase, next_phase)
 
@@ -45,7 +45,7 @@ defmodule DestilaWeb.ChatComponents do
           {raw(markdown_to_html(@message.content))}
         </div>
 
-        <%= if @prompt[:phase_status] == :advance_suggested do %>
+        <%= if @prompt.phase_status == :advance_suggested do %>
           <div class="flex gap-2 mt-2">
             <button
               phx-click="confirm_advance"
@@ -226,7 +226,7 @@ defmodule DestilaWeb.ChatComponents do
 
       <div class={[
         "rounded-2xl px-4 py-3 text-sm",
-        if(@message[:input_type] in [:single_select, :multi_select, :questions],
+        if(@message.input_type in [:single_select, :multi_select, :questions],
           do: "flex-1",
           else: "max-w-[80%]"
         ),

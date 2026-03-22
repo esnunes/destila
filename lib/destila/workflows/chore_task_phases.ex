@@ -64,7 +64,7 @@ defmodule Destila.Workflows.ChoreTaskPhases do
 
   def system_prompt(2, prompt) do
     project =
-      if prompt[:project_id], do: Destila.Store.get_project(prompt[:project_id])
+      if prompt.project_id, do: Destila.Projects.get_project(prompt.project_id)
 
     repo_context =
       cond do

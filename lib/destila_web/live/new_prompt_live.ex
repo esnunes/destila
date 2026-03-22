@@ -9,7 +9,7 @@ defmodule DestilaWeb.NewPromptLive do
      |> assign(:step, 1)
      |> assign(:workflow_type, nil)
      |> assign(:project_id, nil)
-     |> assign(:projects, Destila.Store.list_projects())
+     |> assign(:projects, Destila.Projects.list_projects())
      |> assign(:project_step, :select)
      |> assign(
        :project_form,
@@ -78,8 +78,8 @@ defmodule DestilaWeb.NewPromptLive do
       end
 
     if errors == %{} do
-      project =
-        Destila.Store.create_project(%{
+      {:ok, project} =
+        Destila.Projects.create_project(%{
           name: name,
           git_repo_url: git_repo_url,
           local_folder: local_folder
@@ -88,7 +88,7 @@ defmodule DestilaWeb.NewPromptLive do
       {:noreply,
        socket
        |> assign(:project_id, project.id)
-       |> assign(:projects, Destila.Store.list_projects())
+       |> assign(:projects, Destila.Projects.list_projects())
        |> assign(:project_step, :select)
        |> assign(:errors, %{})}
     else
@@ -151,8 +151,8 @@ defmodule DestilaWeb.NewPromptLive do
     steps = Destila.Workflows.steps(workflow_type)
     first_step = List.first(steps)
 
-    prompt =
-      Destila.Store.create_prompt(%{
+    {:ok, prompt} =
+      Destila.Prompts.create_prompt(%{
         title: "Generating title...",
         title_generating: true,
         workflow_type: workflow_type,
@@ -165,37 +165,40 @@ defmodule DestilaWeb.NewPromptLive do
       })
 
     # Add system message for step 1 (the question)
-    Destila.Store.add_message(prompt.id, %{
-      role: :system,
-      content: first_step.content,
-      input_type: first_step.input_type,
-      options: first_step.options,
-      step: first_step.step
-    })
+    {:ok, _} =
+      Destila.Messages.create_message(prompt.id, %{
+        role: :system,
+        content: first_step.content,
+        input_type: first_step.input_type,
+        options: first_step.options,
+        step: first_step.step
+      })
 
     # Add user message for step 1 (the initial idea)
-    Destila.Store.add_message(prompt.id, %{
-      role: :user,
-      content: idea,
-      selected: nil,
-      step: 1
-    })
+    {:ok, _} =
+      Destila.Messages.create_message(prompt.id, %{
+        role: :user,
+        content: idea,
+        selected: nil,
+        step: 1
+      })
 
     # For static workflows, add the second system message so the chat picks up from there
     # For AI-driven workflows (chore_task), skip — the AI will generate the next response
     if workflow_type != :chore_task do
       second_step = Enum.at(steps, 1)
 
-      Destila.Store.add_message(prompt.id, %{
-        role: :system,
-        content: second_step.content,
-        input_type: second_step.input_type,
-        options: second_step.options,
-        step: second_step.step
-      })
+      {:ok, _} =
+        Destila.Messages.create_message(prompt.id, %{
+          role: :system,
+          content: second_step.content,
+          input_type: second_step.input_type,
+          options: second_step.options,
+          step: second_step.step
+        })
     end
 
-    # Start an AI session and store its PID on the prompt
+    # Start an AI session
     session_opts =
       case action do
         :continue -> [timeout_ms: :timer.minutes(15)]
@@ -203,7 +206,6 @@ defmodule DestilaWeb.NewPromptLive do
       end
 
     {:ok, session} = Destila.AI.Session.start_link(session_opts)
-    Destila.Store.update_prompt(prompt.id, %{ai_session: session})
 
     # Generate title asynchronously
     prompt_id = prompt.id
@@ -211,10 +213,10 @@ defmodule DestilaWeb.NewPromptLive do
     Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
       case Destila.AI.generate_title(session, workflow_type, idea) do
         {:ok, title} ->
-          Destila.Store.update_prompt(prompt_id, %{title: title, title_generating: false})
+          Destila.Prompts.update_prompt(prompt_id, %{title: title, title_generating: false})
 
         {:error, _} ->
-          Destila.Store.update_prompt(prompt_id, %{
+          Destila.Prompts.update_prompt(prompt_id, %{
             title: default_title(workflow_type),
             title_generating: false
           })
@@ -227,7 +229,6 @@ defmodule DestilaWeb.NewPromptLive do
 
       if action == :close do
         Destila.AI.Session.stop(session)
-        Destila.Store.update_prompt(prompt_id, %{ai_session: nil})
       end
     end)
 
@@ -235,15 +236,15 @@ defmodule DestilaWeb.NewPromptLive do
   end
 
   defp trigger_ai_response(prompt_id, session, phase) do
-    prompt = Destila.Store.get_prompt(prompt_id)
-    messages = Destila.Store.list_messages(prompt_id)
+    prompt = Destila.Prompts.get_prompt!(prompt_id)
+    messages = Destila.Messages.list_messages(prompt_id)
 
     system_prompt = Destila.Workflows.ChoreTaskPhases.system_prompt(phase, prompt)
     conversation_context = Destila.Workflows.ChoreTaskPhases.build_conversation_context(messages)
 
     query = system_prompt <> "\n\n" <> conversation_context
 
-    Destila.Store.update_prompt(prompt_id, %{phase_status: :generating})
+    Destila.Prompts.update_prompt(prompt_id, %{phase_status: :generating})
 
     case Destila.AI.Session.query(session, query) do
       {:ok, result} ->
@@ -271,27 +272,28 @@ defmodule DestilaWeb.NewPromptLive do
             _ -> {:questions, nil}
           end
 
-        Destila.Store.add_message(prompt_id, %{
-          role: :system,
-          content: content,
-          input_type: input_type,
-          options: options,
-          questions: questions,
-          step: phase,
-          message_type: message_type
-        })
+        {:ok, _} =
+          Destila.Messages.create_message(prompt_id, %{
+            role: :system,
+            content: content,
+            input_type: input_type,
+            options: options,
+            step: phase,
+            message_type: message_type
+          })
 
-        Destila.Store.update_prompt(prompt_id, %{phase_status: new_phase_status})
+        Destila.Prompts.update_prompt(prompt_id, %{phase_status: new_phase_status})
 
       {:error, _} ->
-        Destila.Store.add_message(prompt_id, %{
-          role: :system,
-          content: "Something went wrong. Please try sending your message again.",
-          input_type: :text,
-          step: phase
-        })
+        {:ok, _} =
+          Destila.Messages.create_message(prompt_id, %{
+            role: :system,
+            content: "Something went wrong. Please try sending your message again.",
+            input_type: :text,
+            step: phase
+          })
 
-        Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
+        Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
     end
   end
 

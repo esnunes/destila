@@ -7,40 +7,44 @@ defmodule DestilaWeb.PromptDetailLive do
   alias Destila.Workflows.ChoreTaskPhases
 
   def mount(%{"id" => id}, session, socket) do
-    prompt = Destila.Store.get_prompt(id)
+    prompt = Destila.Prompts.get_prompt(id)
 
     if prompt do
       if connected?(socket) do
         Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
       end
 
-      messages = Destila.Store.list_messages(id)
+      messages = Destila.Messages.list_messages(id)
 
       # If no messages yet, start the workflow by adding the first system message
       messages =
         if messages == [] do
           start_workflow(prompt)
-          Destila.Store.list_messages(id)
+          Destila.Messages.list_messages(id)
         else
           messages
         end
 
       # For AI workflows, ensure session is alive and trigger initial response if needed
       socket =
-        if ai_workflow?(prompt) && connected?(socket) do
-          ensure_ai_session(socket, prompt, messages)
-        else
-          socket
-        end
+        socket
+        |> assign(:ai_session, nil)
+        |> then(fn s ->
+          if ai_workflow?(prompt) && connected?(socket) do
+            ensure_ai_session(s, prompt, messages)
+          else
+            s
+          end
+        end)
 
       current_step = current_step_info(messages, prompt)
 
       {:ok,
        socket
        |> assign(:current_user, session["current_user"])
-       |> assign(:prompt, Destila.Store.get_prompt(id) || prompt)
+       |> assign(:prompt, Destila.Prompts.get_prompt(id) || prompt)
        |> assign(:project, lookup_project(prompt))
-       |> assign(:messages, Destila.Store.list_messages(id))
+       |> assign(:messages, Destila.Messages.list_messages(id))
        |> assign(:current_step, current_step)
        |> assign(:editing_title, false)
        |> assign(:question_answers, %{})
@@ -155,7 +159,9 @@ defmodule DestilaWeb.PromptDetailLive do
 
   def handle_event("save_title", %{"title" => title}, socket) do
     title = if title == "", do: socket.assigns.prompt.title, else: title
-    prompt = Destila.Store.update_prompt(socket.assigns.prompt.id, %{title: title})
+
+    {:ok, prompt} =
+      Destila.Prompts.update_prompt(socket.assigns.prompt, %{title: title})
 
     {:noreply,
      socket
@@ -166,8 +172,8 @@ defmodule DestilaWeb.PromptDetailLive do
 
   # Send to implementation
   def handle_event("send_to_implementation", _params, socket) do
-    prompt =
-      Destila.Store.update_prompt(socket.assigns.prompt.id, %{
+    {:ok, prompt} =
+      Destila.Prompts.update_prompt(socket.assigns.prompt, %{
         board: :implementation,
         column: :todo
       })
@@ -189,25 +195,27 @@ defmodule DestilaWeb.PromptDetailLive do
       # Insert phase divider message
       phase_name = ChoreTaskPhases.phase_name(next_phase)
 
-      Destila.Store.add_message(prompt.id, %{
-        role: :system,
-        content: "Phase #{next_phase} — #{phase_name}",
-        input_type: nil,
-        step: next_phase,
-        message_type: :phase_divider
-      })
+      {:ok, _} =
+        Destila.Messages.create_message(prompt.id, %{
+          role: :system,
+          content: "Phase #{next_phase} — #{phase_name}",
+          input_type: nil,
+          step: next_phase,
+          message_type: :phase_divider
+        })
 
       # Advance phase
-      Destila.Store.update_prompt(prompt.id, %{
-        steps_completed: next_phase,
-        phase_status: :generating
-      })
+      {:ok, _} =
+        Destila.Prompts.update_prompt(prompt, %{
+          steps_completed: next_phase,
+          phase_status: :generating
+        })
 
       # Trigger AI response for the new phase — send phase system prompt only
       # (session already has full conversation history)
-      updated_prompt = Destila.Store.get_prompt(prompt.id)
+      updated_prompt = Destila.Prompts.get_prompt!(prompt.id)
       phase_prompt = ChoreTaskPhases.system_prompt(next_phase, updated_prompt)
-      spawn_ai_query(prompt.id, next_phase, phase_prompt)
+      spawn_ai_query(prompt.id, next_phase, phase_prompt, socket.assigns.ai_session)
 
       {:noreply, refresh_state(socket)}
     end
@@ -215,7 +223,7 @@ defmodule DestilaWeb.PromptDetailLive do
 
   # Decline phase advance (AI workflows)
   def handle_event("decline_advance", _params, socket) do
-    Destila.Store.update_prompt(socket.assigns.prompt.id, %{phase_status: :conversing})
+    Destila.Prompts.update_prompt(socket.assigns.prompt, %{phase_status: :conversing})
     {:noreply, refresh_state(socket)}
   end
 
@@ -223,15 +231,16 @@ defmodule DestilaWeb.PromptDetailLive do
   def handle_event("mark_done", _params, socket) do
     prompt = socket.assigns.prompt
 
-    Destila.Store.add_message(prompt.id, %{
-      role: :system,
-      content: Destila.Workflows.completion_message(:chore_task),
-      input_type: nil,
-      step: prompt.steps_completed,
-      message_type: nil
-    })
+    {:ok, _} =
+      Destila.Messages.create_message(prompt.id, %{
+        role: :system,
+        content: Destila.Workflows.completion_message(:chore_task),
+        input_type: nil,
+        step: prompt.steps_completed,
+        message_type: nil
+      })
 
-    Destila.Store.update_prompt(prompt.id, %{
+    Destila.Prompts.update_prompt(prompt, %{
       steps_completed: prompt.steps_total,
       column: :done,
       phase_status: nil
@@ -243,7 +252,7 @@ defmodule DestilaWeb.PromptDetailLive do
   # PubSub handlers
   def handle_info({:prompt_updated, updated_prompt}, socket) do
     if updated_prompt.id == socket.assigns.prompt.id do
-      messages = Destila.Store.list_messages(updated_prompt.id)
+      messages = Destila.Messages.list_messages(updated_prompt.id)
       current_step = current_step_info(messages, updated_prompt)
 
       {:noreply,
@@ -265,6 +274,10 @@ defmodule DestilaWeb.PromptDetailLive do
     end
   end
 
+  def handle_info({:ai_session_replaced, new_session}, socket) do
+    {:noreply, assign(socket, :ai_session, new_session)}
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   # --- Static workflow response handling (unchanged logic) ---
@@ -275,12 +288,13 @@ defmodule DestilaWeb.PromptDetailLive do
     current_step = current_step_number(messages)
 
     # Add user message
-    Destila.Store.add_message(prompt.id, %{
-      role: :user,
-      content: content,
-      selected: selected,
-      step: current_step
-    })
+    {:ok, _} =
+      Destila.Messages.create_message(prompt.id, %{
+        role: :user,
+        content: content,
+        selected: selected,
+        step: current_step
+      })
 
     # Advance workflow
     workflow_steps = Destila.Workflows.steps(prompt.workflow_type)
@@ -291,26 +305,28 @@ defmodule DestilaWeb.PromptDetailLive do
       # Add next system message
       next_step = Enum.at(workflow_steps, next_step_num - 1)
 
-      Destila.Store.add_message(prompt.id, %{
-        role: :system,
-        content: next_step.content,
-        input_type: next_step.input_type,
-        options: next_step.options,
-        step: next_step.step
-      })
+      {:ok, _} =
+        Destila.Messages.create_message(prompt.id, %{
+          role: :system,
+          content: next_step.content,
+          input_type: next_step.input_type,
+          options: next_step.options,
+          step: next_step.step
+        })
 
       # Update progress
-      Destila.Store.update_prompt(prompt.id, %{steps_completed: current_step})
+      Destila.Prompts.update_prompt(prompt, %{steps_completed: current_step})
     else
       # Workflow complete
-      Destila.Store.add_message(prompt.id, %{
-        role: :system,
-        content: Destila.Workflows.completion_message(prompt.workflow_type),
-        input_type: nil,
-        step: next_step_num
-      })
+      {:ok, _} =
+        Destila.Messages.create_message(prompt.id, %{
+          role: :system,
+          content: Destila.Workflows.completion_message(prompt.workflow_type),
+          input_type: nil,
+          step: next_step_num
+        })
 
-      Destila.Store.update_prompt(prompt.id, %{
+      Destila.Prompts.update_prompt(prompt, %{
         steps_completed: total,
         column: :done
       })
@@ -325,24 +341,25 @@ defmodule DestilaWeb.PromptDetailLive do
     prompt = socket.assigns.prompt
 
     # Prevent sending while AI is generating
-    if prompt[:phase_status] == :generating do
+    if prompt.phase_status == :generating do
       {:noreply, socket}
     else
       phase = prompt.steps_completed
 
       # Add user message
-      Destila.Store.add_message(prompt.id, %{
-        role: :user,
-        content: content,
-        selected: nil,
-        step: phase
-      })
+      {:ok, _} =
+        Destila.Messages.create_message(prompt.id, %{
+          role: :user,
+          content: content,
+          selected: nil,
+          step: phase
+        })
 
       # Set generating status
-      Destila.Store.update_prompt(prompt.id, %{phase_status: :generating})
+      Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
 
       # Spawn async AI query — pass user's message directly (session has context)
-      spawn_ai_query(prompt.id, phase, content)
+      spawn_ai_query(prompt.id, phase, content, socket.assigns.ai_session)
 
       {:noreply, refresh_state(socket)}
     end
@@ -352,140 +369,146 @@ defmodule DestilaWeb.PromptDetailLive do
   # - For user messages: the user's message text (session already has conversation history)
   # - For phase transitions: the phase system prompt (to set new AI instructions)
   # - For session resumption: system prompt + full conversation context
-  defp spawn_ai_query(prompt_id, phase, query_text) do
+  defp spawn_ai_query(prompt_id, phase, query_text, session) do
+    lv_pid = self()
+
     Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
-      prompt = Destila.Store.get_prompt(prompt_id)
-      session = prompt[:ai_session]
+      prompt = Destila.Prompts.get_prompt!(prompt_id)
 
       if session && Process.alive?(session) do
-        case Destila.AI.Session.query(session, query_text) do
-          {:ok, result} ->
-            response_text =
-              if result.text != nil and result.text != "" do
-                result.text
-              else
-                result.result || ""
-              end
-
-            {content, message_type, new_phase_status} = parse_ai_response(response_text)
-
-            # In the final phase, normal AI responses are generated prompts
-            message_type =
-              if phase == prompt.steps_total and message_type == nil,
-                do: :generated_prompt,
-                else: message_type
-
-            questions = extract_questions_from_tool_uses(result[:mcp_tool_uses])
-
-            # Use question texts from tool if AI text is empty/generic
-            content =
-              if questions != [] and (content == "" or content == "Waiting for your answer.") do
-                questions |> Enum.map(& &1.question) |> Enum.join("\n\n")
-              else
-                content
-              end
-
-            # Derive input_type from questions for backwards compat
-            {input_type, options} =
-              case questions do
-                [] -> {:text, nil}
-                [q] -> {q.input_type, q.options}
-                _ -> {:questions, nil}
-              end
-
-            Destila.Store.add_message(prompt_id, %{
-              role: :system,
-              content: content,
-              input_type: input_type,
-              options: options,
-              questions: questions,
-              step: phase,
-              message_type: message_type
-            })
-
-            # Handle auto-skip (Phase 3)
-            if message_type == :skip_phase do
-              handle_skip_phase(prompt_id, phase)
-            else
-              Destila.Store.update_prompt(prompt_id, %{phase_status: new_phase_status})
-            end
-
-          {:error, _} ->
-            Destila.Store.add_message(prompt_id, %{
-              role: :system,
-              content: "Something went wrong. Please try sending your message again.",
-              input_type: :text,
-              step: phase
-            })
-
-            Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
-        end
+        handle_ai_query_result(prompt_id, phase, prompt, session, query_text)
       else
         # Session is dead — restart and replay with full context
         case Destila.AI.Session.start_link(timeout_ms: :timer.minutes(15)) do
           {:ok, new_session} ->
-            Destila.Store.update_prompt(prompt_id, %{ai_session: new_session})
+            send(lv_pid, {:ai_session_replaced, new_session})
 
-            prompt = Destila.Store.get_prompt(prompt_id)
-            messages = Destila.Store.list_messages(prompt_id)
+            messages = Destila.Messages.list_messages(prompt_id)
             system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
             context = ChoreTaskPhases.build_conversation_context(messages)
             query = system_prompt <> "\n\n" <> context
 
-            spawn_ai_query(prompt_id, phase, query)
+            handle_ai_query_result(prompt_id, phase, prompt, new_session, query)
 
           {:error, _} ->
-            Destila.Store.add_message(prompt_id, %{
-              role: :system,
-              content: "Something went wrong. Please try sending your message again.",
-              input_type: :text,
-              step: phase
-            })
+            {:ok, _} =
+              Destila.Messages.create_message(prompt_id, %{
+                role: :system,
+                content: "Something went wrong. Please try sending your message again.",
+                input_type: :text,
+                step: phase
+              })
 
-            Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
+            Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
         end
       end
     end)
   end
 
-  defp handle_skip_phase(prompt_id, current_phase) do
+  defp handle_ai_query_result(prompt_id, phase, prompt, session, query_text) do
+    case Destila.AI.Session.query(session, query_text) do
+      {:ok, result} ->
+        response_text =
+          if result.text != nil and result.text != "" do
+            result.text
+          else
+            result.result || ""
+          end
+
+        {content, message_type, new_phase_status} = parse_ai_response(response_text)
+
+        # In the final phase, normal AI responses are generated prompts
+        message_type =
+          if phase == prompt.steps_total and message_type == nil,
+            do: :generated_prompt,
+            else: message_type
+
+        questions = extract_questions_from_tool_uses(result[:mcp_tool_uses])
+
+        # Use question texts from tool if AI text is empty/generic
+        content =
+          if questions != [] and (content == "" or content == "Waiting for your answer.") do
+            questions |> Enum.map(& &1.question) |> Enum.join("\n\n")
+          else
+            content
+          end
+
+        # Derive input_type from questions for backwards compat
+        {input_type, options} =
+          case questions do
+            [] -> {:text, nil}
+            [q] -> {q.input_type, q.options}
+            _ -> {:questions, nil}
+          end
+
+        {:ok, _} =
+          Destila.Messages.create_message(prompt_id, %{
+            role: :system,
+            content: content,
+            input_type: input_type,
+            options: options,
+            step: phase,
+            message_type: message_type
+          })
+
+        # Handle auto-skip (Phase 3)
+        if message_type == :skip_phase do
+          handle_skip_phase(prompt_id, phase, session)
+        else
+          Destila.Prompts.update_prompt(prompt_id, %{phase_status: new_phase_status})
+        end
+
+      {:error, _} ->
+        {:ok, _} =
+          Destila.Messages.create_message(prompt_id, %{
+            role: :system,
+            content: "Something went wrong. Please try sending your message again.",
+            input_type: :text,
+            step: phase
+          })
+
+        Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
+    end
+  end
+
+  defp handle_skip_phase(prompt_id, current_phase, session) do
     next_phase = current_phase + 1
     phase_name = ChoreTaskPhases.phase_name(next_phase)
 
     # Insert skip notice
-    Destila.Store.add_message(prompt_id, %{
-      role: :system,
-      content: "Phase #{next_phase} — #{phase_name}",
-      input_type: nil,
-      step: next_phase,
-      message_type: :phase_divider
-    })
+    {:ok, _} =
+      Destila.Messages.create_message(prompt_id, %{
+        role: :system,
+        content: "Phase #{next_phase} — #{phase_name}",
+        input_type: nil,
+        step: next_phase,
+        message_type: :phase_divider
+      })
 
     # Advance to next phase
-    Destila.Store.update_prompt(prompt_id, %{
+    Destila.Prompts.update_prompt(prompt_id, %{
       steps_completed: next_phase,
       phase_status: :generating
     })
 
     # Trigger AI for the next phase — send phase system prompt only
-    prompt = Destila.Store.get_prompt(prompt_id)
+    # Call directly since we're already in a task
+    prompt = Destila.Prompts.get_prompt!(prompt_id)
     phase_prompt = ChoreTaskPhases.system_prompt(next_phase, prompt)
-    spawn_ai_query(prompt_id, next_phase, phase_prompt)
+    handle_ai_query_result(prompt_id, next_phase, prompt, session, phase_prompt)
   end
 
   defp ensure_ai_session(socket, prompt, messages) do
-    session = prompt[:ai_session]
+    session = socket.assigns.ai_session
 
     cond do
       session && Process.alive?(session) ->
         # Session alive — check if we need to trigger initial AI response
-        # (e.g., user just created the prompt and we have their idea but no AI response yet)
         last_msg = List.last(messages)
 
-        if last_msg && last_msg.role == :user && prompt[:phase_status] != :generating do
-          Destila.Store.update_prompt(prompt.id, %{phase_status: :generating})
-          # Session is alive, just send the user's latest message
-          spawn_ai_query(prompt.id, prompt.steps_completed, last_msg.content)
+        if last_msg && last_msg.role == :user && prompt.phase_status != :generating do
+          Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
+          spawn_ai_query(prompt.id, prompt.steps_completed, last_msg.content, session)
         end
 
         socket
@@ -494,8 +517,6 @@ defmodule DestilaWeb.PromptDetailLive do
         # Session dead or nil — restart with full context
         case Destila.AI.Session.start_link(timeout_ms: :timer.minutes(15)) do
           {:ok, new_session} ->
-            Destila.Store.update_prompt(prompt.id, %{ai_session: new_session})
-
             # If there's a pending user message, trigger AI response with full context
             last_msg = List.last(messages)
 
@@ -505,11 +526,11 @@ defmodule DestilaWeb.PromptDetailLive do
               context = ChoreTaskPhases.build_conversation_context(messages)
               query = system_prompt <> "\n\n" <> context
 
-              Destila.Store.update_prompt(prompt.id, %{phase_status: :generating})
-              spawn_ai_query(prompt.id, phase, query)
+              Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
+              spawn_ai_query(prompt.id, phase, query, new_session)
             end
 
-            socket
+            assign(socket, :ai_session, new_session)
 
           {:error, _} ->
             put_flash(socket, :error, "Failed to start AI session")
@@ -567,20 +588,21 @@ defmodule DestilaWeb.PromptDetailLive do
   defp ai_workflow?(_), do: false
 
   defp lookup_project(prompt) do
-    if prompt[:project_id], do: Destila.Store.get_project(prompt[:project_id])
+    if prompt.project_id, do: Destila.Projects.get_project(prompt.project_id)
   end
 
   defp start_workflow(prompt) do
     steps = Destila.Workflows.steps(prompt.workflow_type)
     first = List.first(steps)
 
-    Destila.Store.add_message(prompt.id, %{
-      role: :system,
-      content: first.content,
-      input_type: first.input_type,
-      options: first.options,
-      step: first.step
-    })
+    {:ok, _} =
+      Destila.Messages.create_message(prompt.id, %{
+        role: :system,
+        content: first.content,
+        input_type: first.input_type,
+        options: first.options,
+        step: first.step
+      })
   end
 
   defp current_step_number(messages) do
@@ -606,24 +628,23 @@ defmodule DestilaWeb.PromptDetailLive do
       completed >= total && prompt.column == :done ->
         %{input_type: nil, options: nil, questions: [], completed: true}
 
-      prompt[:phase_status] == :advance_suggested ->
+      prompt.phase_status == :advance_suggested ->
         %{input_type: nil, options: nil, questions: [], completed: false}
 
-      prompt[:phase_status] == :generating ->
+      prompt.phase_status == :generating ->
         %{input_type: :text, options: nil, questions: [], completed: false}
 
       true ->
-        # Use the last system message's input_type, options, and questions
+        # Use the last system message's input_type and options
         last_system =
           messages
-          |> Enum.filter(&(&1.role == :system && &1[:message_type] not in [:phase_divider]))
+          |> Enum.filter(&(&1.role == :system && &1.message_type not in [:phase_divider]))
           |> List.last()
 
-        input_type = (last_system && last_system[:input_type]) || :text
-        options = last_system && last_system[:options]
-        questions = (last_system && last_system[:questions]) || []
+        input_type = (last_system && last_system.input_type) || :text
+        options = last_system && last_system.options
 
-        %{input_type: input_type, options: options, questions: questions, completed: false}
+        %{input_type: input_type, options: options, questions: [], completed: false}
     end
   end
 
@@ -650,8 +671,8 @@ defmodule DestilaWeb.PromptDetailLive do
   end
 
   defp refresh_state(socket) do
-    prompt = Destila.Store.get_prompt(socket.assigns.prompt.id)
-    messages = Destila.Store.list_messages(prompt.id)
+    prompt = Destila.Prompts.get_prompt!(socket.assigns.prompt.id)
+    messages = Destila.Messages.list_messages(prompt.id)
     current_step = current_step_info(messages, prompt)
 
     # Reset question answers when questions change
@@ -704,17 +725,17 @@ defmodule DestilaWeb.PromptDetailLive do
                   <h1
                     class={[
                       "text-lg font-bold truncate transition-colors",
-                      if(@prompt[:title_generating],
+                      if(@prompt.title_generating,
                         do: "animate-pulse text-base-content/50",
                         else: "cursor-pointer hover:text-primary"
                       )
                     ]}
-                    phx-click={if(!@prompt[:title_generating], do: "edit_title")}
+                    phx-click={if(!@prompt.title_generating, do: "edit_title")}
                   >
                     {@prompt.title}
                   </h1>
                   <button
-                    :if={!@prompt[:title_generating]}
+                    :if={!@prompt.title_generating}
                     phx-click="edit_title"
                     class="cursor-pointer"
                   >
@@ -829,7 +850,7 @@ defmodule DestilaWeb.PromptDetailLive do
             <% end %>
 
             <%!-- Typing indicator --%>
-            <.chat_typing_indicator :if={@prompt[:phase_status] == :generating} />
+            <.chat_typing_indicator :if={@prompt.phase_status == :generating} />
 
             <%!-- Inline structured options (inside chat flow) --%>
             <div
@@ -871,7 +892,7 @@ defmodule DestilaWeb.PromptDetailLive do
             input_type={@current_step.input_type}
             options={@current_step.options}
             disabled={
-              ai_workflow?(@prompt) && @prompt[:phase_status] in [:generating, :advance_suggested]
+              ai_workflow?(@prompt) && @prompt.phase_status in [:generating, :advance_suggested]
             }
           />
         </div>

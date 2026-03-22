@@ -10,7 +10,7 @@ defmodule DestilaWeb.ImplementationBoardLive do
       Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
     end
 
-    prompts = Destila.Store.list_prompts(:implementation)
+    prompts = Destila.Prompts.list_prompts(:implementation)
 
     {:ok,
      socket
@@ -22,13 +22,14 @@ defmodule DestilaWeb.ImplementationBoardLive do
 
   def handle_event("card_moved", %{"id" => id, "to" => to_column, "index" => index}, socket) do
     column = String.to_existing_atom(to_column)
-    Destila.Store.move_card(id, column, index)
-    prompts = Destila.Store.list_prompts(:implementation)
+    prompt = Destila.Prompts.get_prompt!(id)
+    Destila.Prompts.move_card(prompt, column, index)
+    prompts = Destila.Prompts.list_prompts(:implementation)
     {:noreply, assign_columns(socket, prompts)}
   end
 
   def handle_info({_event, _data}, socket) do
-    prompts = Destila.Store.list_prompts(:implementation)
+    prompts = Destila.Prompts.list_prompts(:implementation)
     {:noreply, assign_columns(socket, prompts)}
   end
 

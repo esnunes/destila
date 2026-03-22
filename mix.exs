@@ -61,6 +61,8 @@ defmodule Destila.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:claude_code, "~> 0.32"},
+      {:ecto_sql, "~> 3.12"},
+      {:ecto_sqlite3, "~> 0.17"},
       {:earmark, "~> 1.4"},
       {:html_sanitize_ex, "~> 1.4"}
     ]
@@ -74,7 +76,9 @@ defmodule Destila.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup", "assets.build", "git.hooks"],
+      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build", "git.hooks"],
+      "ecto.setup": ["ecto.create --quiet", "ecto.migrate --quiet"],
+      "ecto.reset": ["ecto.drop", "ecto.setup"],
       "git.hooks": ["cmd git config core.hooksPath .githooks"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind destila", "esbuild destila"],

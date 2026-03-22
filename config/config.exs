@@ -8,7 +8,8 @@
 import Config
 
 config :destila,
-  generators: [timestamp_type: :utc_datetime]
+  ecto_repos: [Destila.Repo],
+  generators: [timestamp_type: :utc_datetime, binary_id: true]
 
 # Configure the endpoint
 config :destila, DestilaWeb.Endpoint,

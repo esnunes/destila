@@ -24,8 +24,8 @@ defmodule DestilaWeb.NewPromptLiveTest do
     conn = post(conn, "/login", %{"email" => "test@example.com"})
 
     # Create a test project for selection tests
-    project =
-      Destila.Store.create_project(%{
+    {:ok, project} =
+      Destila.Projects.create_project(%{
         name: "Test Project",
         git_repo_url: "https://github.com/test/repo"
       })
