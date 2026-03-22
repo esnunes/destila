@@ -194,6 +194,103 @@ defmodule DestilaWeb.NewPromptLiveTest do
     end
   end
 
+  describe "inline project creation" do
+    @tag feature: "project_inline_creation",
+         scenario: "Create a project with a git repository URL"
+    test "creates and selects a project with git URL", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prompts/new")
+
+      view |> element("button[phx-value-type='feature_request']") |> render_click()
+      view |> element("#create-new-project-btn") |> render_click()
+
+      assert has_element?(view, "#inline-project-form")
+
+      view
+      |> form("#inline-project-form", %{
+        "name" => "Git Project",
+        "git_repo_url" => "https://github.com/inline/repo"
+      })
+      |> render_submit()
+
+      assert render(view) =~ "Git Project"
+      assert has_element?(view, "#continue-project-btn")
+    end
+
+    @tag feature: "project_inline_creation",
+         scenario: "Create a project with a local folder only"
+    test "creates and selects a project with local folder only", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prompts/new")
+
+      view |> element("button[phx-value-type='feature_request']") |> render_click()
+      view |> element("#create-new-project-btn") |> render_click()
+
+      view
+      |> form("#inline-project-form", %{
+        "name" => "Local Project",
+        "local_folder" => "/path/to/local"
+      })
+      |> render_submit()
+
+      assert render(view) =~ "Local Project"
+      assert has_element?(view, "#continue-project-btn")
+    end
+
+    @tag feature: "project_inline_creation",
+         scenario: "Create a project with both git URL and local folder"
+    test "creates and selects a project with both git URL and local folder", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prompts/new")
+
+      view |> element("button[phx-value-type='feature_request']") |> render_click()
+      view |> element("#create-new-project-btn") |> render_click()
+
+      view
+      |> form("#inline-project-form", %{
+        "name" => "Full Project",
+        "git_repo_url" => "https://github.com/full/repo",
+        "local_folder" => "/path/to/full"
+      })
+      |> render_submit()
+
+      assert render(view) =~ "Full Project"
+      assert has_element?(view, "#continue-project-btn")
+    end
+
+    @tag feature: "project_inline_creation",
+         scenario: "Cannot create a project without git URL or local folder"
+    test "shows error when neither git URL nor local folder provided", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prompts/new")
+
+      view |> element("button[phx-value-type='feature_request']") |> render_click()
+      view |> element("#create-new-project-btn") |> render_click()
+
+      view
+      |> form("#inline-project-form", %{"name" => "Incomplete"})
+      |> render_submit()
+
+      assert render(view) =~ "Provide at least one"
+      assert has_element?(view, "#inline-project-form")
+    end
+
+    @tag feature: "project_inline_creation",
+         scenario: "Cannot create a project without a name"
+    test "shows error when name is empty", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/prompts/new")
+
+      view |> element("button[phx-value-type='feature_request']") |> render_click()
+      view |> element("#create-new-project-btn") |> render_click()
+
+      view
+      |> form("#inline-project-form", %{
+        "name" => "",
+        "git_repo_url" => "https://github.com/test/repo"
+      })
+      |> render_submit()
+
+      assert render(view) =~ "Name is required"
+      assert has_element?(view, "#inline-project-form")
+    end
+  end
+
   describe "navigation" do
     @tag feature: @feature, scenario: "Navigate back from step 2 to step 1"
     test "back from step 2 returns to step 1", %{conn: conn} do

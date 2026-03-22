@@ -73,6 +73,23 @@ defmodule DestilaWeb.ProjectsLiveTest do
       assert render(view) =~ "Local Project"
     end
 
+    @tag feature: @feature, scenario: "Create a new project with both git URL and local folder"
+    test "creates a project with both git URL and local folder", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      view
+      |> form("#project-form-create_project", %{
+        "name" => "Full Project",
+        "git_repo_url" => "https://github.com/full/repo",
+        "local_folder" => "/path/to/full"
+      })
+      |> render_submit()
+
+      assert render(view) =~ "Full Project"
+    end
+
     @tag feature: @feature, scenario: "Cannot create a project without git URL or local folder"
     test "shows error when neither git URL nor local folder provided", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/projects")
