@@ -31,10 +31,19 @@ const ScrollBottomHook = {
   updated() { this.el.scrollTop = this.el.scrollHeight },
 }
 
+const FocusFirstErrorHook = {
+  updated() {
+    let el = this.el.querySelector("[aria-invalid='true']")
+    if (!el) return
+    requestAnimationFrame(() => el.focus())
+  }
+}
+
 const Hooks = {
   ...colocatedHooks,
   Sortable: SortableHook,
   ScrollBottom: ScrollBottomHook,
+  FocusFirstError: FocusFirstErrorHook,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")

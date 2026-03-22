@@ -525,7 +525,12 @@ defmodule DestilaWeb.NewPromptLive do
                 </p>
               </div>
 
-              <form phx-submit="create_and_select_project" class="space-y-4" id="inline-project-form">
+              <form
+                phx-submit="create_and_select_project"
+                class="space-y-4"
+                id="inline-project-form"
+                phx-hook="FocusFirstError"
+              >
                 <fieldset class="fieldset">
                   <label class="fieldset-label text-xs font-medium" for="project-name">
                     Project name <span class="text-error">*</span>
@@ -535,12 +540,15 @@ defmodule DestilaWeb.NewPromptLive do
                     id="project-name"
                     name="name"
                     placeholder="My Project"
+                    aria-invalid={@errors[:name] && "true"}
                     class={[
                       "input input-bordered w-full",
                       @errors[:name] && "input-error"
                     ]}
                   />
-                  <p :if={@errors[:name]} class="text-xs text-error mt-1">{@errors[:name]}</p>
+                  <p :if={@errors[:name]} class="text-xs text-error mt-1">
+                    {@errors[:name]}
+                  </p>
                 </fieldset>
 
                 <div class={[
@@ -564,6 +572,7 @@ defmodule DestilaWeb.NewPromptLive do
                       id="project-git-repo-url"
                       name="git_repo_url"
                       placeholder="https://github.com/org/repo"
+                      aria-invalid={@errors[:location] && "true"}
                       class={[
                         "input input-bordered w-full",
                         @errors[:location] && "input-error"
@@ -586,6 +595,7 @@ defmodule DestilaWeb.NewPromptLive do
                       id="project-local-folder"
                       name="local_folder"
                       placeholder="/path/to/project"
+                      aria-invalid={@errors[:location] && "true"}
                       class={[
                         "input input-bordered w-full",
                         @errors[:location] && "input-error"
@@ -593,7 +603,9 @@ defmodule DestilaWeb.NewPromptLive do
                     />
                   </fieldset>
 
-                  <p :if={@errors[:location]} class="text-xs text-error">{@errors[:location]}</p>
+                  <p :if={@errors[:location]} class="text-xs text-error">
+                    {@errors[:location]}
+                  </p>
                 </div>
 
                 <button type="submit" class="btn btn-primary w-full" id="create-and-select-btn">
@@ -623,6 +635,7 @@ defmodule DestilaWeb.NewPromptLive do
               id="initial-idea-form"
               phx-submit="save_and_continue"
               phx-change="update_idea"
+              phx-hook="FocusFirstError"
               class="space-y-4"
             >
               <fieldset class="fieldset">
@@ -634,13 +647,16 @@ defmodule DestilaWeb.NewPromptLive do
                   name="initial_idea"
                   rows="5"
                   placeholder="Describe your idea in as much detail as you'd like..."
+                  aria-invalid={@errors[:idea] && "true"}
                   class={[
                     "textarea textarea-bordered w-full",
                     @errors[:idea] && "textarea-error"
                   ]}
                   phx-debounce="300"
                 />
-                <p :if={@errors[:idea]} class="text-xs text-error mt-1">{@errors[:idea]}</p>
+                <p :if={@errors[:idea]} class="text-xs text-error mt-1">
+                  {@errors[:idea]}
+                </p>
               </fieldset>
 
               <div class="flex gap-3">

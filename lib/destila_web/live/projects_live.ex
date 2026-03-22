@@ -366,7 +366,12 @@ defmodule DestilaWeb.ProjectsLive do
 
   defp project_form(assigns) do
     ~H"""
-    <form phx-submit={@submit_event} class="space-y-3" id={"project-form-#{@submit_event}"}>
+    <form
+      phx-submit={@submit_event}
+      class="space-y-3"
+      id={"project-form-#{@submit_event}"}
+      phx-hook="FocusFirstError"
+    >
       <fieldset class="fieldset">
         <label class="fieldset-label text-xs font-medium" for="project-name">
           Name <span class="text-error">*</span>
@@ -377,6 +382,8 @@ defmodule DestilaWeb.ProjectsLive do
           name="name"
           value={@form["name"].value}
           placeholder="My Project"
+          aria-invalid={@errors[:name] && "true"}
+          phx-mounted={JS.focus()}
           class={[
             "input input-bordered w-full input-sm",
             @errors[:name] && "input-error"
@@ -404,6 +411,7 @@ defmodule DestilaWeb.ProjectsLive do
             name="git_repo_url"
             value={@form["git_repo_url"].value}
             placeholder="https://github.com/org/repo"
+            aria-invalid={@errors[:location] && "true"}
             class={[
               "input input-bordered w-full input-sm",
               @errors[:location] && "input-error"
@@ -427,6 +435,7 @@ defmodule DestilaWeb.ProjectsLive do
             name="local_folder"
             value={@form["local_folder"].value}
             placeholder="/path/to/project"
+            aria-invalid={@errors[:location] && "true"}
             class={[
               "input input-bordered w-full input-sm",
               @errors[:location] && "input-error"
