@@ -464,7 +464,7 @@ defmodule DestilaWeb.PromptDetailLive do
             # If there's a pending user message, trigger AI response with full context
             last_msg = List.last(messages)
 
-            if last_msg && last_msg.role == :user do
+            if last_msg && last_msg.role == :user && prompt.phase_status != :generating do
               phase = prompt.steps_completed
               system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
               context = ChoreTaskPhases.build_conversation_context(messages)
