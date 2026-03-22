@@ -35,11 +35,9 @@ defmodule Destila.Repo.Migrations.CreateProjectsPromptsMessages do
       add :prompt_id, references(:prompts, type: :binary_id, on_delete: :delete_all), null: false
       add :role, :string, null: false
       add :content, :text, null: false, default: ""
-      add :input_type, :string
-      add :options, :text
+      add :raw_response, :text
       add :selected, :text
-      add :step, :integer, default: 1
-      add :message_type, :string
+      add :phase, :integer, default: 1
 
       add :inserted_at, :utc_datetime_usec, null: false
     end

@@ -28,7 +28,12 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
   defp create_prompt_in_phase(phase, opts \\ []) do
     phase_status = Keyword.get(opts, :phase_status, :conversing)
     column = Keyword.get(opts, :column, :request)
-    last_message_type = Keyword.get(opts, :last_message_type, nil)
+
+    # For advance_suggested tests, the last message needs to contain the marker
+    last_content =
+      if Keyword.get(opts, :last_message_type) == :phase_advance,
+        do: "I have some questions about this task. <<READY_TO_ADVANCE>>",
+        else: "I have some questions about this task."
 
     {:ok, prompt} =
       Destila.Prompts.create_prompt(%{
@@ -47,25 +52,34 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       Destila.Messages.create_message(prompt.id, %{
         role: :system,
         content: "Let's work on your task.",
-        input_type: :text,
-        step: 1
+        phase: 1
       })
 
     {:ok, _} =
       Destila.Messages.create_message(prompt.id, %{
         role: :user,
         content: "Fix the login timeout bug",
-        step: 1
+        phase: 1
       })
 
     # Last message from system (prevents ensure_ai_session from auto-triggering)
+    # For AI messages, store raw_response so Messages.process derives message_type
+    raw_response =
+      if Keyword.get(opts, :last_message_type) != nil,
+        do: %{
+          "text" => last_content,
+          "result" => last_content,
+          "mcp_tool_uses" => [],
+          "is_error" => false
+        },
+        else: nil
+
     {:ok, _} =
       Destila.Messages.create_message(prompt.id, %{
         role: :system,
-        content: "I have some questions about this task.",
-        input_type: :text,
-        step: phase,
-        message_type: last_message_type
+        content: last_content,
+        raw_response: raw_response,
+        phase: phase
       })
 
     prompt

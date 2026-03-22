@@ -192,18 +192,6 @@ defmodule DestilaWeb.PromptDetailLive do
     if next_phase > prompt.steps_total do
       {:noreply, socket}
     else
-      # Insert phase divider message
-      phase_name = ChoreTaskPhases.phase_name(next_phase)
-
-      {:ok, _} =
-        Destila.Messages.create_message(prompt.id, %{
-          role: :system,
-          content: "Phase #{next_phase} — #{phase_name}",
-          input_type: nil,
-          step: next_phase,
-          message_type: :phase_divider
-        })
-
       # Advance phase
       {:ok, _} =
         Destila.Prompts.update_prompt(prompt, %{
@@ -235,9 +223,7 @@ defmodule DestilaWeb.PromptDetailLive do
       Destila.Messages.create_message(prompt.id, %{
         role: :system,
         content: Destila.Workflows.completion_message(:chore_task),
-        input_type: nil,
-        step: prompt.steps_completed,
-        message_type: nil
+        phase: prompt.steps_completed
       })
 
     Destila.Prompts.update_prompt(prompt, %{
@@ -293,7 +279,7 @@ defmodule DestilaWeb.PromptDetailLive do
         role: :user,
         content: content,
         selected: selected,
-        step: current_step
+        phase: current_step
       })
 
     # Advance workflow
@@ -309,9 +295,7 @@ defmodule DestilaWeb.PromptDetailLive do
         Destila.Messages.create_message(prompt.id, %{
           role: :system,
           content: next_step.content,
-          input_type: next_step.input_type,
-          options: next_step.options,
-          step: next_step.step
+          phase: next_step.step
         })
 
       # Update progress
@@ -322,8 +306,7 @@ defmodule DestilaWeb.PromptDetailLive do
         Destila.Messages.create_message(prompt.id, %{
           role: :system,
           content: Destila.Workflows.completion_message(prompt.workflow_type),
-          input_type: nil,
-          step: next_step_num
+          phase: next_step_num
         })
 
       Destila.Prompts.update_prompt(prompt, %{
@@ -352,7 +335,7 @@ defmodule DestilaWeb.PromptDetailLive do
           role: :user,
           content: content,
           selected: nil,
-          step: phase
+          phase: phase
         })
 
       # Set generating status
@@ -395,8 +378,7 @@ defmodule DestilaWeb.PromptDetailLive do
               Destila.Messages.create_message(prompt_id, %{
                 role: :system,
                 content: "Something went wrong. Please try sending your message again.",
-                input_type: :text,
-                step: phase
+                phase: phase
               })
 
             Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
@@ -405,7 +387,7 @@ defmodule DestilaWeb.PromptDetailLive do
     end)
   end
 
-  defp handle_ai_query_result(prompt_id, phase, prompt, session, query_text) do
+  defp handle_ai_query_result(prompt_id, phase, _prompt, session, query_text) do
     case Destila.AI.Session.query(session, query_text) do
       {:ok, result} ->
         response_text =
@@ -415,45 +397,18 @@ defmodule DestilaWeb.PromptDetailLive do
             result.result || ""
           end
 
-        {content, message_type, new_phase_status} = parse_ai_response(response_text)
-
-        # In the final phase, normal AI responses are generated prompts
-        message_type =
-          if phase == prompt.steps_total and message_type == nil,
-            do: :generated_prompt,
-            else: message_type
-
-        questions = extract_questions_from_tool_uses(result[:mcp_tool_uses])
-
-        # Use question texts from tool if AI text is empty/generic
-        content =
-          if questions != [] and (content == "" or content == "Waiting for your answer.") do
-            questions |> Enum.map(& &1.question) |> Enum.join("\n\n")
-          else
-            content
-          end
-
-        # Derive input_type from questions for backwards compat
-        {input_type, options} =
-          case questions do
-            [] -> {:text, nil}
-            [q] -> {q.input_type, q.options}
-            _ -> {:questions, nil}
-          end
+        new_phase_status = derive_phase_status(response_text)
 
         {:ok, _} =
           Destila.Messages.create_message(prompt_id, %{
             role: :system,
-            content: content,
-            input_type: input_type,
-            options: options,
-            questions: questions,
-            step: phase,
-            message_type: message_type
+            content: response_text,
+            raw_response: result,
+            phase: phase
           })
 
-        # Handle auto-skip (Phase 3)
-        if message_type == :skip_phase do
+        # Check for skip_phase marker
+        if String.contains?(response_text, "<<SKIP_PHASE>>") do
           handle_skip_phase(prompt_id, phase, session)
         else
           Destila.Prompts.update_prompt(prompt_id, %{phase_status: new_phase_status})
@@ -464,8 +419,7 @@ defmodule DestilaWeb.PromptDetailLive do
           Destila.Messages.create_message(prompt_id, %{
             role: :system,
             content: "Something went wrong. Please try sending your message again.",
-            input_type: :text,
-            step: phase
+            phase: phase
           })
 
         Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
@@ -474,17 +428,6 @@ defmodule DestilaWeb.PromptDetailLive do
 
   defp handle_skip_phase(prompt_id, current_phase, session) do
     next_phase = current_phase + 1
-    phase_name = ChoreTaskPhases.phase_name(next_phase)
-
-    # Insert skip notice
-    {:ok, _} =
-      Destila.Messages.create_message(prompt_id, %{
-        role: :system,
-        content: "Phase #{next_phase} — #{phase_name}",
-        input_type: nil,
-        step: next_phase,
-        message_type: :phase_divider
-      })
 
     # Advance to next phase
     Destila.Prompts.update_prompt(prompt_id, %{
@@ -539,48 +482,12 @@ defmodule DestilaWeb.PromptDetailLive do
     end
   end
 
-  defp parse_ai_response(text) do
+  defp derive_phase_status(text) do
     cond do
-      String.contains?(text, "<<SKIP_PHASE>>") ->
-        content = String.replace(text, "<<SKIP_PHASE>>", "") |> String.trim()
-        {content, :skip_phase, :conversing}
-
-      String.contains?(text, "<<READY_TO_ADVANCE>>") ->
-        content = String.replace(text, "<<READY_TO_ADVANCE>>", "") |> String.trim()
-        {content, :phase_advance, :advance_suggested}
-
-      true ->
-        {String.trim(text), nil, :conversing}
+      String.contains?(text, "<<SKIP_PHASE>>") -> :conversing
+      String.contains?(text, "<<READY_TO_ADVANCE>>") -> :advance_suggested
+      true -> :conversing
     end
-  end
-
-  defp extract_questions_from_tool_uses(nil), do: []
-  defp extract_questions_from_tool_uses([]), do: []
-
-  defp extract_questions_from_tool_uses(mcp_tool_uses) do
-    mcp_tool_uses
-    |> Enum.filter(fn tool ->
-      tool.name in ["ask_user_question", "mcp__destila__ask_user_question"]
-    end)
-    |> Enum.flat_map(fn %{input: input} ->
-      # Handle both single-question (legacy) and multi-question formats
-      questions = input["questions"] || [input]
-
-      Enum.map(questions, fn q ->
-        multi_select = q["multi_select"] == true
-
-        %{
-          question: q["question"] || "",
-          title: q["title"],
-          input_type: if(multi_select, do: :multi_select, else: :single_select),
-          options:
-            (q["options"] || [])
-            |> Enum.map(fn opt ->
-              %{label: opt["label"] || "", description: opt["description"]}
-            end)
-        }
-      end)
-    end)
   end
 
   # --- Helpers ---
@@ -600,9 +507,7 @@ defmodule DestilaWeb.PromptDetailLive do
       Destila.Messages.create_message(prompt.id, %{
         role: :system,
         content: first.content,
-        input_type: first.input_type,
-        options: first.options,
-        step: first.step
+        phase: 1
       })
   end
 
@@ -636,17 +541,23 @@ defmodule DestilaWeb.PromptDetailLive do
         %{input_type: :text, options: nil, questions: [], completed: false}
 
       true ->
-        # Use the last system message's input_type and options
         last_system =
           messages
-          |> Enum.filter(&(&1.role == :system && &1.message_type not in [:phase_divider]))
+          |> Enum.filter(&(&1.role == :system))
           |> List.last()
 
-        input_type = (last_system && last_system.input_type) || :text
-        options = last_system && last_system.options
-        questions = (last_system && last_system.questions) || []
+        if last_system do
+          processed = Destila.Messages.process(last_system, prompt)
 
-        %{input_type: input_type, options: options, questions: questions, completed: false}
+          %{
+            input_type: processed.input_type,
+            options: processed.options,
+            questions: processed.questions,
+            completed: false
+          }
+        else
+          %{input_type: :text, options: nil, questions: [], completed: false}
+        end
     end
   end
 
@@ -659,10 +570,12 @@ defmodule DestilaWeb.PromptDetailLive do
       completed >= total ->
         %{input_type: nil, options: nil, questions: [], completed: true}
 
-      last_system && last_system.input_type ->
+      last_system ->
+        processed = Destila.Messages.process(last_system, prompt)
+
         %{
-          input_type: last_system.input_type,
-          options: last_system.options,
+          input_type: processed.input_type,
+          options: processed.options,
           questions: [],
           completed: false
         }
@@ -695,19 +608,9 @@ defmodule DestilaWeb.PromptDetailLive do
   defp phase_name(phase), do: ChoreTaskPhases.phase_name(phase)
 
   defp phase_groups(messages) do
-    {groups, acc} =
-      Enum.reduce(messages, {[], []}, fn msg, {groups, acc} ->
-        if msg.message_type == :phase_divider and acc != [] do
-          {groups ++ [Enum.reverse(acc)], [msg]}
-        else
-          {groups, [msg | acc]}
-        end
-      end)
-
-    case acc do
-      [] -> groups
-      _ -> groups ++ [Enum.reverse(acc)]
-    end
+    messages
+    |> Enum.chunk_by(& &1.phase)
+    |> Enum.map(fn group -> {List.first(group).phase, group} end)
   end
 
   def render(assigns) do
@@ -824,11 +727,7 @@ defmodule DestilaWeb.PromptDetailLive do
           <div class="max-w-2xl mx-auto">
             <%= if ai_workflow?(@prompt) do %>
               <% current_phase = max(@prompt.steps_completed, 1) %>
-              <%= for group <- phase_groups(@messages) do %>
-                <% first = List.first(group) %>
-                <% phase = first.step %>
-                <% divider = if(first.message_type == :phase_divider, do: first) %>
-                <% content = if(divider, do: tl(group), else: group) %>
+              <%= for {phase, group} <- phase_groups(@messages) do %>
                 <details
                   class={["phase-section", phase == 1 && "first-phase"]}
                   open={phase >= current_phase}
@@ -836,7 +735,7 @@ defmodule DestilaWeb.PromptDetailLive do
                   <summary class="flex items-center gap-3 my-6 cursor-pointer group list-none">
                     <div class="flex-1 h-px bg-base-300" />
                     <span class="flex items-center gap-1.5 text-xs font-medium text-base-content/40 uppercase tracking-wide group-hover:text-base-content/60 transition-colors">
-                      {if(divider, do: divider.content, else: "Phase 1 — #{phase_name(1)}")}
+                      Phase {phase} — {phase_name(phase)}
                       <.icon
                         name="hero-chevron-down-micro"
                         class="size-3 phase-chevron"
@@ -844,7 +743,7 @@ defmodule DestilaWeb.PromptDetailLive do
                     </span>
                     <div class="flex-1 h-px bg-base-300" />
                   </summary>
-                  <.chat_message :for={msg <- content} message={msg} prompt={@prompt} />
+                  <.chat_message :for={msg <- group} message={msg} prompt={@prompt} />
                 </details>
               <% end %>
             <% else %>

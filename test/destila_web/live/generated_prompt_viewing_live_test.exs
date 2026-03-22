@@ -58,9 +58,13 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
       Destila.Messages.create_message(prompt.id, %{
         role: :system,
         content: @sample_markdown,
-        input_type: :text,
-        step: 4,
-        message_type: :generated_prompt
+        raw_response: %{
+          "text" => @sample_markdown,
+          "result" => @sample_markdown,
+          "mcp_tool_uses" => [],
+          "is_error" => false
+        },
+        phase: 4
       })
 
     prompt
