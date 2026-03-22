@@ -13,6 +13,7 @@ defmodule Destila.Messages.Message do
     )
 
     field(:options, {:array, :map})
+    field(:questions, {:array, :map})
     field(:selected, {:array, :string})
     field(:step, :integer, default: 1)
 
@@ -34,6 +35,7 @@ defmodule Destila.Messages.Message do
       :content,
       :input_type,
       :options,
+      :questions,
       :selected,
       :step,
       :message_type

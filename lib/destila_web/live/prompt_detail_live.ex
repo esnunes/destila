@@ -447,6 +447,7 @@ defmodule DestilaWeb.PromptDetailLive do
             content: content,
             input_type: input_type,
             options: options,
+            questions: questions,
             step: phase,
             message_type: message_type
           })
@@ -643,8 +644,9 @@ defmodule DestilaWeb.PromptDetailLive do
 
         input_type = (last_system && last_system.input_type) || :text
         options = last_system && last_system.options
+        questions = (last_system && last_system.questions) || []
 
-        %{input_type: input_type, options: options, questions: [], completed: false}
+        %{input_type: input_type, options: options, questions: questions, completed: false}
     end
   end
 

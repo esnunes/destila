@@ -278,6 +278,7 @@ defmodule DestilaWeb.NewPromptLive do
             content: content,
             input_type: input_type,
             options: options,
+            questions: questions,
             step: phase,
             message_type: message_type
           })
