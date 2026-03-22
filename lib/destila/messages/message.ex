@@ -27,6 +27,6 @@ defmodule Destila.Messages.Message do
       :selected,
       :phase
     ])
-    |> validate_required([:prompt_id, :role, :content])
+    |> validate_required([:prompt_id, :role])
   end
 end
