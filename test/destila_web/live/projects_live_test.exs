@@ -83,7 +83,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
       |> form("#project-form-create_project", %{"name" => "Incomplete"})
       |> render_submit()
 
-      assert render(view) =~ "At least a git repository URL or local folder is required"
+      assert render(view) =~ "Provide at least one"
     end
 
     @tag feature: @feature, scenario: "Cannot create a project without a name"
@@ -99,7 +99,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
       })
       |> render_submit()
 
-      assert render(view) =~ "Project name is required"
+      assert render(view) =~ "Name is required"
     end
   end
 
@@ -163,7 +163,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#delete-project-#{project.id}") |> render_click()
       view |> element("#confirm-delete-#{project.id}") |> render_click()
 
-      assert render(view) =~ "Cannot delete project while it is linked to prompts"
+      assert render(view) =~ "Cannot delete this project while it is linked to prompts"
       assert render(view) =~ "Linked Project"
     end
   end

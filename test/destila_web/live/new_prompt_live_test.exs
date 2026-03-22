@@ -77,7 +77,7 @@ defmodule DestilaWeb.NewPromptLiveTest do
       view |> element("button[phx-value-type='chore_task']") |> render_click()
       view |> element("#continue-project-btn") |> render_click()
 
-      assert render(view) =~ "Please select a project"
+      assert render(view) =~ "select a project"
     end
 
     @tag feature: @feature, scenario: "Skip project for Project workflow type"

@@ -12,7 +12,8 @@ defmodule DestilaWeb.NewPromptLive do
      |> assign(:projects, Destila.Store.list_projects())
      |> assign(:project_step, :select)
      |> assign(:initial_idea, "")
-     |> assign(:return_to, "/crafting")}
+     |> assign(:return_to, "/crafting")
+     |> assign(:errors, %{})}
   end
 
   def handle_params(params, _uri, socket) do
@@ -29,9 +30,9 @@ defmodule DestilaWeb.NewPromptLive do
 
   def handle_event("continue_project", _params, socket) do
     if socket.assigns.project_id == nil && socket.assigns.workflow_type != :project do
-      {:noreply, put_flash(socket, :error, "Please select a project")}
+      {:noreply, assign(socket, :errors, %{project: "Please select a project"})}
     else
-      {:noreply, assign(socket, step: 3)}
+      {:noreply, assign(socket, step: 3, errors: %{})}
     end
   end
 
@@ -40,15 +41,15 @@ defmodule DestilaWeb.NewPromptLive do
   end
 
   def handle_event("skip_project", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Please select a project")}
+    {:noreply, assign(socket, :errors, %{project: "Please select a project"})}
   end
 
   def handle_event("select_project", %{"id" => project_id}, socket) do
-    {:noreply, assign(socket, :project_id, project_id)}
+    {:noreply, assign(socket, project_id: project_id, errors: %{})}
   end
 
   def handle_event("show_create_project", _params, socket) do
-    {:noreply, assign(socket, :project_step, :create)}
+    {:noreply, assign(socket, project_step: :create, errors: %{})}
   end
 
   def handle_event("back_to_select", _params, socket) do
@@ -62,41 +63,59 @@ defmodule DestilaWeb.NewPromptLive do
     local_folder = params["local_folder"]
     local_folder = if local_folder && local_folder != "", do: local_folder, else: nil
 
-    cond do
-      name == "" ->
-        {:noreply, put_flash(socket, :error, "Project name is required")}
+    errors = %{}
+    errors = if name == "", do: Map.put(errors, :name, "Name is required"), else: errors
 
-      git_repo_url == nil && local_folder == nil ->
-        {:noreply,
-         put_flash(socket, :error, "At least a git repository URL or local folder is required")}
+    errors =
+      if git_repo_url == nil && local_folder == nil do
+        Map.put(errors, :location, "Provide at least one")
+      else
+        errors
+      end
 
-      true ->
-        project =
-          Destila.Store.create_project(%{
-            name: name,
-            git_repo_url: git_repo_url,
-            local_folder: local_folder
-          })
+    if errors == %{} do
+      project =
+        Destila.Store.create_project(%{
+          name: name,
+          git_repo_url: git_repo_url,
+          local_folder: local_folder
+        })
 
-        {:noreply,
-         socket
-         |> assign(:project_id, project.id)
-         |> assign(:projects, Destila.Store.list_projects())
-         |> assign(:project_step, :select)}
+      {:noreply,
+       socket
+       |> assign(:project_id, project.id)
+       |> assign(:projects, Destila.Store.list_projects())
+       |> assign(:project_step, :select)
+       |> assign(:errors, %{})}
+    else
+      {:noreply, assign(socket, :errors, errors)}
     end
   end
 
   def handle_event("back", _params, socket) do
     {:noreply,
-     assign(socket, step: 1, workflow_type: nil, project_id: nil, project_step: :select)}
+     assign(socket,
+       step: 1,
+       workflow_type: nil,
+       project_id: nil,
+       project_step: :select,
+       errors: %{}
+     )}
   end
 
   def handle_event("back_to_project", _params, socket) do
-    {:noreply, assign(socket, step: 2)}
+    {:noreply, assign(socket, step: 2, errors: %{})}
   end
 
   def handle_event("update_idea", %{"initial_idea" => idea}, socket) do
-    {:noreply, assign(socket, :initial_idea, idea)}
+    errors =
+      if idea != "" do
+        Map.delete(socket.assigns.errors, :idea)
+      else
+        socket.assigns.errors
+      end
+
+    {:noreply, assign(socket, initial_idea: idea, errors: errors)}
   end
 
   def handle_event("save_and_continue", %{"initial_idea" => idea}, socket)
@@ -106,7 +125,7 @@ defmodule DestilaWeb.NewPromptLive do
   end
 
   def handle_event("save_and_continue", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Please describe your initial idea")}
+    {:noreply, assign(socket, :errors, %{idea: "Please describe your initial idea"})}
   end
 
   def handle_event("save_and_close", _params, socket) do
@@ -116,7 +135,7 @@ defmodule DestilaWeb.NewPromptLive do
       create_prompt_with_idea(socket, idea, :close)
       {:noreply, push_navigate(socket, to: socket.assigns.return_to)}
     else
-      {:noreply, put_flash(socket, :error, "Please describe your initial idea")}
+      {:noreply, assign(socket, :errors, %{idea: "Please describe your initial idea"})}
     end
   end
 
@@ -470,6 +489,10 @@ defmodule DestilaWeb.NewPromptLive do
                 </button>
               <% end %>
 
+              <p :if={@errors[:project]} class="text-xs text-error text-center mt-2">
+                {@errors[:project]}
+              </p>
+
               <div class="flex gap-3 mt-4">
                 <button
                   phx-click="continue_project"
@@ -512,35 +535,66 @@ defmodule DestilaWeb.NewPromptLive do
                     id="project-name"
                     name="name"
                     placeholder="My Project"
-                    class="input input-bordered w-full"
+                    class={[
+                      "input input-bordered w-full",
+                      @errors[:name] && "input-error"
+                    ]}
                   />
+                  <p :if={@errors[:name]} class="text-xs text-error mt-1">{@errors[:name]}</p>
                 </fieldset>
 
-                <fieldset class="fieldset">
-                  <label class="fieldset-label text-xs font-medium" for="project-git-repo-url">
-                    Git repository URL
-                  </label>
-                  <input
-                    type="url"
-                    id="project-git-repo-url"
-                    name="git_repo_url"
-                    placeholder="https://github.com/org/repo"
-                    class="input input-bordered w-full"
-                  />
-                </fieldset>
+                <div class={[
+                  "rounded-lg p-3 space-y-3",
+                  if(@errors[:location],
+                    do: "ring-1 ring-error/30 bg-error/5",
+                    else: "bg-base-200/50"
+                  )
+                ]}>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-base-content/50">Location</span>
+                    <span class="text-xs text-base-content/30">at least one required</span>
+                  </div>
 
-                <fieldset class="fieldset">
-                  <label class="fieldset-label text-xs font-medium" for="project-local-folder">
-                    Local folder
-                  </label>
-                  <input
-                    type="text"
-                    id="project-local-folder"
-                    name="local_folder"
-                    placeholder="/path/to/project"
-                    class="input input-bordered w-full"
-                  />
-                </fieldset>
+                  <fieldset class="fieldset">
+                    <label class="fieldset-label text-xs font-medium" for="project-git-repo-url">
+                      Git repository URL
+                    </label>
+                    <input
+                      type="url"
+                      id="project-git-repo-url"
+                      name="git_repo_url"
+                      placeholder="https://github.com/org/repo"
+                      class={[
+                        "input input-bordered w-full",
+                        @errors[:location] && "input-error"
+                      ]}
+                    />
+                  </fieldset>
+
+                  <div class="flex items-center gap-3">
+                    <div class="flex-1 h-px bg-base-300" />
+                    <span class="text-xs text-base-content/30">or</span>
+                    <div class="flex-1 h-px bg-base-300" />
+                  </div>
+
+                  <fieldset class="fieldset">
+                    <label class="fieldset-label text-xs font-medium" for="project-local-folder">
+                      Local folder
+                    </label>
+                    <input
+                      type="text"
+                      id="project-local-folder"
+                      name="local_folder"
+                      placeholder="/path/to/project"
+                      class={[
+                        "input input-bordered w-full",
+                        @errors[:location] && "input-error"
+                      ]}
+                    />
+                  </fieldset>
+
+                  <p :if={@errors[:location]} class="text-xs text-error">{@errors[:location]}</p>
+                </div>
 
                 <button type="submit" class="btn btn-primary w-full" id="create-and-select-btn">
                   <.icon name="hero-plus-micro" class="size-4" /> Create & Select
@@ -580,9 +634,13 @@ defmodule DestilaWeb.NewPromptLive do
                   name="initial_idea"
                   rows="5"
                   placeholder="Describe your idea in as much detail as you'd like..."
-                  class="textarea textarea-bordered w-full"
+                  class={[
+                    "textarea textarea-bordered w-full",
+                    @errors[:idea] && "textarea-error"
+                  ]}
                   phx-debounce="300"
                 />
+                <p :if={@errors[:idea]} class="text-xs text-error mt-1">{@errors[:idea]}</p>
               </fieldset>
 
               <div class="flex gap-3">

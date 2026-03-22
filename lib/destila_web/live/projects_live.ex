@@ -17,6 +17,7 @@ defmodule DestilaWeb.ProjectsLive do
      |> assign(:creating, false)
      |> assign(:editing_project_id, nil)
      |> assign(:form, new_form())
+     |> assign(:errors, %{})
      |> assign(:delete_confirming_id, nil)}
   end
 
@@ -25,7 +26,8 @@ defmodule DestilaWeb.ProjectsLive do
      socket
      |> assign(:creating, true)
      |> assign(:editing_project_id, nil)
-     |> assign(:form, new_form())}
+     |> assign(:form, new_form())
+     |> assign(:errors, %{})}
   end
 
   def handle_event("cancel", _params, socket) do
@@ -37,6 +39,7 @@ defmodule DestilaWeb.ProjectsLive do
       |> assign(:creating, false)
       |> assign(:editing_project_id, nil)
       |> assign(:delete_confirming_id, nil)
+      |> assign(:errors, %{})
 
     {:noreply, socket}
   end
@@ -49,10 +52,11 @@ defmodule DestilaWeb.ProjectsLive do
         {:noreply,
          socket
          |> assign(:creating, false)
-         |> assign(:form, new_form())}
+         |> assign(:form, new_form())
+         |> assign(:errors, %{})}
 
-      {:error, message} ->
-        {:noreply, put_flash(socket, :error, message)}
+      {:error, errors} ->
+        {:noreply, assign(socket, :errors, errors)}
     end
   end
 
@@ -72,7 +76,8 @@ defmodule DestilaWeb.ProjectsLive do
        |> stream_insert(:projects, project)
        |> assign(:editing_project_id, id)
        |> assign(:creating, false)
-       |> assign(:form, form)}
+       |> assign(:form, form)
+       |> assign(:errors, %{})}
     else
       {:noreply, socket}
     end
@@ -88,10 +93,11 @@ defmodule DestilaWeb.ProjectsLive do
         {:noreply,
          socket
          |> assign(:editing_project_id, nil)
-         |> assign(:form, new_form())}
+         |> assign(:form, new_form())
+         |> assign(:errors, %{})}
 
-      {:error, message} ->
-        {:noreply, put_flash(socket, :error, message)}
+      {:error, errors} ->
+        {:noreply, assign(socket, :errors, errors)}
     end
   end
 
@@ -118,7 +124,7 @@ defmodule DestilaWeb.ProjectsLive do
          socket
          |> maybe_restream_project(id)
          |> assign(:delete_confirming_id, nil)
-         |> put_flash(:error, "Cannot delete project while it is linked to prompts")}
+         |> put_flash(:error, "Cannot delete this project while it is linked to prompts")}
 
       {:error, :not_found} ->
         {:noreply, assign(socket, :delete_confirming_id, nil)}
@@ -178,15 +184,21 @@ defmodule DestilaWeb.ProjectsLive do
     local_folder = params["local_folder"]
     local_folder = if local_folder && local_folder != "", do: local_folder, else: nil
 
-    cond do
-      name == "" ->
-        {:error, "Project name is required"}
+    errors = %{}
+    errors = if name == "", do: Map.put(errors, :name, "Name is required"), else: errors
 
-      git_repo_url == nil && local_folder == nil ->
-        {:error, "At least a git repository URL or local folder is required"}
+    errors =
+      if git_repo_url == nil && local_folder == nil do
+        errors
+        |> Map.put(:location, "Provide at least one")
+      else
+        errors
+      end
 
-      true ->
-        {:ok, %{name: name, git_repo_url: git_repo_url, local_folder: local_folder}}
+    if errors == %{} do
+      {:ok, %{name: name, git_repo_url: git_repo_url, local_folder: local_folder}}
+    else
+      {:error, errors}
     end
   end
 
@@ -226,7 +238,12 @@ defmodule DestilaWeb.ProjectsLive do
         >
           <div class="card-body">
             <h3 class="text-sm font-semibold mb-3">New Project</h3>
-            <.project_form form={@form} submit_event="create_project" submit_label="Create">
+            <.project_form
+              form={@form}
+              errors={@errors}
+              submit_event="create_project"
+              submit_label="Create"
+            >
               <button phx-click="cancel" type="button" class="btn btn-ghost btn-sm flex-1">
                 Cancel
               </button>
@@ -257,7 +274,12 @@ defmodule DestilaWeb.ProjectsLive do
             <%!-- Edit form --%>
             <div :if={@editing_project_id == project.id} class="card-body">
               <h3 class="text-sm font-semibold mb-3">Edit Project</h3>
-              <.project_form form={@form} submit_event="update_project" submit_label="Save">
+              <.project_form
+                form={@form}
+                errors={@errors}
+                submit_event="update_project"
+                submit_label="Save"
+              >
                 <button phx-click="cancel" type="button" class="btn btn-ghost btn-sm flex-1">
                   Cancel
                 </button>
@@ -331,6 +353,7 @@ defmodule DestilaWeb.ProjectsLive do
   end
 
   attr :form, :any, required: true
+  attr :errors, :map, required: true
   attr :submit_event, :string, required: true
   attr :submit_label, :string, required: true
   slot :inner_block
@@ -348,37 +371,65 @@ defmodule DestilaWeb.ProjectsLive do
           name="name"
           value={@form["name"].value}
           placeholder="My Project"
-          class="input input-bordered w-full input-sm"
+          class={[
+            "input input-bordered w-full input-sm",
+            @errors[:name] && "input-error"
+          ]}
         />
+        <p :if={@errors[:name]} class="text-xs text-error mt-1">{@errors[:name]}</p>
       </fieldset>
 
-      <fieldset class="fieldset">
-        <label class="fieldset-label text-xs font-medium" for="project-git-repo-url">
-          Git repository URL
-        </label>
-        <input
-          type="url"
-          id="project-git-repo-url"
-          name="git_repo_url"
-          value={@form["git_repo_url"].value}
-          placeholder="https://github.com/org/repo"
-          class="input input-bordered w-full input-sm"
-        />
-      </fieldset>
+      <div class={[
+        "rounded-lg p-3 space-y-3",
+        if(@errors[:location], do: "ring-1 ring-error/30 bg-error/5", else: "bg-base-200/50")
+      ]}>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-medium text-base-content/50">Location</span>
+          <span class="text-xs text-base-content/30">at least one required</span>
+        </div>
 
-      <fieldset class="fieldset">
-        <label class="fieldset-label text-xs font-medium" for="project-local-folder">
-          Local folder
-        </label>
-        <input
-          type="text"
-          id="project-local-folder"
-          name="local_folder"
-          value={@form["local_folder"].value}
-          placeholder="/path/to/project"
-          class="input input-bordered w-full input-sm"
-        />
-      </fieldset>
+        <fieldset class="fieldset">
+          <label class="fieldset-label text-xs font-medium" for="project-git-repo-url">
+            Git repository URL
+          </label>
+          <input
+            type="url"
+            id="project-git-repo-url"
+            name="git_repo_url"
+            value={@form["git_repo_url"].value}
+            placeholder="https://github.com/org/repo"
+            class={[
+              "input input-bordered w-full input-sm",
+              @errors[:location] && "input-error"
+            ]}
+          />
+        </fieldset>
+
+        <div class="flex items-center gap-3">
+          <div class="flex-1 h-px bg-base-300" />
+          <span class="text-xs text-base-content/30">or</span>
+          <div class="flex-1 h-px bg-base-300" />
+        </div>
+
+        <fieldset class="fieldset">
+          <label class="fieldset-label text-xs font-medium" for="project-local-folder">
+            Local folder
+          </label>
+          <input
+            type="text"
+            id="project-local-folder"
+            name="local_folder"
+            value={@form["local_folder"].value}
+            placeholder="/path/to/project"
+            class={[
+              "input input-bordered w-full input-sm",
+              @errors[:location] && "input-error"
+            ]}
+          />
+        </fieldset>
+
+        <p :if={@errors[:location]} class="text-xs text-error">{@errors[:location]}</p>
+      </div>
 
       <div class="flex gap-2">
         <button type="submit" class="btn btn-primary btn-sm flex-1">
