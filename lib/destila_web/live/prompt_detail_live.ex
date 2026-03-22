@@ -29,6 +29,7 @@ defmodule DestilaWeb.PromptDetailLive do
       socket =
         socket
         |> assign(:ai_session, nil)
+        |> assign(:session_primed, false)
         |> then(fn s ->
           if ai_workflow?(prompt) && connected?(socket) do
             ensure_ai_session(s, prompt, messages)
@@ -261,7 +262,10 @@ defmodule DestilaWeb.PromptDetailLive do
   end
 
   def handle_info({:ai_session_replaced, new_session}, socket) do
-    {:noreply, assign(socket, :ai_session, new_session)}
+    {:noreply,
+     socket
+     |> assign(:ai_session, new_session)
+     |> assign(:session_primed, true)}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -341,10 +345,24 @@ defmodule DestilaWeb.PromptDetailLive do
       # Set generating status
       Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
 
-      # Spawn async AI query — pass user's message directly (session has context)
-      spawn_ai_query(prompt.id, phase, content, socket.assigns.ai_session)
+      # Build query text — if session isn't primed (e.g., page was reloaded),
+      # include full conversation context so the AI has history
+      query_text =
+        if socket.assigns.session_primed do
+          content
+        else
+          messages = Destila.Messages.list_messages(prompt.id)
+          system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
+          context = ChoreTaskPhases.build_conversation_context(messages)
+          system_prompt <> "\n\n" <> context
+        end
 
-      {:noreply, refresh_state(socket)}
+      spawn_ai_query(prompt.id, phase, query_text, socket.assigns.ai_session)
+
+      {:noreply,
+       socket
+       |> assign(:session_primed, true)
+       |> refresh_state()}
     end
   end
 
@@ -472,9 +490,13 @@ defmodule DestilaWeb.PromptDetailLive do
 
               Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
               spawn_ai_query(prompt.id, phase, query, new_session)
-            end
 
-            assign(socket, :ai_session, new_session)
+              socket
+              |> assign(:ai_session, new_session)
+              |> assign(:session_primed, true)
+            else
+              assign(socket, :ai_session, new_session)
+            end
 
           {:error, _} ->
             put_flash(socket, :error, "Failed to start AI session")
