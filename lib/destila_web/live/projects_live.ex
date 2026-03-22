@@ -56,7 +56,10 @@ defmodule DestilaWeb.ProjectsLive do
          |> assign(:errors, %{})}
 
       {:error, errors} ->
-        {:noreply, assign(socket, :errors, errors)}
+        {:noreply,
+         socket
+         |> assign(:form, to_form(params))
+         |> assign(:errors, errors)}
     end
   end
 
@@ -97,7 +100,10 @@ defmodule DestilaWeb.ProjectsLive do
          |> assign(:errors, %{})}
 
       {:error, errors} ->
-        {:noreply, assign(socket, :errors, errors)}
+        {:noreply,
+         socket
+         |> assign(:form, to_form(params))
+         |> assign(:errors, errors)}
     end
   end
 
