@@ -36,7 +36,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       Destila.Store.create_prompt(%{
         title: "Test Chore Task",
         workflow_type: :chore_task,
-        repo_url: "https://github.com/owner/repo",
+        project_id: nil,
         board: :crafting,
         column: column,
         steps_completed: phase,

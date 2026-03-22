@@ -39,6 +39,7 @@ defmodule DestilaWeb.PromptDetailLive do
        socket
        |> assign(:current_user, session["current_user"])
        |> assign(:prompt, Destila.Store.get_prompt(id) || prompt)
+       |> assign(:project, lookup_project(prompt))
        |> assign(:messages, Destila.Store.list_messages(id))
        |> assign(:current_step, current_step)
        |> assign(:editing_title, false)
@@ -565,6 +566,10 @@ defmodule DestilaWeb.PromptDetailLive do
   defp ai_workflow?(%{workflow_type: :chore_task}), do: true
   defp ai_workflow?(_), do: false
 
+  defp lookup_project(prompt) do
+    if prompt[:project_id], do: Destila.Store.get_project(prompt[:project_id])
+  end
+
   defp start_workflow(prompt) do
     steps = Destila.Workflows.steps(prompt.workflow_type)
     first = List.first(steps)
@@ -731,8 +736,16 @@ defmodule DestilaWeb.PromptDetailLive do
 
                 <div class="flex items-center gap-3 mt-1">
                   <.workflow_badge type={@prompt.workflow_type} />
-                  <span :if={@prompt.repo_url} class="text-xs text-base-content/40">
-                    {@prompt.repo_url}
+                  <span :if={@project} class="text-xs text-base-content/40">
+                    <.link
+                      navigate={~p"/projects"}
+                      class="hover:text-base-content/60 transition-colors"
+                    >
+                      {@project.name}
+                    </.link>
+                    <span :if={@project.git_repo_url} class="ml-1">
+                      ({@project.git_repo_url})
+                    </span>
                   </span>
                 </div>
               </div>

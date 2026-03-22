@@ -60,6 +60,13 @@ defmodule DestilaWeb.Layouts do
           active={@page_title == "Implementation"}
         />
 
+        <.sidebar_item
+          navigate={~p"/projects"}
+          icon="hero-folder"
+          label="Projects"
+          active={@page_title == "Projects"}
+        />
+
         <div class="my-2 mx-1 border-t border-base-300/50" />
 
         <.sidebar_item navigate={~p"/prompts/new"} icon="hero-plus-circle" label="Create Prompt" />

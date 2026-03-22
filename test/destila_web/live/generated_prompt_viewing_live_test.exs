@@ -48,7 +48,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
       Destila.Store.create_prompt(%{
         title: "Test Prompt",
         workflow_type: :chore_task,
-        repo_url: "https://github.com/owner/repo",
+        project_id: nil,
         board: :crafting,
         column: :done,
         steps_completed: 4,

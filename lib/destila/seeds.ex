@@ -6,17 +6,47 @@ defmodule Destila.Seeds do
   alias Destila.Store
 
   def seed do
-    seed_crafting_board()
-    seed_implementation_board()
+    projects = seed_projects()
+    seed_crafting_board(projects)
+    seed_implementation_board(projects)
     seed_chat_messages()
   end
 
-  defp seed_crafting_board do
+  defp seed_projects do
+    %{
+      webapp:
+        insert_project(%{name: "Acme Webapp", git_repo_url: "https://github.com/acme/webapp"}),
+      api_server:
+        insert_project(%{
+          name: "Acme API Server",
+          git_repo_url: "https://github.com/acme/api-server"
+        }),
+      payments:
+        insert_project(%{name: "Acme Payments", git_repo_url: "https://github.com/acme/payments"}),
+      webhooks:
+        insert_project(%{name: "Acme Webhooks", git_repo_url: "https://github.com/acme/webhooks"}),
+      gateway:
+        insert_project(%{name: "Acme Gateway", git_repo_url: "https://github.com/acme/gateway"}),
+      notifications:
+        insert_project(%{
+          name: "Acme Notifications",
+          git_repo_url: "https://github.com/acme/notifications"
+        }),
+      auth: insert_project(%{name: "Acme Auth", git_repo_url: "https://github.com/acme/auth"}),
+      reports:
+        insert_project(%{name: "Acme Reports", git_repo_url: "https://github.com/acme/reports"}),
+      store: insert_project(%{name: "Acme Store", git_repo_url: "https://github.com/acme/store"}),
+      search:
+        insert_project(%{name: "Acme Search", git_repo_url: "https://github.com/acme/search"})
+    }
+  end
+
+  defp seed_crafting_board(projects) do
     # Request column
     insert_prompt(%{
       title: "Add dark mode toggle to settings",
       workflow_type: :feature_request,
-      repo_url: "https://github.com/acme/webapp",
+      project_id: projects.webapp.id,
       board: :crafting,
       column: :request,
       steps_completed: 0,
@@ -27,7 +57,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "Build onboarding wizard for new users",
       workflow_type: :project,
-      repo_url: nil,
+      project_id: nil,
       board: :crafting,
       column: :request,
       steps_completed: 0,
@@ -40,7 +70,7 @@ defmodule Destila.Seeds do
       %{
         title: "Refactor authentication middleware",
         workflow_type: :feature_request,
-        repo_url: "https://github.com/acme/api-server",
+        project_id: projects.api_server.id,
         board: :crafting,
         column: :distill,
         steps_completed: 2,
@@ -53,7 +83,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "CLI tool for database migrations",
       workflow_type: :project,
-      repo_url: nil,
+      project_id: nil,
       board: :crafting,
       column: :distill,
       steps_completed: 1,
@@ -64,7 +94,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "Fix flaky test in user registration flow",
       workflow_type: :chore_task,
-      repo_url: "https://github.com/acme/webapp",
+      project_id: projects.webapp.id,
       board: :crafting,
       column: :request,
       steps_completed: 0,
@@ -75,7 +105,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "Refactor payment gateway error handling",
       workflow_type: :chore_task,
-      repo_url: "https://github.com/acme/payments",
+      project_id: projects.payments.id,
       board: :crafting,
       column: :distill,
       steps_completed: 1,
@@ -87,7 +117,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "Implement webhook retry logic",
       workflow_type: :feature_request,
-      repo_url: "https://github.com/acme/webhooks",
+      project_id: projects.webhooks.id,
       board: :crafting,
       column: :done,
       steps_completed: 4,
@@ -96,11 +126,11 @@ defmodule Destila.Seeds do
     })
   end
 
-  defp seed_implementation_board do
+  defp seed_implementation_board(projects) do
     insert_prompt(%{
       title: "Add rate limiting to API gateway",
       workflow_type: :feature_request,
-      repo_url: "https://github.com/acme/gateway",
+      project_id: projects.gateway.id,
       board: :implementation,
       column: :todo,
       steps_completed: 4,
@@ -111,7 +141,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "Build notification service",
       workflow_type: :project,
-      repo_url: "https://github.com/acme/notifications",
+      project_id: projects.notifications.id,
       board: :implementation,
       column: :todo,
       steps_completed: 3,
@@ -122,7 +152,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "Migrate user sessions to Redis",
       workflow_type: :feature_request,
-      repo_url: "https://github.com/acme/auth",
+      project_id: projects.auth.id,
       board: :implementation,
       column: :in_progress,
       steps_completed: 4,
@@ -133,7 +163,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "GraphQL schema for reporting API",
       workflow_type: :feature_request,
-      repo_url: "https://github.com/acme/reports",
+      project_id: projects.reports.id,
       board: :implementation,
       column: :review,
       steps_completed: 4,
@@ -144,7 +174,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "E2E test suite for checkout flow",
       workflow_type: :project,
-      repo_url: "https://github.com/acme/store",
+      project_id: projects.store.id,
       board: :implementation,
       column: :qa,
       steps_completed: 3,
@@ -155,7 +185,7 @@ defmodule Destila.Seeds do
     insert_prompt(%{
       title: "Search indexing pipeline",
       workflow_type: :project,
-      repo_url: "https://github.com/acme/search",
+      project_id: projects.search.id,
       board: :implementation,
       column: :impl_done,
       steps_completed: 3,
@@ -233,6 +263,27 @@ defmodule Destila.Seeds do
         created_at: DateTime.add(base_time, 240, :second)
       })
     end
+  end
+
+  defp insert_project(attrs) do
+    id = :crypto.strong_rand_bytes(16) |> Base.url_encode64(padding: false)
+    now = DateTime.utc_now()
+
+    project =
+      Map.merge(
+        %{
+          id: id,
+          name: "",
+          git_repo_url: nil,
+          local_folder: nil,
+          created_at: now,
+          updated_at: now
+        },
+        attrs
+      )
+
+    :ets.insert(:destila_store, {{:project, id}, project})
+    project
   end
 
   defp insert_prompt(attrs, :with_partial_chat) do

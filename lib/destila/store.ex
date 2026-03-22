@@ -37,7 +37,7 @@ defmodule Destila.Store do
           id: id,
           title: "Untitled Prompt",
           workflow_type: :feature_request,
-          repo_url: nil,
+          project_id: nil,
           board: :crafting,
           column: :request,
           steps_completed: 0,
@@ -71,6 +71,81 @@ defmodule Destila.Store do
 
   def move_card(id, new_column, new_position) do
     update_prompt(id, %{column: new_column, position: new_position})
+  end
+
+  # Project API
+
+  def list_projects do
+    :ets.match_object(@table, {{:project, :_}, :_})
+    |> Enum.map(fn {_key, project} -> project end)
+    |> Enum.sort_by(& &1.name)
+  end
+
+  def get_project(id) do
+    case :ets.lookup(@table, {:project, id}) do
+      [{_, project}] -> project
+      [] -> nil
+    end
+  end
+
+  def create_project(attrs) do
+    id = generate_id()
+    now = DateTime.utc_now()
+
+    project =
+      Map.merge(
+        %{
+          id: id,
+          name: "",
+          git_repo_url: nil,
+          local_folder: nil,
+          created_at: now,
+          updated_at: now
+        },
+        attrs
+      )
+      |> Map.put(:id, id)
+
+    :ets.insert(@table, {{:project, id}, project})
+    Phoenix.PubSub.broadcast(Destila.PubSub, "store:updates", {:project_created, project})
+    project
+  end
+
+  def update_project(id, attrs) do
+    case get_project(id) do
+      nil ->
+        nil
+
+      project ->
+        updated = Map.merge(project, attrs) |> Map.put(:updated_at, DateTime.utc_now())
+        :ets.insert(@table, {{:project, id}, updated})
+        Phoenix.PubSub.broadcast(Destila.PubSub, "store:updates", {:project_updated, updated})
+        updated
+    end
+  end
+
+  def delete_project(id) do
+    case get_project(id) do
+      nil ->
+        {:error, :not_found}
+
+      project ->
+        linked = list_prompts() |> Enum.any?(&(&1[:project_id] == id))
+
+        if linked do
+          {:error, :has_linked_prompts}
+        else
+          :ets.delete(@table, {:project, id})
+
+          Phoenix.PubSub.broadcast(
+            Destila.PubSub,
+            "store:updates",
+            {:project_deleted, project}
+          )
+
+          :ok
+        end
+    end
   end
 
   def list_messages(prompt_id) do

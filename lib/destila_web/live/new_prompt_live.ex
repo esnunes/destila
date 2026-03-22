@@ -8,9 +8,16 @@ defmodule DestilaWeb.NewPromptLive do
      |> assign(:page_title, "New Prompt")
      |> assign(:step, 1)
      |> assign(:workflow_type, nil)
-     |> assign(:repo_url, nil)
+     |> assign(:project_id, nil)
+     |> assign(:projects, Destila.Store.list_projects())
+     |> assign(:project_step, :select)
+     |> assign(
+       :project_form,
+       to_form(%{"name" => "", "git_repo_url" => "", "local_folder" => ""})
+     )
      |> assign(:initial_idea, "")
-     |> assign(:return_to, "/crafting")}
+     |> assign(:return_to, "/crafting")
+     |> assign(:errors, %{})}
   end
 
   def handle_params(params, _uri, socket) do
@@ -25,34 +32,97 @@ defmodule DestilaWeb.NewPromptLive do
      |> assign(:step, 2)}
   end
 
-  def handle_event("set_repo", %{"repo_url" => repo_url}, socket) do
-    url = if repo_url && repo_url != "", do: repo_url, else: nil
-
-    if url == nil && socket.assigns.workflow_type != :project do
-      {:noreply, put_flash(socket, :error, "Repository URL is required")}
+  def handle_event("continue_project", _params, socket) do
+    if socket.assigns.project_id == nil && socket.assigns.workflow_type != :project do
+      {:noreply, assign(socket, :errors, %{project: "Please select a project"})}
     else
-      {:noreply, assign(socket, step: 3, repo_url: url)}
+      {:noreply, assign(socket, step: 3, errors: %{})}
     end
   end
 
-  def handle_event("skip_repo", _params, %{assigns: %{workflow_type: :project}} = socket) do
-    {:noreply, assign(socket, step: 3, repo_url: nil)}
+  def handle_event("skip_project", _params, %{assigns: %{workflow_type: :project}} = socket) do
+    {:noreply, assign(socket, step: 3, project_id: nil)}
   end
 
-  def handle_event("skip_repo", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Repository URL is required")}
+  def handle_event("skip_project", _params, socket) do
+    {:noreply, assign(socket, :errors, %{project: "Please select a project"})}
+  end
+
+  def handle_event("select_project", %{"id" => project_id}, socket) do
+    {:noreply, assign(socket, project_id: project_id, errors: %{})}
+  end
+
+  def handle_event("show_create_project", _params, socket) do
+    {:noreply, assign(socket, project_step: :create, errors: %{})}
+  end
+
+  def handle_event("back_to_select", _params, socket) do
+    {:noreply, assign(socket, :project_step, :select)}
+  end
+
+  def handle_event("create_and_select_project", params, socket) do
+    name = String.trim(params["name"] || "")
+    git_repo_url = params["git_repo_url"]
+    git_repo_url = if git_repo_url && git_repo_url != "", do: git_repo_url, else: nil
+    local_folder = params["local_folder"]
+    local_folder = if local_folder && local_folder != "", do: local_folder, else: nil
+
+    errors = %{}
+    errors = if name == "", do: Map.put(errors, :name, "Name is required"), else: errors
+
+    errors =
+      if git_repo_url == nil && local_folder == nil do
+        Map.put(errors, :location, "Provide at least one")
+      else
+        errors
+      end
+
+    if errors == %{} do
+      project =
+        Destila.Store.create_project(%{
+          name: name,
+          git_repo_url: git_repo_url,
+          local_folder: local_folder
+        })
+
+      {:noreply,
+       socket
+       |> assign(:project_id, project.id)
+       |> assign(:projects, Destila.Store.list_projects())
+       |> assign(:project_step, :select)
+       |> assign(:errors, %{})}
+    else
+      {:noreply,
+       socket
+       |> assign(:project_form, to_form(params))
+       |> assign(:errors, errors)}
+    end
   end
 
   def handle_event("back", _params, socket) do
-    {:noreply, assign(socket, step: 1, workflow_type: nil)}
+    {:noreply,
+     assign(socket,
+       step: 1,
+       workflow_type: nil,
+       project_id: nil,
+       project_step: :select,
+       errors: %{}
+     )}
   end
 
-  def handle_event("back_to_repo", _params, socket) do
-    {:noreply, assign(socket, step: 2)}
+  def handle_event("back_to_project", _params, socket) do
+    {:noreply, assign(socket, step: 2, errors: %{})}
   end
 
   def handle_event("update_idea", %{"initial_idea" => idea}, socket) do
-    {:noreply, assign(socket, :initial_idea, idea)}
+    errors =
+      if idea != "" do
+        Map.delete(socket.assigns.errors, :idea)
+      else
+        socket.assigns.errors
+      end
+
+    {:noreply, assign(socket, initial_idea: idea, errors: errors)}
   end
 
   def handle_event("save_and_continue", %{"initial_idea" => idea}, socket)
@@ -62,7 +132,7 @@ defmodule DestilaWeb.NewPromptLive do
   end
 
   def handle_event("save_and_continue", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Please describe your initial idea")}
+    {:noreply, assign(socket, :errors, %{idea: "Please describe your initial idea"})}
   end
 
   def handle_event("save_and_close", _params, socket) do
@@ -72,7 +142,7 @@ defmodule DestilaWeb.NewPromptLive do
       create_prompt_with_idea(socket, idea, :close)
       {:noreply, push_navigate(socket, to: socket.assigns.return_to)}
     else
-      {:noreply, put_flash(socket, :error, "Please describe your initial idea")}
+      {:noreply, assign(socket, :errors, %{idea: "Please describe your initial idea"})}
     end
   end
 
@@ -86,7 +156,7 @@ defmodule DestilaWeb.NewPromptLive do
         title: "Generating title...",
         title_generating: true,
         workflow_type: workflow_type,
-        repo_url: socket.assigns.repo_url,
+        project_id: socket.assigns.project_id,
         board: :crafting,
         column: :request,
         steps_completed: 1,
@@ -368,51 +438,199 @@ defmodule DestilaWeb.NewPromptLive do
             </div>
           </div>
 
-          <%!-- Step 2: Link repository --%>
+          <%!-- Step 2: Link a project --%>
           <div :if={@step == 2} class="space-y-4">
-            <div class="text-center mb-6">
-              <h2 class="text-xl font-bold">Link a repository</h2>
-              <p class="text-sm text-base-content/50 mt-1">
-                <%= if @workflow_type == :project do %>
-                  Paste a repository URL to give context, or skip for new projects
-                <% else %>
-                  Paste a repository URL to give context for your task
-                <% end %>
+            <%!-- Select existing project --%>
+            <div :if={@project_step == :select}>
+              <div class="text-center mb-6">
+                <h2 class="text-xl font-bold">Link a project</h2>
+                <p class="text-sm text-base-content/50 mt-1">
+                  <%= if @workflow_type == :project do %>
+                    Select a project to give context, or skip for new projects
+                  <% else %>
+                    Select the project this task belongs to
+                  <% end %>
+                </p>
+              </div>
+
+              <%= if @projects == [] do %>
+                <div class="text-center py-8">
+                  <.icon name="hero-folder" class="size-10 text-base-content/20 mx-auto mb-3" />
+                  <p class="text-sm text-base-content/30 mb-4">No projects yet</p>
+                  <button
+                    phx-click="show_create_project"
+                    class="btn btn-primary"
+                    id="create-first-project-btn"
+                  >
+                    <.icon name="hero-plus-micro" class="size-4" /> Create your first project
+                  </button>
+                </div>
+              <% else %>
+                <div class="space-y-2 max-h-64 overflow-y-auto" id="project-list">
+                  <button
+                    :for={project <- @projects}
+                    phx-click="select_project"
+                    phx-value-id={project.id}
+                    id={"project-#{project.id}"}
+                    class={[
+                      "w-full text-left p-3 rounded-lg border-2 transition-colors cursor-pointer",
+                      if(@project_id == project.id,
+                        do: "border-primary bg-primary/5",
+                        else: "border-base-300 hover:border-primary"
+                      )
+                    ]}
+                  >
+                    <div class="font-medium text-sm">{project.name}</div>
+                    <div class="text-xs text-base-content/40 mt-0.5">
+                      {project.git_repo_url || project.local_folder}
+                    </div>
+                  </button>
+                </div>
+
+                <button
+                  phx-click="show_create_project"
+                  class="btn btn-ghost btn-sm w-full mt-2"
+                  id="create-new-project-btn"
+                >
+                  <.icon name="hero-plus-micro" class="size-4" /> Create New Project
+                </button>
+              <% end %>
+
+              <p :if={@errors[:project]} class="text-xs text-error text-center mt-2">
+                {@errors[:project]}
               </p>
-            </div>
 
-            <form phx-submit="set_repo" class="space-y-4">
-              <fieldset class="fieldset">
-                <label class="fieldset-label text-xs font-medium" for="repo_url">
-                  Repository URL <span :if={@workflow_type != :project} class="text-error">*</span>
-                </label>
-                <input
-                  type="url"
-                  id="repo_url"
-                  name="repo_url"
-                  placeholder="https://github.com/org/repo"
-                  class="input input-bordered w-full"
-                />
-              </fieldset>
-
-              <div class="flex gap-3">
-                <button type="submit" class="btn btn-primary flex-1">
+              <div class="flex gap-3 mt-4">
+                <button
+                  phx-click="continue_project"
+                  class="btn btn-primary flex-1"
+                  id="continue-project-btn"
+                >
                   Continue
                 </button>
                 <button
                   :if={@workflow_type == :project}
-                  type="button"
-                  phx-click="skip_repo"
+                  phx-click="skip_project"
                   class="btn btn-ghost flex-1"
+                  id="skip-project-btn"
                 >
                   Skip
                 </button>
               </div>
-            </form>
 
-            <button phx-click="back" class="btn btn-ghost btn-sm w-full mt-2 text-base-content/40">
-              &larr; Back
-            </button>
+              <button phx-click="back" class="btn btn-ghost btn-sm w-full mt-2 text-base-content/40">
+                &larr; Back
+              </button>
+            </div>
+
+            <%!-- Create new project inline --%>
+            <div :if={@project_step == :create}>
+              <div class="text-center mb-6">
+                <h2 class="text-xl font-bold">Create a new project</h2>
+                <p class="text-sm text-base-content/50 mt-1">
+                  Add a name and at least a git URL or local folder
+                </p>
+              </div>
+
+              <form
+                phx-submit="create_and_select_project"
+                class="space-y-4"
+                id="inline-project-form"
+                phx-hook="FocusFirstError"
+              >
+                <fieldset class="fieldset">
+                  <label class="fieldset-label text-xs font-medium" for="project-name">
+                    Project name <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="project-name"
+                    name="name"
+                    value={@project_form["name"].value}
+                    placeholder="My Project"
+                    aria-invalid={@errors[:name] && "true"}
+                    phx-mounted={JS.focus()}
+                    class={[
+                      "input input-bordered w-full",
+                      @errors[:name] && "input-error"
+                    ]}
+                  />
+                  <p :if={@errors[:name]} class="text-xs text-error mt-1">
+                    {@errors[:name]}
+                  </p>
+                </fieldset>
+
+                <div class={[
+                  "rounded-lg p-3 space-y-3",
+                  if(@errors[:location],
+                    do: "ring-1 ring-error/30 bg-error/5",
+                    else: "bg-base-200/50"
+                  )
+                ]}>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-base-content/50">Location</span>
+                    <span class="text-xs text-base-content/30">at least one required</span>
+                  </div>
+
+                  <fieldset class="fieldset">
+                    <label class="fieldset-label text-xs font-medium" for="project-git-repo-url">
+                      Git repository URL
+                    </label>
+                    <input
+                      type="url"
+                      id="project-git-repo-url"
+                      name="git_repo_url"
+                      value={@project_form["git_repo_url"].value}
+                      placeholder="https://github.com/org/repo"
+                      aria-invalid={@errors[:location] && "true"}
+                      class={[
+                        "input input-bordered w-full",
+                        @errors[:location] && "input-error"
+                      ]}
+                    />
+                  </fieldset>
+
+                  <div class="flex items-center gap-3">
+                    <div class="flex-1 h-px bg-base-300" />
+                    <span class="text-xs text-base-content/30">or</span>
+                    <div class="flex-1 h-px bg-base-300" />
+                  </div>
+
+                  <fieldset class="fieldset">
+                    <label class="fieldset-label text-xs font-medium" for="project-local-folder">
+                      Local folder
+                    </label>
+                    <input
+                      type="text"
+                      id="project-local-folder"
+                      name="local_folder"
+                      value={@project_form["local_folder"].value}
+                      placeholder="/path/to/project"
+                      aria-invalid={@errors[:location] && "true"}
+                      class={[
+                        "input input-bordered w-full",
+                        @errors[:location] && "input-error"
+                      ]}
+                    />
+                  </fieldset>
+
+                  <p :if={@errors[:location]} class="text-xs text-error">
+                    {@errors[:location]}
+                  </p>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-full" id="create-and-select-btn">
+                  <.icon name="hero-plus-micro" class="size-4" /> Create & Select
+                </button>
+              </form>
+
+              <button
+                phx-click="back_to_select"
+                class="btn btn-ghost btn-sm w-full mt-2 text-base-content/40"
+              >
+                &larr; Back to selection
+              </button>
+            </div>
           </div>
 
           <%!-- Step 3: Initial idea --%>
@@ -428,6 +646,7 @@ defmodule DestilaWeb.NewPromptLive do
               id="initial-idea-form"
               phx-submit="save_and_continue"
               phx-change="update_idea"
+              phx-hook="FocusFirstError"
               class="space-y-4"
             >
               <fieldset class="fieldset">
@@ -439,9 +658,16 @@ defmodule DestilaWeb.NewPromptLive do
                   name="initial_idea"
                   rows="5"
                   placeholder="Describe your idea in as much detail as you'd like..."
-                  class="textarea textarea-bordered w-full"
+                  aria-invalid={@errors[:idea] && "true"}
+                  class={[
+                    "textarea textarea-bordered w-full",
+                    @errors[:idea] && "textarea-error"
+                  ]}
                   phx-debounce="300"
                 />
+                <p :if={@errors[:idea]} class="text-xs text-error mt-1">
+                  {@errors[:idea]}
+                </p>
               </fieldset>
 
               <div class="flex gap-3">
@@ -460,7 +686,7 @@ defmodule DestilaWeb.NewPromptLive do
             </form>
 
             <button
-              phx-click="back_to_repo"
+              phx-click="back_to_project"
               class="btn btn-ghost btn-sm w-full mt-2 text-base-content/40"
             >
               &larr; Back

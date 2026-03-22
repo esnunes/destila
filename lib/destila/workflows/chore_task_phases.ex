@@ -63,10 +63,26 @@ defmodule Destila.Workflows.ChoreTaskPhases do
   end
 
   def system_prompt(2, prompt) do
-    repo_url = prompt[:repo_url] || "unknown"
+    project =
+      if prompt[:project_id], do: Destila.Store.get_project(prompt[:project_id])
+
+    repo_context =
+      cond do
+        project && project.git_repo_url && project.local_folder ->
+          "The project \"#{project.name}\" has a git repository at #{project.git_repo_url} and a local folder at #{project.local_folder}."
+
+        project && project.git_repo_url ->
+          "The project \"#{project.name}\" has a git repository at #{project.git_repo_url}."
+
+        project && project.local_folder ->
+          "The project \"#{project.name}\" has a local folder at #{project.local_folder}."
+
+        true ->
+          "The repository location is unknown."
+      end
 
     """
-    You are reviewing Gherkin feature files for a coding task. The repository is at #{repo_url}.
+    You are reviewing Gherkin feature files for a coding task. #{repo_context}
 
     Use your tools to browse the repository and find existing .feature files. Then:
 
