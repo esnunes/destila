@@ -22,6 +22,7 @@ defmodule Destila.Repo.Migrations.CreateProjectsPromptsMessages do
       add :steps_total, :integer, default: 4
       add :phase_status, :string
       add :title_generating, :boolean, default: false
+      add :session_id, :string
       add :position, :integer, null: false
 
       timestamps(type: :utc_datetime)

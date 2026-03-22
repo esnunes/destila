@@ -260,7 +260,15 @@ defmodule DestilaWeb.NewPromptLive do
             phase: phase
           })
 
-        Destila.Prompts.update_prompt(prompt_id, %{phase_status: new_phase_status})
+        # Persist session_id + phase_status
+        update_attrs = %{phase_status: new_phase_status}
+
+        update_attrs =
+          if result[:session_id],
+            do: Map.put(update_attrs, :session_id, result[:session_id]),
+            else: update_attrs
+
+        Destila.Prompts.update_prompt(prompt_id, update_attrs)
 
       {:error, _} ->
         {:ok, _} =
