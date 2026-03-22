@@ -27,15 +27,11 @@ defmodule DestilaWeb.PromptDetailLive do
 
       # For AI workflows, ensure session is alive and trigger initial response if needed
       socket =
-        socket
-        |> assign(:ai_session, nil)
-        |> then(fn s ->
-          if ai_workflow?(prompt) && connected?(socket) do
-            ensure_ai_session(s, prompt, messages)
-          else
-            s
-          end
-        end)
+        if ai_workflow?(prompt) && connected?(socket) do
+          ensure_ai_session(socket, prompt, messages)
+        else
+          socket
+        end
 
       current_step = current_step_info(messages, prompt)
 
@@ -203,7 +199,8 @@ defmodule DestilaWeb.PromptDetailLive do
       # (session already has full conversation history)
       updated_prompt = Destila.Prompts.get_prompt!(prompt.id)
       phase_prompt = ChoreTaskPhases.system_prompt(next_phase, updated_prompt)
-      spawn_ai_query(prompt.id, next_phase, phase_prompt, socket.assigns.ai_session)
+      {:ok, session} = Destila.AI.Session.for_prompt(prompt.id)
+      spawn_ai_query(prompt.id, next_phase, phase_prompt, session)
 
       {:noreply, refresh_state(socket)}
     end
@@ -258,10 +255,6 @@ defmodule DestilaWeb.PromptDetailLive do
     else
       {:noreply, socket}
     end
-  end
-
-  def handle_info({:ai_session_replaced, new_session}, socket) do
-    {:noreply, assign(socket, :ai_session, new_session)}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -341,8 +334,9 @@ defmodule DestilaWeb.PromptDetailLive do
       # Set generating status
       Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
 
-      # Session has context (either from original creation or from resume)
-      spawn_ai_query(prompt.id, phase, content, socket.assigns.ai_session)
+      # Look up the shared session for this prompt
+      {:ok, session} = Destila.AI.Session.for_prompt(prompt.id)
+      spawn_ai_query(prompt.id, phase, content, session)
 
       {:noreply, refresh_state(socket)}
     end
@@ -353,15 +347,13 @@ defmodule DestilaWeb.PromptDetailLive do
   # - For phase transitions: the phase system prompt (to set new AI instructions)
   # - For session resumption: system prompt + full conversation context
   defp spawn_ai_query(prompt_id, phase, query_text, session) do
-    lv_pid = self()
-
     Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
       prompt = Destila.Prompts.get_prompt!(prompt_id)
 
       if session && Process.alive?(session) do
         handle_ai_query_result(prompt_id, phase, prompt, session, query_text)
       else
-        # Session is dead — resume or restart
+        # Session is dead — get or create via Registry (with resume if available)
         session_opts = [timeout_ms: :timer.minutes(15)]
 
         session_opts =
@@ -371,11 +363,8 @@ defmodule DestilaWeb.PromptDetailLive do
             session_opts
           end
 
-        case Destila.AI.Session.start_link(session_opts) do
+        case Destila.AI.Session.for_prompt(prompt_id, session_opts) do
           {:ok, new_session} ->
-            send(lv_pid, {:ai_session_replaced, new_session})
-
-            # If resuming, use original query; if new, rebuild full context
             query =
               if prompt.session_id do
                 query_text
@@ -463,60 +452,39 @@ defmodule DestilaWeb.PromptDetailLive do
   end
 
   defp ensure_ai_session(socket, prompt, messages) do
-    session = socket.assigns.ai_session
+    session_opts = [timeout_ms: :timer.minutes(15)]
 
-    cond do
-      session && Process.alive?(session) ->
-        # Session alive — check if we need to trigger initial AI response
+    session_opts =
+      if prompt.session_id do
+        Keyword.put(session_opts, :resume, prompt.session_id)
+      else
+        session_opts
+      end
+
+    case Destila.AI.Session.for_prompt(prompt.id, session_opts) do
+      {:ok, session} ->
         last_msg = List.last(messages)
 
         if last_msg && last_msg.role == :user && prompt.phase_status != :generating do
+          phase = prompt.steps_completed
+
+          query =
+            if prompt.session_id do
+              last_msg.content
+            else
+              system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
+              context = ChoreTaskPhases.build_conversation_context(messages)
+              system_prompt <> "\n\n" <> context
+            end
+
           Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
-          spawn_ai_query(prompt.id, prompt.steps_completed, last_msg.content, session)
+          spawn_ai_query(prompt.id, phase, query, session)
         end
 
         socket
 
-      true ->
-        # Session dead or nil — start or resume
-        session_opts = [timeout_ms: :timer.minutes(15)]
-
-        # Resume from stored session_id if available
-        session_opts =
-          if prompt.session_id do
-            Keyword.put(session_opts, :resume, prompt.session_id)
-          else
-            session_opts
-          end
-
-        case Destila.AI.Session.start_link(session_opts) do
-          {:ok, new_session} ->
-            last_msg = List.last(messages)
-
-            # Only trigger AI if there's a pending user message and not already generating
-            if last_msg && last_msg.role == :user && prompt.phase_status != :generating do
-              phase = prompt.steps_completed
-
-              # If resuming, just send the user message (session has history)
-              # If new session, send full context
-              query =
-                if prompt.session_id do
-                  last_msg.content
-                else
-                  system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
-                  context = ChoreTaskPhases.build_conversation_context(messages)
-                  system_prompt <> "\n\n" <> context
-                end
-
-              Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
-              spawn_ai_query(prompt.id, phase, query, new_session)
-            end
-
-            assign(socket, :ai_session, new_session)
-
-          {:error, _} ->
-            put_flash(socket, :error, "Failed to start AI session")
-        end
+      {:error, _} ->
+        put_flash(socket, :error, "Failed to start AI session")
     end
   end
 

@@ -193,14 +193,14 @@ defmodule DestilaWeb.NewPromptLive do
         })
     end
 
-    # Start an AI session
+    # Start an AI session registered to this prompt
     session_opts =
       case action do
         :continue -> [timeout_ms: :timer.minutes(15)]
         :close -> [timeout_ms: :timer.seconds(30)]
       end
 
-    {:ok, session} = Destila.AI.Session.start_link(session_opts)
+    {:ok, session} = Destila.AI.Session.for_prompt(prompt.id, session_opts)
 
     # Generate title asynchronously
     prompt_id = prompt.id
