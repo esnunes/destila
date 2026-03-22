@@ -149,7 +149,7 @@ defmodule Destila.Workflows.ChoreTaskPhases do
   """
   def build_conversation_context(messages) do
     messages
-    |> Enum.reject(&(&1[:message_type] == :phase_divider))
+    |> Enum.reject(&(&1.message_type == :phase_divider))
     |> Enum.group_by(& &1.step)
     |> Enum.sort_by(fn {step, _} -> step end)
     |> Enum.map(fn {step, msgs} ->
