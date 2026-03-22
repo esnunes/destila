@@ -43,6 +43,6 @@ defmodule Destila.Repo.Migrations.CreateProjectsPromptsMessages do
       add :inserted_at, :utc_datetime_usec, null: false
     end
 
-    create index(:messages, [:prompt_id])
+    create index(:messages, [:prompt_id, :inserted_at])
   end
 end

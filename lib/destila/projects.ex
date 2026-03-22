@@ -31,14 +31,7 @@ defmodule Destila.Projects do
   end
 
   def delete_project(%Project{} = project) do
-    linked? =
-      Repo.exists?(
-        from(p in Destila.Prompts.Prompt,
-          where: p.project_id == ^project.id
-        )
-      )
-
-    if linked? do
+    if Destila.Prompts.count_by_project(project.id) > 0 do
       {:error, :has_linked_prompts}
     else
       case Repo.delete(project) do
@@ -50,10 +43,6 @@ defmodule Destila.Projects do
           error
       end
     end
-  end
-
-  def change_project(%Project{} = project, attrs \\ %{}) do
-    Project.changeset(project, attrs)
   end
 
   defp broadcast({:ok, entity}, event) do

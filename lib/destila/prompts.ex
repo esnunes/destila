@@ -44,12 +44,19 @@ defmodule Destila.Prompts do
     update_prompt(prompt, %{column: new_column, position: new_position})
   end
 
-  def change_prompt(%Prompt{} = prompt, attrs \\ %{}) do
-    Prompt.changeset(prompt, attrs)
-  end
-
   def count_by_project(project_id) do
     Repo.aggregate(from(p in Prompt, where: p.project_id == ^project_id), :count)
+  end
+
+  def count_by_projects do
+    Repo.all(
+      from(p in Prompt,
+        where: not is_nil(p.project_id),
+        group_by: p.project_id,
+        select: {p.project_id, count(p.id)}
+      )
+    )
+    |> Map.new()
   end
 
   defp broadcast({:ok, entity}, event) do

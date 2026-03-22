@@ -90,13 +90,6 @@ defmodule Destila.Messages do
     }
   end
 
-  @doc """
-  Processes all messages for a prompt into display-ready maps.
-  """
-  def process_all(messages, prompt) do
-    Enum.map(messages, &process(&1, prompt))
-  end
-
   # Strips <<READY_TO_ADVANCE>> and <<SKIP_PHASE>> markers from AI text.
   # Returns {cleaned_content, message_type}.
   defp parse_markers(text, phase, prompt) do
@@ -166,6 +159,22 @@ defmodule Destila.Messages do
     case Enum.find(steps, fn s -> s.step == phase end) do
       nil -> {:text, nil}
       step -> {step.input_type, step.options}
+    end
+  end
+
+  def derive_phase_status(text) do
+    cond do
+      String.contains?(text, "<<SKIP_PHASE>>") -> :conversing
+      String.contains?(text, "<<READY_TO_ADVANCE>>") -> :advance_suggested
+      true -> :conversing
+    end
+  end
+
+  def response_text(result) do
+    if result.text != nil and result.text != "" do
+      result.text
+    else
+      result.result || ""
     end
   end
 

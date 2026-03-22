@@ -38,9 +38,9 @@ defmodule DestilaWeb.PromptDetailLive do
       {:ok,
        socket
        |> assign(:current_user, session["current_user"])
-       |> assign(:prompt, Destila.Prompts.get_prompt(id) || prompt)
+       |> assign(:prompt, prompt)
        |> assign(:project, lookup_project(prompt))
-       |> assign(:messages, Destila.Messages.list_messages(id))
+       |> assign(:messages, messages)
        |> assign(:current_step, current_step)
        |> assign(:editing_title, false)
        |> assign(:question_answers, %{})
@@ -342,66 +342,17 @@ defmodule DestilaWeb.PromptDetailLive do
     end
   end
 
-  # query_text: the text to send to the AI session.
-  # - For user messages: the user's message text (session already has conversation history)
-  # - For phase transitions: the phase system prompt (to set new AI instructions)
-  # - For session resumption: system prompt + full conversation context
   defp spawn_ai_query(prompt_id, phase, query_text, session) do
     Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
-      prompt = Destila.Prompts.get_prompt!(prompt_id)
-
-      if session && Process.alive?(session) do
-        handle_ai_query_result(prompt_id, phase, prompt, session, query_text)
-      else
-        # Session is dead — get or create via Registry (with resume if available)
-        session_opts = [timeout_ms: :timer.minutes(15)]
-
-        session_opts =
-          if prompt.session_id do
-            Keyword.put(session_opts, :resume, prompt.session_id)
-          else
-            session_opts
-          end
-
-        case Destila.AI.Session.for_prompt(prompt_id, session_opts) do
-          {:ok, new_session} ->
-            query =
-              if prompt.session_id do
-                query_text
-              else
-                messages = Destila.Messages.list_messages(prompt_id)
-                system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
-                context = ChoreTaskPhases.build_conversation_context(messages)
-                system_prompt <> "\n\n" <> context
-              end
-
-            handle_ai_query_result(prompt_id, phase, prompt, new_session, query)
-
-          {:error, _} ->
-            {:ok, _} =
-              Destila.Messages.create_message(prompt_id, %{
-                role: :system,
-                content: "Something went wrong. Please try sending your message again.",
-                phase: phase
-              })
-
-            Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
-        end
-      end
+      handle_ai_query_result(prompt_id, phase, session, query_text)
     end)
   end
 
-  defp handle_ai_query_result(prompt_id, phase, _prompt, session, query_text) do
+  defp handle_ai_query_result(prompt_id, phase, session, query_text) do
     case Destila.AI.Session.query(session, query_text) do
       {:ok, result} ->
-        response_text =
-          if result.text != nil and result.text != "" do
-            result.text
-          else
-            result.result || ""
-          end
-
-        new_phase_status = derive_phase_status(response_text)
+        response_text = Destila.Messages.response_text(result)
+        new_phase_status = Destila.Messages.derive_phase_status(response_text)
 
         {:ok, _} =
           Destila.Messages.create_message(prompt_id, %{
@@ -411,16 +362,18 @@ defmodule DestilaWeb.PromptDetailLive do
             phase: phase
           })
 
-        # Persist session_id for resumption across page reloads
-        if result[:session_id] do
-          Destila.Prompts.update_prompt(prompt_id, %{session_id: result[:session_id]})
-        end
-
         # Check for skip_phase marker
         if String.contains?(response_text, "<<SKIP_PHASE>>") do
           handle_skip_phase(prompt_id, phase, session)
         else
-          Destila.Prompts.update_prompt(prompt_id, %{phase_status: new_phase_status})
+          update_attrs = %{phase_status: new_phase_status}
+
+          update_attrs =
+            if result[:session_id],
+              do: Map.put(update_attrs, :session_id, result[:session_id]),
+              else: update_attrs
+
+          Destila.Prompts.update_prompt(prompt_id, update_attrs)
         end
 
       {:error, _} ->
@@ -448,7 +401,7 @@ defmodule DestilaWeb.PromptDetailLive do
     # Call directly since we're already in a task
     prompt = Destila.Prompts.get_prompt!(prompt_id)
     phase_prompt = ChoreTaskPhases.system_prompt(next_phase, prompt)
-    handle_ai_query_result(prompt_id, next_phase, prompt, session, phase_prompt)
+    handle_ai_query_result(prompt_id, next_phase, session, phase_prompt)
   end
 
   defp ensure_ai_session(socket, prompt, messages) do
@@ -485,14 +438,6 @@ defmodule DestilaWeb.PromptDetailLive do
 
       {:error, _} ->
         put_flash(socket, :error, "Failed to start AI session")
-    end
-  end
-
-  defp derive_phase_status(text) do
-    cond do
-      String.contains?(text, "<<SKIP_PHASE>>") -> :conversing
-      String.contains?(text, "<<READY_TO_ADVANCE>>") -> :advance_suggested
-      true -> :conversing
     end
   end
 

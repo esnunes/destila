@@ -152,46 +152,51 @@ defmodule DestilaWeb.NewPromptLive do
     first_step = List.first(steps)
 
     {:ok, prompt} =
-      Destila.Prompts.create_prompt(%{
-        title: "Generating title...",
-        title_generating: true,
-        workflow_type: workflow_type,
-        project_id: socket.assigns.project_id,
-        board: :crafting,
-        column: :request,
-        steps_completed: 1,
-        steps_total: Destila.Workflows.total_steps(workflow_type),
-        phase_status: if(workflow_type == :chore_task, do: :generating, else: nil)
-      })
+      Destila.Repo.transaction(fn ->
+        {:ok, prompt} =
+          Destila.Prompts.create_prompt(%{
+            title: "Generating title...",
+            title_generating: true,
+            workflow_type: workflow_type,
+            project_id: socket.assigns.project_id,
+            board: :crafting,
+            column: :request,
+            steps_completed: 1,
+            steps_total: Destila.Workflows.total_steps(workflow_type),
+            phase_status: if(workflow_type == :chore_task, do: :generating, else: nil)
+          })
 
-    # Add system message for phase 1 (the question)
-    {:ok, _} =
-      Destila.Messages.create_message(prompt.id, %{
-        role: :system,
-        content: first_step.content,
-        phase: 1
-      })
+        # Add system message for phase 1 (the question)
+        {:ok, _} =
+          Destila.Messages.create_message(prompt.id, %{
+            role: :system,
+            content: first_step.content,
+            phase: 1
+          })
 
-    # Add user message for phase 1 (the initial idea)
-    {:ok, _} =
-      Destila.Messages.create_message(prompt.id, %{
-        role: :user,
-        content: idea,
-        phase: 1
-      })
+        # Add user message for phase 1 (the initial idea)
+        {:ok, _} =
+          Destila.Messages.create_message(prompt.id, %{
+            role: :user,
+            content: idea,
+            phase: 1
+          })
 
-    # For static workflows, add the second system message so the chat picks up from there
-    # For AI-driven workflows (chore_task), skip — the AI will generate the next response
-    if workflow_type != :chore_task do
-      second_step = Enum.at(steps, 1)
+        # For static workflows, add the second system message so the chat picks up from there
+        # For AI-driven workflows (chore_task), skip — the AI will generate the next response
+        if workflow_type != :chore_task do
+          second_step = Enum.at(steps, 1)
 
-      {:ok, _} =
-        Destila.Messages.create_message(prompt.id, %{
-          role: :system,
-          content: second_step.content,
-          phase: second_step.step
-        })
-    end
+          {:ok, _} =
+            Destila.Messages.create_message(prompt.id, %{
+              role: :system,
+              content: second_step.content,
+              phase: second_step.step
+            })
+        end
+
+        prompt
+      end)
 
     # Start an AI session registered to this prompt
     session_opts =
@@ -243,14 +248,8 @@ defmodule DestilaWeb.NewPromptLive do
 
     case Destila.AI.Session.query(session, query) do
       {:ok, result} ->
-        response_text =
-          if result.text != nil and result.text != "" do
-            result.text
-          else
-            result.result || ""
-          end
-
-        new_phase_status = derive_phase_status(response_text)
+        response_text = Destila.Messages.response_text(result)
+        new_phase_status = Destila.Messages.derive_phase_status(response_text)
 
         {:ok, _} =
           Destila.Messages.create_message(prompt_id, %{
@@ -279,14 +278,6 @@ defmodule DestilaWeb.NewPromptLive do
           })
 
         Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
-    end
-  end
-
-  defp derive_phase_status(text) do
-    cond do
-      String.contains?(text, "<<SKIP_PHASE>>") -> :conversing
-      String.contains?(text, "<<READY_TO_ADVANCE>>") -> :advance_suggested
-      true -> :conversing
     end
   end
 

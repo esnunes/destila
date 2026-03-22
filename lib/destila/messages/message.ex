@@ -28,5 +28,6 @@ defmodule Destila.Messages.Message do
       :phase
     ])
     |> validate_required([:prompt_id, :role])
+    |> validate_number(:phase, greater_than_or_equal_to: 1)
   end
 end
