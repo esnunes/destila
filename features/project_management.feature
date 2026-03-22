@@ -59,6 +59,13 @@ Feature: Project Management
     And I click "Save"
     Then the project should be updated
 
+  Scenario: Cannot save an edited project with invalid data
+    Given there is an existing project
+    When I navigate to the projects page
+    And I click edit on the project
+    When I clear all fields and click "Save"
+    Then I should see validation errors for name and location
+
   Scenario: Delete a project not linked to any prompts
     Given there is a project with no linked prompts
     When I navigate to the projects page

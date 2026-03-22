@@ -100,8 +100,11 @@ defmodule DestilaWeb.ProjectsLive do
          |> assign(:errors, %{})}
 
       {:error, errors} ->
+        project = Destila.Store.get_project(id)
+
         {:noreply,
          socket
+         |> then(fn s -> if project, do: stream_insert(s, :projects, project), else: s end)
          |> assign(:form, to_form(params))
          |> assign(:errors, errors)}
     end

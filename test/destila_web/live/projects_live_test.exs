@@ -140,6 +140,30 @@ defmodule DestilaWeb.ProjectsLiveTest do
 
       assert render(view) =~ "Updated Name"
     end
+
+    @tag feature: @feature, scenario: "Cannot save an edited project with invalid data"
+    test "shows validation errors when all fields are cleared", %{conn: conn} do
+      project =
+        Destila.Store.create_project(%{
+          name: "Original Name",
+          git_repo_url: "https://github.com/test/repo"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      view
+      |> form("#project-form-update_project", %{
+        "name" => "",
+        "git_repo_url" => "",
+        "local_folder" => ""
+      })
+      |> render_submit()
+
+      assert render(view) =~ "Name is required"
+      assert render(view) =~ "Provide at least one"
+    end
   end
 
   describe "delete project" do
