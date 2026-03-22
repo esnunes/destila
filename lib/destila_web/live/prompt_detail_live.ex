@@ -613,10 +613,18 @@ defmodule DestilaWeb.PromptDetailLive do
 
   defp phase_name(phase), do: ChoreTaskPhases.phase_name(phase)
 
-  defp phase_groups(messages) do
-    messages
-    |> Enum.chunk_by(& &1.phase)
-    |> Enum.map(fn group -> {List.first(group).phase, group} end)
+  defp phase_groups(messages, current_phase) do
+    groups =
+      messages
+      |> Enum.chunk_by(& &1.phase)
+      |> Enum.map(fn group -> {List.first(group).phase, group} end)
+
+    # Ensure the current phase has a group even if no messages yet
+    if Enum.any?(groups, fn {phase, _} -> phase == current_phase end) do
+      groups
+    else
+      groups ++ [{current_phase, []}]
+    end
   end
 
   def render(assigns) do
@@ -733,7 +741,7 @@ defmodule DestilaWeb.PromptDetailLive do
           <div class="max-w-2xl mx-auto">
             <%= if ai_workflow?(@prompt) do %>
               <% current_phase = max(@prompt.steps_completed, 1) %>
-              <%= for {phase, group} <- phase_groups(@messages) do %>
+              <%= for {phase, group} <- phase_groups(@messages, current_phase) do %>
                 <details
                   class={["phase-section", phase == 1 && "first-phase"]}
                   open={phase >= current_phase}
@@ -750,14 +758,15 @@ defmodule DestilaWeb.PromptDetailLive do
                     <div class="flex-1 h-px bg-base-300" />
                   </summary>
                   <.chat_message :for={msg <- group} message={msg} prompt={@prompt} />
+                  <.chat_typing_indicator :if={
+                    phase == current_phase && @prompt.phase_status == :generating
+                  } />
                 </details>
               <% end %>
             <% else %>
               <.chat_message :for={message <- @messages} message={message} prompt={@prompt} />
+              <.chat_typing_indicator :if={@prompt.phase_status == :generating} />
             <% end %>
-
-            <%!-- Typing indicator --%>
-            <.chat_typing_indicator :if={@prompt.phase_status == :generating} />
 
             <%!-- Inline structured options (inside chat flow) --%>
             <div
