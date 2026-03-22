@@ -11,6 +11,10 @@ defmodule DestilaWeb.NewPromptLive do
      |> assign(:project_id, nil)
      |> assign(:projects, Destila.Store.list_projects())
      |> assign(:project_step, :select)
+     |> assign(
+       :project_form,
+       to_form(%{"name" => "", "git_repo_url" => "", "local_folder" => ""})
+     )
      |> assign(:initial_idea, "")
      |> assign(:return_to, "/crafting")
      |> assign(:errors, %{})}
@@ -88,7 +92,10 @@ defmodule DestilaWeb.NewPromptLive do
        |> assign(:project_step, :select)
        |> assign(:errors, %{})}
     else
-      {:noreply, assign(socket, :errors, errors)}
+      {:noreply,
+       socket
+       |> assign(:project_form, to_form(params))
+       |> assign(:errors, errors)}
     end
   end
 
@@ -539,6 +546,7 @@ defmodule DestilaWeb.NewPromptLive do
                     type="text"
                     id="project-name"
                     name="name"
+                    value={@project_form["name"].value}
                     placeholder="My Project"
                     aria-invalid={@errors[:name] && "true"}
                     class={[
@@ -571,6 +579,7 @@ defmodule DestilaWeb.NewPromptLive do
                       type="url"
                       id="project-git-repo-url"
                       name="git_repo_url"
+                      value={@project_form["git_repo_url"].value}
                       placeholder="https://github.com/org/repo"
                       aria-invalid={@errors[:location] && "true"}
                       class={[
@@ -594,6 +603,7 @@ defmodule DestilaWeb.NewPromptLive do
                       type="text"
                       id="project-local-folder"
                       name="local_folder"
+                      value={@project_form["local_folder"].value}
                       placeholder="/path/to/project"
                       aria-invalid={@errors[:location] && "true"}
                       class={[
