@@ -102,6 +102,57 @@ defmodule DestilaWeb.BoardComponents do
     """
   end
 
+  attr :card, :map, required: true
+  attr :project_filter, :string, default: nil
+
+  def crafting_card(assigns) do
+    ~H"""
+    <div
+      id={"crafting-card-#{@card.id}"}
+      class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow"
+    >
+      <div class="card-body p-4 gap-2">
+        <.link
+          navigate={"/prompts/#{@card.id}"}
+          class="text-sm font-medium leading-tight hover:text-primary transition-colors"
+        >
+          <span class={[
+            @card.title_generating && "animate-pulse text-base-content/50"
+          ]}>
+            {@card.title}
+          </span>
+        </.link>
+
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <.workflow_badge type={@card.workflow_type} />
+            <%= if @card.project do %>
+              <.link
+                patch={
+                  if @project_filter == @card.project_id,
+                    do: "/crafting",
+                    else: "/crafting?project=#{@card.project_id}"
+                }
+                class="text-xs text-base-content/60 hover:text-primary transition-colors truncate max-w-[120px]"
+              >
+                {@card.project.name}
+              </.link>
+            <% end %>
+          </div>
+          <span class="text-xs text-base-content/40 whitespace-nowrap">
+            Phase {@card.steps_completed}
+          </span>
+        </div>
+
+        <.progress_indicator
+          completed={@card.steps_completed}
+          total={@card.steps_total}
+        />
+      </div>
+    </div>
+    """
+  end
+
   # Helpers
 
   defp column_label(:request), do: "Request"

@@ -104,6 +104,41 @@ defmodule Destila.Workflows do
   def total_steps(:project), do: 3
   def total_steps(:chore_task), do: 4
 
+  @doc """
+  Returns the human-readable phase name for a workflow type and phase number.
+  """
+  def phase_name(:chore_task, phase), do: Destila.Workflows.ChoreTaskPhases.phase_name(phase)
+
+  def phase_name(:feature_request, 1), do: "Problem"
+  def phase_name(:feature_request, 2), do: "Feature Type"
+  def phase_name(:feature_request, 3), do: "Affected Areas"
+  def phase_name(:feature_request, 4), do: "Mockups"
+
+  def phase_name(:project, 1), do: "Project Idea"
+  def phase_name(:project, 2), do: "Tech Stack"
+  def phase_name(:project, 3), do: "V1 Features"
+
+  def phase_name(_type, _phase), do: nil
+
+  @doc """
+  Returns the list of {phase_number, phase_name} column definitions for a workflow type,
+  including a final {:done, "Done"} column.
+  """
+  def phase_columns(workflow_type) do
+    range =
+      case workflow_type do
+        :chore_task -> 0..total_steps(workflow_type)
+        _ -> 1..total_steps(workflow_type)
+      end
+
+    columns =
+      range
+      |> Enum.map(fn n -> {n, phase_name(workflow_type, n)} end)
+      |> Enum.reject(fn {_, name} -> is_nil(name) end)
+
+    columns ++ [{:done, "Done"}]
+  end
+
   def completion_message(:feature_request) do
     "Your feature request prompt is ready! I've gathered all the details needed to create a comprehensive, actionable prompt for your coding agent. You can now move this to the Implementation Board to start building."
   end

@@ -5,11 +5,15 @@ defmodule Destila.Prompts do
   alias Destila.Prompts.Prompt
 
   def list_prompts do
-    Repo.all(from(p in Prompt, order_by: p.position))
+    from(p in Prompt, order_by: p.position)
+    |> preload(:project)
+    |> Repo.all()
   end
 
   def list_prompts(board) do
-    Repo.all(from(p in Prompt, where: p.board == ^board, order_by: p.position))
+    from(p in Prompt, where: p.board == ^board, order_by: p.position)
+    |> preload(:project)
+    |> Repo.all()
   end
 
   def get_prompt(id) do
