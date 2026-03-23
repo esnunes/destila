@@ -130,27 +130,32 @@ defmodule DestilaWeb.BoardComponents do
           <.status_dot :if={@compact} card={@card} />
         </div>
 
-        <div :if={!@compact} class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <.workflow_badge type={@card.workflow_type} />
-            <%= if @card.project do %>
-              <.link
-                patch={
-                  if @project_filter == @card.project_id,
-                    do: "/crafting",
-                    else: "/crafting?project=#{@card.project_id}"
-                }
-                class="text-xs text-base-content/60 hover:text-primary transition-colors truncate max-w-[120px]"
-              >
-                {@card.project.name}
-              </.link>
-            <% end %>
-          </div>
-          <span class="text-xs text-base-content/40 whitespace-nowrap">
-            {Destila.Workflows.phase_name(@card.workflow_type, @card.steps_completed) ||
-              "Phase #{@card.steps_completed}"}
+        <%= if @compact do %>
+          <span :if={@card.project} class="text-xs text-base-content/50 truncate">
+            {@card.project.name}
           </span>
-        </div>
+        <% else %>
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <.workflow_badge type={@card.workflow_type} />
+              <%= if @card.project do %>
+                <.link
+                  patch={
+                    if @project_filter == @card.project_id,
+                      do: "/crafting",
+                      else: "/crafting?project=#{@card.project_id}"
+                  }
+                  class="text-xs text-base-content/60 hover:text-primary transition-colors truncate max-w-[120px]"
+                >
+                  {@card.project.name}
+                </.link>
+              <% end %>
+            </div>
+            <span class="text-xs text-base-content/40 whitespace-nowrap">
+              {phase_label(@card)}
+            </span>
+          </div>
+        <% end %>
 
         <.progress_indicator
           :if={!@compact}
@@ -187,6 +192,13 @@ defmodule DestilaWeb.BoardComponents do
 
   defp status_dot_style(_card),
     do: {"bg-primary/40", "In progress"}
+
+  defp phase_label(%{column: :done}), do: "Done"
+
+  defp phase_label(card),
+    do:
+      Destila.Workflows.phase_name(card.workflow_type, card.steps_completed) ||
+        "Phase #{card.steps_completed}"
 
   # Helpers
 
