@@ -215,7 +215,10 @@ defmodule DestilaWeb.CraftingBoardLive do
             </select>
           </form>
 
-          <label id="view-toggle" class="flex items-center gap-2 cursor-pointer select-none">
+          <label
+            id="view-toggle"
+            class="flex items-center gap-2 cursor-pointer select-none border border-base-300 rounded-lg px-3 py-1.5"
+          >
             <input
               type="checkbox"
               class="toggle toggle-sm toggle-primary"
