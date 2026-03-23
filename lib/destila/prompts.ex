@@ -72,20 +72,16 @@ defmodule Destila.Prompts do
     if prompt.phase_status != :setup do
       :noop
     else
-      title_done = !prompt.title_generating
+      phase0_messages =
+        Destila.Messages.list_messages(prompt_id)
+        |> Enum.filter(&(&1.phase == 0))
+
+      title_done = step_completed?(phase0_messages, "title_generation")
 
       setup_done =
         if prompt.project_id do
-          # Check if ai_session step completed
-          Destila.Messages.list_messages(prompt_id)
-          |> Enum.any?(fn msg ->
-            msg.phase == 0 &&
-              msg.raw_response &&
-              msg.raw_response["setup_step"] == "ai_session" &&
-              msg.raw_response["status"] == "completed"
-          end)
+          step_completed?(phase0_messages, "ai_session")
         else
-          # No project — no setup steps needed
           true
         end
 
@@ -95,6 +91,14 @@ defmodule Destila.Prompts do
         :noop
       end
     end
+  end
+
+  defp step_completed?(phase0_messages, step_name) do
+    Enum.any?(phase0_messages, fn msg ->
+      msg.raw_response &&
+        msg.raw_response["setup_step"] == step_name &&
+        msg.raw_response["status"] == "completed"
+    end)
   end
 
   defp do_finish_phase0(prompt) do
