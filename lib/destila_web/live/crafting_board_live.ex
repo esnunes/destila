@@ -212,16 +212,15 @@ defmodule DestilaWeb.CraftingBoardLive do
             </form>
 
             <%!-- View toggle --%>
-            <button
-              id="view-toggle"
-              phx-click="toggle_view"
-              class={[
-                "btn btn-sm gap-1",
-                if(@view_mode == :workflow, do: "btn-primary", else: "btn-ghost")
-              ]}
-            >
-              <.icon name="hero-view-columns-micro" class="size-4" /> Group by Workflow
-            </button>
+            <label id="view-toggle" class="flex items-center gap-2 cursor-pointer select-none">
+              <span class="text-xs text-base-content/60">Group by Workflow</span>
+              <input
+                type="checkbox"
+                class="toggle toggle-sm toggle-primary"
+                checked={@view_mode == :workflow}
+                phx-click="toggle_view"
+              />
+            </label>
 
             <%!-- New Prompt --%>
             <.link navigate={~p"/prompts/new?from=/crafting"} class="btn btn-primary btn-sm">

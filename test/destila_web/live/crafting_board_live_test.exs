@@ -273,7 +273,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
       # Toggle to workflow view
-      view |> element("#view-toggle") |> render_click()
+      view |> element("#view-toggle input") |> render_click()
 
       # Should see workflow boards
       assert has_element?(view, "#workflow-board-chore_task")
@@ -322,7 +322,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
     test "toggling back returns to list view", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/crafting?view=workflow")
 
-      view |> element("#view-toggle") |> render_click()
+      view |> element("#view-toggle input") |> render_click()
 
       assert has_element?(view, "#crafting-sections")
       refute has_element?(view, "#crafting-workflow-boards")
@@ -375,7 +375,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       {:ok, view, _html} = live(conn, "/crafting?project=#{project_a.id}")
 
       # Toggle to workflow view — filter should persist
-      view |> element("#view-toggle") |> render_click()
+      view |> element("#view-toggle input") |> render_click()
 
       # Should still be filtered (URL should have both params)
       assert has_element?(view, "#crafting-workflow-boards")
@@ -401,7 +401,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
     test "toggle updates URL query params", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
-      view |> element("#view-toggle") |> render_click()
+      view |> element("#view-toggle input") |> render_click()
 
       assert_patch(view, "/crafting?view=workflow")
     end
