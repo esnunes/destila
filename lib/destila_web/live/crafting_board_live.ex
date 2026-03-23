@@ -217,7 +217,7 @@ defmodule DestilaWeb.CraftingBoardLive do
 
           <label
             id="view-toggle"
-            class="flex items-center gap-2 cursor-pointer select-none border border-base-300 rounded-lg px-3 py-1.5"
+            class="flex items-center gap-2 cursor-pointer select-none border border-base-content/20 rounded-[var(--radius-field)] px-3 py-1.5"
           >
             <input
               type="checkbox"
