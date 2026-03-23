@@ -40,8 +40,8 @@ defmodule DestilaWeb.CraftingBoardLive do
   end
 
   @impl true
-  def handle_event("toggle_view", _params, socket) do
-    new_mode = if socket.assigns.view_mode == :list, do: :workflow, else: :list
+  def handle_event("toggle_view", %{"mode" => mode}, socket) do
+    new_mode = if mode == "workflow", do: :workflow, else: :list
     {:noreply, push_patch(socket, to: build_path(new_mode, socket.assigns.project_filter))}
   end
 
@@ -215,18 +215,28 @@ defmodule DestilaWeb.CraftingBoardLive do
             </select>
           </form>
 
-          <label
-            id="view-toggle"
-            class="flex items-center gap-2 cursor-pointer select-none border border-base-content/20 rounded-[var(--radius-field)] px-3 py-1.5"
-          >
-            <input
-              type="checkbox"
-              class="toggle toggle-sm toggle-primary"
-              checked={@view_mode == :workflow}
+          <div id="view-toggle" class="join">
+            <button
               phx-click="toggle_view"
-            />
-            <span class="text-xs text-base-content/60">Group by Workflow</span>
-          </label>
+              phx-value-mode="list"
+              class={[
+                "join-item btn btn-sm",
+                if(@view_mode == :list, do: "btn-active", else: "")
+              ]}
+            >
+              <.icon name="hero-list-bullet-micro" class="size-4" /> List
+            </button>
+            <button
+              phx-click="toggle_view"
+              phx-value-mode="workflow"
+              class={[
+                "join-item btn btn-sm",
+                if(@view_mode == :workflow, do: "btn-active", else: "")
+              ]}
+            >
+              <.icon name="hero-view-columns-micro" class="size-4" /> Workflow
+            </button>
+          </div>
         </div>
 
         <%!-- List View --%>
