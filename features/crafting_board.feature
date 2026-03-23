@@ -23,7 +23,7 @@ Feature: Crafting Board
     When I navigate to the crafting board
     Then the prompt card should show the title "Fix login bug"
     And the card should show the project name "destila"
-    And the card should show the current phase "2"
+    And the card should show the current phase name (e.g. "Feature Type" for step 2 of Feature Request)
 
   Scenario: Click prompt card to navigate to detail page
     Given there is a prompt on the crafting board

@@ -137,7 +137,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
 
       assert html =~ "Fix login bug"
       assert html =~ "destila"
-      assert html =~ "Phase 2"
+      assert html =~ "Feature Type"
     end
 
     @tag feature: @feature, scenario: "Click prompt card to navigate to detail page"

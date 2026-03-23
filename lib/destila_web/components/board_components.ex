@@ -140,7 +140,8 @@ defmodule DestilaWeb.BoardComponents do
             <% end %>
           </div>
           <span class="text-xs text-base-content/40 whitespace-nowrap">
-            Phase {@card.steps_completed}
+            {Destila.Workflows.phase_name(@card.workflow_type, @card.steps_completed) ||
+              "Phase #{@card.steps_completed}"}
           </span>
         </div>
 
