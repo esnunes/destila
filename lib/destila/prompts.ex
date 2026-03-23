@@ -59,6 +59,69 @@ defmodule Destila.Prompts do
     |> Map.new()
   end
 
+  @doc """
+  Checks if Phase 0 setup is fully complete (both title generation and setup steps)
+  and if so, transitions the prompt out of :setup status and triggers Phase 1.
+
+  Called by both TitleGenerationWorker and SetupWorker after they finish.
+  Only the last one to complete will actually trigger the transition.
+  """
+  def maybe_finish_phase0(prompt_id) do
+    prompt = get_prompt!(prompt_id)
+
+    if prompt.phase_status != :setup do
+      :noop
+    else
+      phase0_messages =
+        Destila.Messages.list_messages(prompt_id)
+        |> Enum.filter(&(&1.phase == 0))
+
+      title_done = step_completed?(phase0_messages, "title_generation")
+
+      setup_done =
+        if prompt.project_id do
+          step_completed?(phase0_messages, "ai_session")
+        else
+          true
+        end
+
+      if title_done && setup_done do
+        do_finish_phase0(prompt)
+      else
+        :noop
+      end
+    end
+  end
+
+  defp step_completed?(phase0_messages, step_name) do
+    Enum.any?(phase0_messages, fn msg ->
+      msg.raw_response &&
+        msg.raw_response["setup_step"] == step_name &&
+        msg.raw_response["status"] == "completed"
+    end)
+  end
+
+  defp do_finish_phase0(prompt) do
+    phase = 1
+    messages = Destila.Messages.list_messages(prompt.id)
+
+    system_prompt =
+      Destila.Workflows.ChoreTaskPhases.system_prompt(phase, prompt)
+
+    context =
+      Destila.Workflows.ChoreTaskPhases.build_conversation_context(messages)
+
+    query = system_prompt <> "\n\n" <> context
+
+    update_prompt(prompt.id, %{phase_status: :generating})
+
+    %{"prompt_id" => prompt.id, "phase" => phase, "query" => query}
+    |> Destila.Workers.AiQueryWorker.new()
+    |> Oban.insert()
+
+    :ok
+  end
+
   defp broadcast({:ok, entity}, event) do
     Phoenix.PubSub.broadcast(Destila.PubSub, "store:updates", {event, entity})
     {:ok, entity}

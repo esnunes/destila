@@ -23,6 +23,7 @@ defmodule DestilaWeb.ConnCase do
       @endpoint DestilaWeb.Endpoint
 
       use DestilaWeb, :verified_routes
+      use Oban.Testing, repo: Destila.Repo
 
       # Import conveniences for testing with connections
       import Plug.Conn

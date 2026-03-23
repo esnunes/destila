@@ -26,6 +26,9 @@ config :phoenix_live_view,
 # Use test adapter for ClaudeCode
 config :claude_code, adapter: {ClaudeCode.Test, ClaudeCode}
 
+# Execute Oban jobs inline during tests for synchronous behavior
+config :destila, Oban, testing: :inline
+
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true

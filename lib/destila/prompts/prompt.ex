@@ -18,10 +18,13 @@ defmodule Destila.Prompts.Prompt do
     field(:steps_completed, :integer, default: 0)
     field(:steps_total, :integer, default: 4)
 
-    field(:phase_status, Ecto.Enum, values: [:generating, :conversing, :advance_suggested])
+    field(:phase_status, Ecto.Enum,
+      values: [:setup, :generating, :conversing, :advance_suggested]
+    )
 
     field(:title_generating, :boolean, default: false)
     field(:session_id, :string)
+    field(:worktree_path, :string)
     field(:position, :integer)
 
     belongs_to(:project, Destila.Projects.Project)
@@ -43,6 +46,7 @@ defmodule Destila.Prompts.Prompt do
       :phase_status,
       :title_generating,
       :session_id,
+      :worktree_path,
       :position
     ])
     |> validate_required([:title, :workflow_type, :board, :column])
