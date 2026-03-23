@@ -2,7 +2,6 @@ defmodule Destila.Workers.SetupWorker do
   use Oban.Worker, queue: :setup, max_attempts: 3
 
   alias Destila.{Git, Messages, Prompts}
-  alias Destila.Workflows.ChoreTaskPhases
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"prompt_id" => prompt_id}}) do
@@ -108,8 +107,8 @@ defmodule Destila.Workers.SetupWorker do
       {:ok, _session} ->
         broadcast_step(prompt.id, "ai_session", "completed", "AI session ready")
 
-        # Transition from setup to generating and trigger Phase 1
-        trigger_phase_1(prompt)
+        # Check if title generation is also done; if so, transition to Phase 1
+        Prompts.maybe_finish_phase0(prompt.id)
         :ok
 
       {:error, reason} ->
@@ -133,21 +132,6 @@ defmodule Destila.Workers.SetupWorker do
     else
       opts
     end
-  end
-
-  defp trigger_phase_1(prompt) do
-    phase = 1
-    messages = Messages.list_messages(prompt.id)
-
-    system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
-    context = ChoreTaskPhases.build_conversation_context(messages)
-    query = system_prompt <> "\n\n" <> context
-
-    Prompts.update_prompt(prompt.id, %{phase_status: :generating})
-
-    %{"prompt_id" => prompt.id, "phase" => phase, "query" => query}
-    |> Destila.Workers.AiQueryWorker.new()
-    |> Oban.insert()
   end
 
   defp broadcast_step(prompt_id, step, status, content) do

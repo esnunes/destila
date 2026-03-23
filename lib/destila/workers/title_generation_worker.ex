@@ -16,40 +16,28 @@ defmodule Destila.Workers.TitleGenerationWorker do
       phase: 0
     })
 
-    case Destila.AI.generate_title(workflow_type, idea) do
-      {:ok, title} ->
-        Prompts.update_prompt(prompt_id, %{title: title, title_generating: false})
+    title =
+      case Destila.AI.generate_title(workflow_type, idea) do
+        {:ok, title} -> title
+        {:error, _reason} -> default_title(workflow_type)
+      end
 
-        Messages.create_message(prompt_id, %{
-          role: :system,
-          content: title,
-          raw_response: %{
-            "setup_step" => "title_generation",
-            "status" => "completed",
-            "result" => title
-          },
-          phase: 0
-        })
+    Prompts.update_prompt(prompt_id, %{title: title, title_generating: false})
 
-        :ok
+    Messages.create_message(prompt_id, %{
+      role: :system,
+      content: title,
+      raw_response: %{
+        "setup_step" => "title_generation",
+        "status" => "completed",
+        "result" => title
+      },
+      phase: 0
+    })
 
-      {:error, _reason} ->
-        title = default_title(workflow_type)
-        Prompts.update_prompt(prompt_id, %{title: title, title_generating: false})
+    Prompts.maybe_finish_phase0(prompt_id)
 
-        Messages.create_message(prompt_id, %{
-          role: :system,
-          content: title,
-          raw_response: %{
-            "setup_step" => "title_generation",
-            "status" => "completed",
-            "result" => title
-          },
-          phase: 0
-        })
-
-        :ok
-    end
+    :ok
   end
 
   defp default_title(:feature_request), do: "New Feature Request"

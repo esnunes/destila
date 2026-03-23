@@ -466,7 +466,24 @@ defmodule DestilaWeb.PromptDetailLive do
   end
 
   defp split_phase0(messages) do
-    Enum.split_with(messages, &(&1.phase == 0))
+    {phase0, rest} = Enum.split_with(messages, &(&1.phase == 0))
+
+    # Deduplicate: keep only the latest message per setup_step
+    deduped =
+      phase0
+      |> Enum.reduce(%{}, fn msg, acc ->
+        step = msg.raw_response && msg.raw_response["setup_step"]
+
+        if step do
+          Map.put(acc, step, msg)
+        else
+          Map.put(acc, msg.id, msg)
+        end
+      end)
+      |> Map.values()
+      |> Enum.sort_by(& &1.inserted_at, DateTime)
+
+    {deduped, rest}
   end
 
   defp has_failed_step?(phase0_messages) do
