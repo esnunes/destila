@@ -189,46 +189,41 @@ defmodule DestilaWeb.CraftingBoardLive do
     <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
       <div class="p-6 lg:p-8">
         <%!-- Header --%>
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <div class="flex items-center gap-4">
-            <h1 class="text-2xl font-bold tracking-tight">Prompt Crafting</h1>
-            <.link navigate={~p"/prompts/new?from=/crafting"} class="btn btn-primary btn-sm">
-              <.icon name="hero-plus-micro" class="size-4" /> New Prompt
-            </.link>
-          </div>
+        <div class="flex items-center justify-between mb-4">
+          <h1 class="text-2xl font-bold tracking-tight">Prompt Crafting</h1>
+          <.link navigate={~p"/prompts/new?from=/crafting"} class="btn btn-primary btn-sm">
+            <.icon name="hero-plus-micro" class="size-4" /> New Prompt
+          </.link>
+        </div>
 
-          <div class="flex items-center gap-3">
-            <%!-- Project filter --%>
-            <form phx-change="filter_project" id="project-filter-form">
-              <select
-                name="project"
-                id="project-filter"
-                class="select select-sm select-bordered"
+        <%!-- View controls --%>
+        <div class="flex items-center gap-3 mb-6">
+          <form phx-change="filter_project" id="project-filter-form">
+            <select
+              name="project"
+              id="project-filter"
+              class="select select-sm select-bordered"
+            >
+              <option value="">All projects</option>
+              <option
+                :for={project <- @projects}
+                value={project.id}
+                selected={@project_filter == project.id}
               >
-                <option value="">All projects</option>
-                <option
-                  :for={project <- @projects}
-                  value={project.id}
-                  selected={@project_filter == project.id}
-                >
-                  {project.name}
-                </option>
-              </select>
-            </form>
+                {project.name}
+              </option>
+            </select>
+          </form>
 
-            <div class="w-px h-5 bg-base-300" />
-
-            <%!-- View toggle --%>
-            <label id="view-toggle" class="flex items-center gap-2 cursor-pointer select-none">
-              <span class="text-xs text-base-content/60">Group by Workflow</span>
-              <input
-                type="checkbox"
-                class="toggle toggle-sm toggle-primary"
-                checked={@view_mode == :workflow}
-                phx-click="toggle_view"
-              />
-            </label>
-          </div>
+          <label id="view-toggle" class="flex items-center gap-2 cursor-pointer select-none">
+            <span class="text-xs text-base-content/60">Group by Workflow</span>
+            <input
+              type="checkbox"
+              class="toggle toggle-sm toggle-primary"
+              checked={@view_mode == :workflow}
+              phx-click="toggle_view"
+            />
+          </label>
         </div>
 
         <%!-- List View --%>
