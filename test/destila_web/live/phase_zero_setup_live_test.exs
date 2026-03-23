@@ -167,11 +167,12 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
     end
 
     @tag feature: @feature, scenario: "A setup step fails"
-    test "clicking retry triggers setup again", %{conn: conn} do
+    test "clicking retry creates new setup progress messages", %{conn: conn} do
+      # Use a project without local_folder so SetupWorker skips git operations
       {:ok, project} =
         Destila.Projects.create_project(%{
           name: "Retry Project",
-          local_folder: "/tmp/retry-repo"
+          git_repo_url: "https://github.com/test/nonexistent"
         })
 
       prompt = create_prompt_in_setup(project)
@@ -187,14 +188,17 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
 
       messages_before = Destila.Messages.list_messages(prompt.id)
 
-      # Click retry — in inline test mode, the SetupWorker runs immediately
-      # It will create new phase 0 messages as it retries the steps
+      # Click retry — SetupWorker runs inline and creates new phase 0 messages
       view |> element("button[phx-click='retry_setup']") |> render_click()
 
       messages_after = Destila.Messages.list_messages(prompt.id)
 
-      # Retry should have produced new phase 0 messages from the SetupWorker
-      assert length(messages_after) > length(messages_before)
+      new_phase0 =
+        Enum.filter(messages_after, &(&1.phase == 0)) --
+          Enum.filter(messages_before, &(&1.phase == 0))
+
+      # Retry should have produced new phase 0 messages
+      assert length(new_phase0) > 0
     end
   end
 
