@@ -19,6 +19,7 @@ defmodule Destila.Projects.Project do
     |> cast(attrs, [:name, :git_repo_url, :local_folder])
     |> validate_required([:name])
     |> validate_at_least_one_location()
+    |> validate_git_repo_url()
   end
 
   defp validate_at_least_one_location(changeset) do
@@ -33,6 +34,33 @@ defmodule Destila.Projects.Project do
       )
     else
       changeset
+    end
+  end
+
+  @allowed_git_schemes ~w(https:// http:// ssh:// git://)
+
+  defp validate_git_repo_url(changeset) do
+    case get_field(changeset, :git_repo_url) do
+      nil ->
+        changeset
+
+      url ->
+        url = String.trim(url)
+
+        cond do
+          String.starts_with?(url, "-") ->
+            add_error(changeset, :git_repo_url, "invalid URL")
+
+          not Enum.any?(@allowed_git_schemes, &String.starts_with?(url, &1)) ->
+            add_error(
+              changeset,
+              :git_repo_url,
+              "must start with https://, http://, ssh://, or git://"
+            )
+
+          true ->
+            changeset
+        end
     end
   end
 

@@ -22,7 +22,7 @@ defmodule Destila.Git do
   def clone(url, target_dir) do
     File.mkdir_p!(Path.dirname(target_dir))
 
-    case System.cmd("git", ["clone", url, target_dir], stderr_to_stdout: true) do
+    case System.cmd("git", ["clone", "--", url, target_dir], stderr_to_stdout: true) do
       {output, 0} -> {:ok, String.trim(output)}
       {output, _code} -> {:error, String.trim(output)}
     end
@@ -35,7 +35,7 @@ defmodule Destila.Git do
   def worktree_add(repo_path, worktree_path, branch_name) do
     File.mkdir_p!(Path.dirname(worktree_path))
 
-    case System.cmd("git", ["worktree", "add", "-b", branch_name, worktree_path],
+    case System.cmd("git", ["worktree", "add", "-b", branch_name, "--", worktree_path],
            cd: repo_path,
            stderr_to_stdout: true
          ) do
