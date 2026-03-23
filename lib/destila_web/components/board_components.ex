@@ -113,10 +113,13 @@ defmodule DestilaWeb.BoardComponents do
       class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow"
     >
       <div class={["card-body gap-2", if(@compact, do: "p-3", else: "p-4")]}>
-        <div class="flex items-center gap-2">
+        <div class={["flex gap-2", if(@compact, do: "items-start", else: "items-center")]}>
           <.link
             navigate={"/prompts/#{@card.id}"}
-            class="text-sm font-medium leading-tight hover:text-primary transition-colors flex-1 min-w-0 truncate"
+            class={[
+              "text-sm font-medium leading-tight hover:text-primary transition-colors flex-1 min-w-0",
+              if(@compact, do: "line-clamp-3", else: "truncate")
+            ]}
           >
             <span class={[
               @card.title_generating && "animate-pulse text-base-content/50"
