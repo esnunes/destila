@@ -162,24 +162,28 @@ defmodule DestilaWeb.BoardComponents do
   attr :card, :map, required: true
 
   defp status_dot(assigns) do
+    {color, title} = status_dot_style(assigns.card)
+    assigns = assigns |> assign(:dot_color, color) |> assign(:dot_title, title)
+
     ~H"""
-    <span
-      :if={@card.phase_status in [:conversing, :advance_suggested]}
-      title="Waiting for your reply"
-      class="inline-flex size-2 shrink-0 rounded-full bg-warning"
-    />
-    <span
-      :if={@card.phase_status in [:generating]}
-      title="AI is responding"
-      class="inline-flex size-2 shrink-0 rounded-full bg-info animate-pulse"
-    />
-    <span
-      :if={@card.phase_status == :setup}
-      title="Setting up"
-      class="inline-flex size-2 shrink-0 rounded-full bg-base-content/20"
-    />
+    <span title={@dot_title} class={["inline-flex size-2 shrink-0 rounded-full", @dot_color]} />
     """
   end
+
+  defp status_dot_style(%{phase_status: s}) when s in [:conversing, :advance_suggested],
+    do: {"bg-warning", "Waiting for your reply"}
+
+  defp status_dot_style(%{phase_status: :generating}),
+    do: {"bg-info animate-pulse", "AI is responding"}
+
+  defp status_dot_style(%{phase_status: :setup}),
+    do: {"bg-base-content/20", "Setting up"}
+
+  defp status_dot_style(%{column: :done}),
+    do: {"bg-success", "Done"}
+
+  defp status_dot_style(_card),
+    do: {"bg-primary/40", "In progress"}
 
   # Helpers
 
