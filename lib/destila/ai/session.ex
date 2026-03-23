@@ -53,6 +53,39 @@ defmodule Destila.AI.Session do
   end
 
   @doc """
+  Gets or creates an AI session for a prompt.
+
+  If a session already exists for this prompt_id (registered in the Registry),
+  returns it. Otherwise starts a new one. This ensures multiple tabs/LiveViews
+  for the same prompt share a single AI session.
+
+  ## Options
+
+  Same as `start_link/1`.
+  """
+  def for_prompt(prompt_id, opts \\ []) do
+    name = {:via, Registry, {Destila.AI.SessionRegistry, prompt_id}}
+
+    case GenServer.whereis(name) do
+      nil ->
+        case start_link(Keyword.put(opts, :name, name)) do
+          {:ok, pid} ->
+            {:ok, pid}
+
+          {:error, {:already_started, pid}} ->
+            # Race condition: another process started it first
+            {:ok, pid}
+
+          error ->
+            error
+        end
+
+      pid ->
+        {:ok, pid}
+    end
+  end
+
+  @doc """
   Sends a prompt to the session and returns the result.
 
   Returns `{:ok, result}` or `{:error, result}` where result includes:

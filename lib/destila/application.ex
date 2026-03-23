@@ -11,8 +11,9 @@ defmodule Destila.Application do
       DestilaWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:destila, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Destila.PubSub},
-      Destila.Store,
+      Destila.Repo,
       {Task.Supervisor, name: Destila.TaskSupervisor},
+      {Registry, keys: :unique, name: Destila.AI.SessionRegistry},
       {DynamicSupervisor, name: Destila.AI.SessionSupervisor, strategy: :one_for_one},
       DestilaWeb.Endpoint
     ]

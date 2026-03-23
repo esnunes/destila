@@ -49,7 +49,7 @@ defmodule DestilaWeb.BoardComponents do
       <div class="card-body p-4 gap-2">
         <h4 class={[
           "text-sm font-medium leading-tight",
-          @card[:title_generating] && "animate-pulse text-base-content/50"
+          @card.title_generating && "animate-pulse text-base-content/50"
         ]}>
           {@card.title}
         </h4>

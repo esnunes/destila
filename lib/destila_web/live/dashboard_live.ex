@@ -9,8 +9,8 @@ defmodule DestilaWeb.DashboardLive do
     end
 
     current_user = session["current_user"]
-    crafting = Destila.Store.list_prompts(:crafting)
-    implementation = Destila.Store.list_prompts(:implementation)
+    crafting = Destila.Prompts.list_prompts(:crafting)
+    implementation = Destila.Prompts.list_prompts(:implementation)
 
     {:ok,
      socket
@@ -21,8 +21,8 @@ defmodule DestilaWeb.DashboardLive do
   end
 
   def handle_info({_event, _data}, socket) do
-    crafting = Destila.Store.list_prompts(:crafting)
-    implementation = Destila.Store.list_prompts(:implementation)
+    crafting = Destila.Prompts.list_prompts(:crafting)
+    implementation = Destila.Prompts.list_prompts(:implementation)
 
     {:noreply,
      socket

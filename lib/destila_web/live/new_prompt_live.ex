@@ -9,7 +9,7 @@ defmodule DestilaWeb.NewPromptLive do
      |> assign(:step, 1)
      |> assign(:workflow_type, nil)
      |> assign(:project_id, nil)
-     |> assign(:projects, Destila.Store.list_projects())
+     |> assign(:projects, Destila.Projects.list_projects())
      |> assign(:project_step, :select)
      |> assign(
        :project_form,
@@ -78,8 +78,8 @@ defmodule DestilaWeb.NewPromptLive do
       end
 
     if errors == %{} do
-      project =
-        Destila.Store.create_project(%{
+      {:ok, project} =
+        Destila.Projects.create_project(%{
           name: name,
           git_repo_url: git_repo_url,
           local_folder: local_folder
@@ -88,7 +88,7 @@ defmodule DestilaWeb.NewPromptLive do
       {:noreply,
        socket
        |> assign(:project_id, project.id)
-       |> assign(:projects, Destila.Store.list_projects())
+       |> assign(:projects, Destila.Projects.list_projects())
        |> assign(:project_step, :select)
        |> assign(:errors, %{})}
     else
@@ -151,59 +151,61 @@ defmodule DestilaWeb.NewPromptLive do
     steps = Destila.Workflows.steps(workflow_type)
     first_step = List.first(steps)
 
-    prompt =
-      Destila.Store.create_prompt(%{
-        title: "Generating title...",
-        title_generating: true,
-        workflow_type: workflow_type,
-        project_id: socket.assigns.project_id,
-        board: :crafting,
-        column: :request,
-        steps_completed: 1,
-        steps_total: Destila.Workflows.total_steps(workflow_type),
-        phase_status: if(workflow_type == :chore_task, do: :generating, else: nil)
-      })
+    {:ok, prompt} =
+      Destila.Repo.transaction(fn ->
+        {:ok, prompt} =
+          Destila.Prompts.create_prompt(%{
+            title: "Generating title...",
+            title_generating: true,
+            workflow_type: workflow_type,
+            project_id: socket.assigns.project_id,
+            board: :crafting,
+            column: :request,
+            steps_completed: 1,
+            steps_total: Destila.Workflows.total_steps(workflow_type),
+            phase_status: if(workflow_type == :chore_task, do: :generating, else: nil)
+          })
 
-    # Add system message for step 1 (the question)
-    Destila.Store.add_message(prompt.id, %{
-      role: :system,
-      content: first_step.content,
-      input_type: first_step.input_type,
-      options: first_step.options,
-      step: first_step.step
-    })
+        # Add system message for phase 1 (the question)
+        {:ok, _} =
+          Destila.Messages.create_message(prompt.id, %{
+            role: :system,
+            content: first_step.content,
+            phase: 1
+          })
 
-    # Add user message for step 1 (the initial idea)
-    Destila.Store.add_message(prompt.id, %{
-      role: :user,
-      content: idea,
-      selected: nil,
-      step: 1
-    })
+        # Add user message for phase 1 (the initial idea)
+        {:ok, _} =
+          Destila.Messages.create_message(prompt.id, %{
+            role: :user,
+            content: idea,
+            phase: 1
+          })
 
-    # For static workflows, add the second system message so the chat picks up from there
-    # For AI-driven workflows (chore_task), skip — the AI will generate the next response
-    if workflow_type != :chore_task do
-      second_step = Enum.at(steps, 1)
+        # For static workflows, add the second system message so the chat picks up from there
+        # For AI-driven workflows (chore_task), skip — the AI will generate the next response
+        if workflow_type != :chore_task do
+          second_step = Enum.at(steps, 1)
 
-      Destila.Store.add_message(prompt.id, %{
-        role: :system,
-        content: second_step.content,
-        input_type: second_step.input_type,
-        options: second_step.options,
-        step: second_step.step
-      })
-    end
+          {:ok, _} =
+            Destila.Messages.create_message(prompt.id, %{
+              role: :system,
+              content: second_step.content,
+              phase: second_step.step
+            })
+        end
 
-    # Start an AI session and store its PID on the prompt
+        prompt
+      end)
+
+    # Start an AI session registered to this prompt
     session_opts =
       case action do
         :continue -> [timeout_ms: :timer.minutes(15)]
         :close -> [timeout_ms: :timer.seconds(30)]
       end
 
-    {:ok, session} = Destila.AI.Session.start_link(session_opts)
-    Destila.Store.update_prompt(prompt.id, %{ai_session: session})
+    {:ok, session} = Destila.AI.Session.for_prompt(prompt.id, session_opts)
 
     # Generate title asynchronously
     prompt_id = prompt.id
@@ -211,10 +213,10 @@ defmodule DestilaWeb.NewPromptLive do
     Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
       case Destila.AI.generate_title(session, workflow_type, idea) do
         {:ok, title} ->
-          Destila.Store.update_prompt(prompt_id, %{title: title, title_generating: false})
+          Destila.Prompts.update_prompt(prompt_id, %{title: title, title_generating: false})
 
         {:error, _} ->
-          Destila.Store.update_prompt(prompt_id, %{
+          Destila.Prompts.update_prompt(prompt_id, %{
             title: default_title(workflow_type),
             title_generating: false
           })
@@ -227,7 +229,6 @@ defmodule DestilaWeb.NewPromptLive do
 
       if action == :close do
         Destila.AI.Session.stop(session)
-        Destila.Store.update_prompt(prompt_id, %{ai_session: nil})
       end
     end)
 
@@ -235,107 +236,49 @@ defmodule DestilaWeb.NewPromptLive do
   end
 
   defp trigger_ai_response(prompt_id, session, phase) do
-    prompt = Destila.Store.get_prompt(prompt_id)
-    messages = Destila.Store.list_messages(prompt_id)
+    prompt = Destila.Prompts.get_prompt!(prompt_id)
+    messages = Destila.Messages.list_messages(prompt_id)
 
     system_prompt = Destila.Workflows.ChoreTaskPhases.system_prompt(phase, prompt)
     conversation_context = Destila.Workflows.ChoreTaskPhases.build_conversation_context(messages)
 
     query = system_prompt <> "\n\n" <> conversation_context
 
-    Destila.Store.update_prompt(prompt_id, %{phase_status: :generating})
+    Destila.Prompts.update_prompt(prompt_id, %{phase_status: :generating})
 
     case Destila.AI.Session.query(session, query) do
       {:ok, result} ->
-        response_text =
-          if result.text != nil and result.text != "" do
-            result.text
-          else
-            result.result || ""
-          end
+        response_text = Destila.Messages.response_text(result)
+        new_phase_status = Destila.Messages.derive_phase_status(response_text)
 
-        {content, message_type, new_phase_status} = parse_ai_response(response_text)
-        questions = extract_questions_from_tool_uses(result[:mcp_tool_uses])
+        {:ok, _} =
+          Destila.Messages.create_message(prompt_id, %{
+            role: :system,
+            content: response_text,
+            raw_response: result,
+            phase: phase
+          })
 
-        content =
-          if questions != [] and (content == "" or content == "Waiting for your answer.") do
-            questions |> Enum.map(& &1.question) |> Enum.join("\n\n")
-          else
-            content
-          end
+        # Persist session_id + phase_status
+        update_attrs = %{phase_status: new_phase_status}
 
-        {input_type, options} =
-          case questions do
-            [] -> {:text, nil}
-            [q] -> {q.input_type, q.options}
-            _ -> {:questions, nil}
-          end
+        update_attrs =
+          if result[:session_id],
+            do: Map.put(update_attrs, :session_id, result[:session_id]),
+            else: update_attrs
 
-        Destila.Store.add_message(prompt_id, %{
-          role: :system,
-          content: content,
-          input_type: input_type,
-          options: options,
-          questions: questions,
-          step: phase,
-          message_type: message_type
-        })
-
-        Destila.Store.update_prompt(prompt_id, %{phase_status: new_phase_status})
+        Destila.Prompts.update_prompt(prompt_id, update_attrs)
 
       {:error, _} ->
-        Destila.Store.add_message(prompt_id, %{
-          role: :system,
-          content: "Something went wrong. Please try sending your message again.",
-          input_type: :text,
-          step: phase
-        })
+        {:ok, _} =
+          Destila.Messages.create_message(prompt_id, %{
+            role: :system,
+            content: "Something went wrong. Please try sending your message again.",
+            phase: phase
+          })
 
-        Destila.Store.update_prompt(prompt_id, %{phase_status: :conversing})
+        Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
     end
-  end
-
-  defp parse_ai_response(text) do
-    cond do
-      String.contains?(text, "<<SKIP_PHASE>>") ->
-        content = String.replace(text, "<<SKIP_PHASE>>", "") |> String.trim()
-        {content, :skip_phase, :conversing}
-
-      String.contains?(text, "<<READY_TO_ADVANCE>>") ->
-        content = String.replace(text, "<<READY_TO_ADVANCE>>", "") |> String.trim()
-        {content, :phase_advance, :advance_suggested}
-
-      true ->
-        {String.trim(text), nil, :conversing}
-    end
-  end
-
-  defp extract_questions_from_tool_uses(nil), do: []
-  defp extract_questions_from_tool_uses([]), do: []
-
-  defp extract_questions_from_tool_uses(mcp_tool_uses) do
-    mcp_tool_uses
-    |> Enum.filter(fn tool ->
-      tool.name in ["ask_user_question", "mcp__destila__ask_user_question"]
-    end)
-    |> Enum.flat_map(fn %{input: input} ->
-      questions = input["questions"] || [input]
-
-      Enum.map(questions, fn q ->
-        multi_select = q["multi_select"] == true
-
-        %{
-          question: q["question"] || "",
-          title: q["title"],
-          input_type: if(multi_select, do: :multi_select, else: :single_select),
-          options:
-            (q["options"] || [])
-            |> Enum.map(fn opt ->
-              %{label: opt["label"] || "", description: opt["description"]}
-            end)
-        }
-      end)
-    end)
   end
 
   defp default_title(:feature_request), do: "New Feature Request"

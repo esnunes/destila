@@ -1,5 +1,11 @@
 import Config
 
+# Configure your database for tests
+config :destila, Destila.Repo,
+  database: Path.expand("../destila_test.db", __DIR__),
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: 16
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :destila, DestilaWeb.Endpoint,

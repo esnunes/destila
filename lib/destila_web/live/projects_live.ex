@@ -6,7 +6,7 @@ defmodule DestilaWeb.ProjectsLive do
       Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
     end
 
-    projects = Destila.Store.list_projects()
+    projects = Destila.Projects.list_projects()
 
     {:ok,
      socket
@@ -14,6 +14,7 @@ defmodule DestilaWeb.ProjectsLive do
      |> assign(:page_title, "Projects")
      |> stream(:projects, projects)
      |> assign(:projects_empty?, projects == [])
+     |> assign(:prompt_counts, Destila.Prompts.count_by_projects())
      |> assign(:creating, false)
      |> assign(:editing_project_id, nil)
      |> assign(:form, new_form())
@@ -47,7 +48,7 @@ defmodule DestilaWeb.ProjectsLive do
   def handle_event("create_project", params, socket) do
     case validate_project_params(params) do
       {:ok, attrs} ->
-        Destila.Store.create_project(attrs)
+        {:ok, _project} = Destila.Projects.create_project(attrs)
 
         {:noreply,
          socket
@@ -64,7 +65,7 @@ defmodule DestilaWeb.ProjectsLive do
   end
 
   def handle_event("edit_project", %{"id" => id}, socket) do
-    project = Destila.Store.get_project(id)
+    project = Destila.Projects.get_project(id)
 
     if project do
       form =
@@ -91,7 +92,8 @@ defmodule DestilaWeb.ProjectsLive do
 
     case validate_project_params(params) do
       {:ok, attrs} ->
-        Destila.Store.update_project(id, attrs)
+        project = Destila.Projects.get_project!(id)
+        {:ok, _project} = Destila.Projects.update_project(project, attrs)
 
         {:noreply,
          socket
@@ -100,7 +102,7 @@ defmodule DestilaWeb.ProjectsLive do
          |> assign(:errors, %{})}
 
       {:error, errors} ->
-        project = Destila.Store.get_project(id)
+        project = Destila.Projects.get_project(id)
 
         {:noreply,
          socket
@@ -111,7 +113,7 @@ defmodule DestilaWeb.ProjectsLive do
   end
 
   def handle_event("confirm_delete", %{"id" => id}, socket) do
-    project = Destila.Store.get_project(id)
+    project = Destila.Projects.get_project(id)
 
     socket =
       if project do
@@ -124,49 +126,55 @@ defmodule DestilaWeb.ProjectsLive do
   end
 
   def handle_event("delete_project", %{"id" => id}, socket) do
-    case Destila.Store.delete_project(id) do
-      :ok ->
+    case Destila.Projects.get_project(id) do
+      nil ->
         {:noreply, assign(socket, :delete_confirming_id, nil)}
 
-      {:error, :has_linked_prompts} ->
-        {:noreply,
-         socket
-         |> maybe_restream_project(id)
-         |> assign(:delete_confirming_id, nil)
-         |> put_flash(:error, "Cannot delete this project while it is linked to prompts")}
+      project ->
+        case Destila.Projects.delete_project(project) do
+          :ok ->
+            {:noreply, assign(socket, :delete_confirming_id, nil)}
 
-      {:error, :not_found} ->
-        {:noreply, assign(socket, :delete_confirming_id, nil)}
+          {:error, :has_linked_prompts} ->
+            {:noreply,
+             socket
+             |> maybe_restream_project(id)
+             |> assign(:delete_confirming_id, nil)
+             |> put_flash(:error, "Cannot delete this project while it is linked to prompts")}
+        end
     end
   end
 
   # PubSub handlers
 
   def handle_info({:project_created, _project}, socket) do
-    projects = Destila.Store.list_projects()
+    projects = Destila.Projects.list_projects()
 
     {:noreply,
      socket
      |> stream(:projects, projects, reset: true)
-     |> assign(:projects_empty?, projects == [])}
+     |> assign(:projects_empty?, projects == [])
+     |> assign(:prompt_counts, Destila.Prompts.count_by_projects())}
   end
 
   def handle_info({:project_updated, _project}, socket) do
-    projects = Destila.Store.list_projects()
+    projects = Destila.Projects.list_projects()
 
     {:noreply,
      socket
      |> stream(:projects, projects, reset: true)
-     |> assign(:projects_empty?, projects == [])}
+     |> assign(:projects_empty?, projects == [])
+     |> assign(:prompt_counts, Destila.Prompts.count_by_projects())}
   end
 
   def handle_info({:project_deleted, _project}, socket) do
-    projects = Destila.Store.list_projects()
+    projects = Destila.Projects.list_projects()
 
     {:noreply,
      socket
      |> stream(:projects, projects, reset: true)
-     |> assign(:projects_empty?, projects == [])}
+     |> assign(:projects_empty?, projects == [])
+     |> assign(:prompt_counts, Destila.Prompts.count_by_projects())}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -176,7 +184,7 @@ defmodule DestilaWeb.ProjectsLive do
   defp maybe_restream_project(socket, nil), do: socket
 
   defp maybe_restream_project(socket, project_id) do
-    case Destila.Store.get_project(project_id) do
+    case Destila.Projects.get_project(project_id) do
       nil -> socket
       project -> stream_insert(socket, :projects, project)
     end
@@ -211,12 +219,8 @@ defmodule DestilaWeb.ProjectsLive do
     end
   end
 
-  defp linked_prompt_count(project_id) do
-    count =
-      Destila.Store.list_prompts()
-      |> Enum.count(&(&1[:project_id] == project_id))
-
-    case count do
+  defp linked_prompt_count(prompt_counts, project_id) do
+    case Map.get(prompt_counts, project_id, 0) do
       0 -> "No prompts"
       1 -> "1 prompt"
       n -> "#{n} prompts"
@@ -317,7 +321,7 @@ defmodule DestilaWeb.ProjectsLive do
 
                 <div class="flex items-center gap-1 ml-4 shrink-0">
                   <span class="text-xs text-base-content/40">
-                    {linked_prompt_count(project.id)}
+                    {linked_prompt_count(@prompt_counts, project.id)}
                   </span>
 
                   <button

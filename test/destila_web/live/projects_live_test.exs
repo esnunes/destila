@@ -17,8 +17,8 @@ defmodule DestilaWeb.ProjectsLiveTest do
   describe "project list" do
     @tag feature: @feature, scenario: "View list of projects"
     test "shows existing projects", %{conn: conn} do
-      project =
-        Destila.Store.create_project(%{
+      {:ok, project} =
+        Destila.Projects.create_project(%{
           name: "My Project",
           git_repo_url: "https://github.com/test/repo"
         })
@@ -123,8 +123,8 @@ defmodule DestilaWeb.ProjectsLiveTest do
   describe "edit project" do
     @tag feature: @feature, scenario: "Edit an existing project"
     test "edits an existing project", %{conn: conn} do
-      project =
-        Destila.Store.create_project(%{
+      {:ok, project} =
+        Destila.Projects.create_project(%{
           name: "Original Name",
           git_repo_url: "https://github.com/test/repo"
         })
@@ -143,8 +143,8 @@ defmodule DestilaWeb.ProjectsLiveTest do
 
     @tag feature: @feature, scenario: "Cannot save an edited project with invalid data"
     test "shows validation errors when all fields are cleared", %{conn: conn} do
-      project =
-        Destila.Store.create_project(%{
+      {:ok, project} =
+        Destila.Projects.create_project(%{
           name: "Original Name",
           git_repo_url: "https://github.com/test/repo"
         })
@@ -169,8 +169,8 @@ defmodule DestilaWeb.ProjectsLiveTest do
   describe "delete project" do
     @tag feature: @feature, scenario: "Delete a project not linked to any prompts"
     test "deletes a project not linked to prompts", %{conn: conn} do
-      project =
-        Destila.Store.create_project(%{
+      {:ok, project} =
+        Destila.Projects.create_project(%{
           name: "Deletable Project",
           git_repo_url: "https://github.com/test/repo"
         })
@@ -187,17 +187,20 @@ defmodule DestilaWeb.ProjectsLiveTest do
 
     @tag feature: @feature, scenario: "Cannot delete a project linked to prompts"
     test "cannot delete a project linked to prompts", %{conn: conn} do
-      project =
-        Destila.Store.create_project(%{
+      {:ok, project} =
+        Destila.Projects.create_project(%{
           name: "Linked Project",
           git_repo_url: "https://github.com/test/repo"
         })
 
-      Destila.Store.create_prompt(%{
-        title: "Test Prompt",
-        project_id: project.id,
-        workflow_type: :feature_request
-      })
+      {:ok, _prompt} =
+        Destila.Prompts.create_prompt(%{
+          title: "Test Prompt",
+          project_id: project.id,
+          workflow_type: :feature_request,
+          board: :crafting,
+          column: :request
+        })
 
       {:ok, view, _html} = live(conn, ~p"/projects")
 

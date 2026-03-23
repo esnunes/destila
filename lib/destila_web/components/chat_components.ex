@@ -15,20 +15,14 @@ defmodule DestilaWeb.ChatComponents do
   attr :message, :map, required: true
   attr :prompt, :map, default: %{}
 
-  def chat_message(%{message: %{message_type: :phase_divider}} = assigns) do
-    ~H"""
-    <div class="flex items-center gap-3 my-6">
-      <div class="flex-1 h-px bg-base-300" />
-      <span class="text-xs font-medium text-base-content/40 uppercase tracking-wide">
-        {@message.content}
-      </span>
-      <div class="flex-1 h-px bg-base-300" />
-    </div>
-    """
+  def chat_message(assigns) do
+    processed = Destila.Messages.process(assigns.message, assigns.prompt)
+    assigns = assign(assigns, :message, processed)
+    render_chat_message(assigns)
   end
 
-  def chat_message(%{message: %{message_type: :phase_advance}} = assigns) do
-    next_phase = (assigns.prompt[:steps_completed] || 1) + 1
+  defp render_chat_message(%{message: %{message_type: :phase_advance}} = assigns) do
+    next_phase = (assigns.prompt.steps_completed || 1) + 1
 
     assigns = assign(assigns, :next_phase, next_phase)
 
@@ -45,7 +39,7 @@ defmodule DestilaWeb.ChatComponents do
           {raw(markdown_to_html(@message.content))}
         </div>
 
-        <%= if @prompt[:phase_status] == :advance_suggested do %>
+        <%= if @prompt.phase_status == :advance_suggested do %>
           <div class="flex gap-2 mt-2">
             <button
               phx-click="confirm_advance"
@@ -70,7 +64,7 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
-  def chat_message(%{message: %{message_type: :generated_prompt}} = assigns) do
+  defp render_chat_message(%{message: %{message_type: :generated_prompt}} = assigns) do
     ~H"""
     <div class="flex gap-3 mb-4">
       <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
@@ -208,7 +202,7 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
-  def chat_message(assigns) do
+  defp render_chat_message(assigns) do
     ~H"""
     <div class={[
       "flex gap-3 mb-4",
@@ -226,7 +220,7 @@ defmodule DestilaWeb.ChatComponents do
 
       <div class={[
         "rounded-2xl px-4 py-3 text-sm",
-        if(@message[:input_type] in [:single_select, :multi_select, :questions],
+        if(@message.input_type in [:single_select, :multi_select, :questions],
           do: "flex-1",
           else: "max-w-[80%]"
         ),

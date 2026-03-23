@@ -42,10 +42,8 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
   end
 
   defp create_prompt_with_generated_prompt do
-    {:ok, session} = Destila.AI.Session.start_link(timeout_ms: :timer.minutes(5))
-
-    prompt =
-      Destila.Store.create_prompt(%{
+    {:ok, prompt} =
+      Destila.Prompts.create_prompt(%{
         title: "Test Prompt",
         workflow_type: :chore_task,
         project_id: nil,
@@ -53,19 +51,23 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
         column: :done,
         steps_completed: 4,
         steps_total: 4,
-        phase_status: nil,
-        ai_session: session
+        phase_status: nil
       })
 
-    Destila.Store.add_message(prompt.id, %{
-      role: :system,
-      content: @sample_markdown,
-      input_type: :text,
-      step: 4,
-      message_type: :generated_prompt
-    })
+    {:ok, _} =
+      Destila.Messages.create_message(prompt.id, %{
+        role: :system,
+        content: @sample_markdown,
+        raw_response: %{
+          "text" => @sample_markdown,
+          "result" => @sample_markdown,
+          "mcp_tool_uses" => [],
+          "is_error" => false
+        },
+        phase: 4
+      })
 
-    Destila.Store.get_prompt(prompt.id)
+    prompt
   end
 
   describe "default rendered view" do
