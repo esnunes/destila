@@ -293,6 +293,7 @@ defmodule DestilaWeb.CraftingBoardLive do
                         :for={card <- col_prompts}
                         card={card}
                         project_filter={@project_filter}
+                        compact
                       />
                       <div
                         :if={col_prompts == []}

@@ -104,6 +104,7 @@ defmodule DestilaWeb.BoardComponents do
 
   attr :card, :map, required: true
   attr :project_filter, :string, default: nil
+  attr :compact, :boolean, default: false
 
   def crafting_card(assigns) do
     ~H"""
@@ -111,19 +112,22 @@ defmodule DestilaWeb.BoardComponents do
       id={"crafting-card-#{@card.id}"}
       class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow"
     >
-      <div class="card-body p-4 gap-2">
-        <.link
-          navigate={"/prompts/#{@card.id}"}
-          class="text-sm font-medium leading-tight hover:text-primary transition-colors"
-        >
-          <span class={[
-            @card.title_generating && "animate-pulse text-base-content/50"
-          ]}>
-            {@card.title}
-          </span>
-        </.link>
+      <div class={["card-body gap-2", if(@compact, do: "p-3", else: "p-4")]}>
+        <div class="flex items-center gap-2">
+          <.link
+            navigate={"/prompts/#{@card.id}"}
+            class="text-sm font-medium leading-tight hover:text-primary transition-colors flex-1 min-w-0 truncate"
+          >
+            <span class={[
+              @card.title_generating && "animate-pulse text-base-content/50"
+            ]}>
+              {@card.title}
+            </span>
+          </.link>
+          <.status_dot :if={@compact} card={@card} />
+        </div>
 
-        <div class="flex items-center justify-between gap-2">
+        <div :if={!@compact} class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <.workflow_badge type={@card.workflow_type} />
             <%= if @card.project do %>
@@ -146,11 +150,34 @@ defmodule DestilaWeb.BoardComponents do
         </div>
 
         <.progress_indicator
+          :if={!@compact}
           completed={@card.steps_completed}
           total={@card.steps_total}
         />
       </div>
     </div>
+    """
+  end
+
+  attr :card, :map, required: true
+
+  defp status_dot(assigns) do
+    ~H"""
+    <span
+      :if={@card.phase_status in [:conversing, :advance_suggested]}
+      title="Waiting for your reply"
+      class="inline-flex size-2 shrink-0 rounded-full bg-warning"
+    />
+    <span
+      :if={@card.phase_status in [:generating]}
+      title="AI is responding"
+      class="inline-flex size-2 shrink-0 rounded-full bg-info animate-pulse"
+    />
+    <span
+      :if={@card.phase_status == :setup}
+      title="Setting up"
+      class="inline-flex size-2 shrink-0 rounded-full bg-base-content/20"
+    />
     """
   end
 
