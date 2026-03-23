@@ -11,18 +11,14 @@ defmodule Destila.Workers.SetupWorker do
       if prompt.project_id,
         do: Destila.Projects.get_project(prompt.project_id)
 
-    with :ok <- maybe_sync_repo(prompt, project),
-         :ok <- maybe_create_worktree(prompt, project),
+    with :ok <- sync_repo(prompt, project),
+         :ok <- create_worktree(prompt, project),
          :ok <- start_ai_session_and_trigger(prompt) do
       :ok
     end
   end
 
-  defp maybe_sync_repo(_prompt, nil), do: :ok
-
-  defp maybe_sync_repo(prompt, project) do
-    sync_repo(prompt, project)
-  end
+  defp sync_repo(_prompt, nil), do: :ok
 
   defp sync_repo(prompt, project) do
     cond do
@@ -57,11 +53,7 @@ defmodule Destila.Workers.SetupWorker do
     end
   end
 
-  defp maybe_create_worktree(_prompt, nil), do: :ok
-
-  defp maybe_create_worktree(prompt, project) do
-    create_worktree(prompt, project)
-  end
+  defp create_worktree(_prompt, nil), do: :ok
 
   defp create_worktree(prompt, project) do
     case Git.effective_local_folder(project) do
