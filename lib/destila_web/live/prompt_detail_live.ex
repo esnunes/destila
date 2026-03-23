@@ -135,13 +135,24 @@ defmodule DestilaWeb.PromptDetailLive do
     handle_ai_message(socket, content)
   end
 
-  # Retry failed Phase 0 setup
+  # Retry failed Phase 0 setup — enqueue both workers so whichever failed gets retried
+  # (idempotent steps skip automatically)
   def handle_event("retry_setup", _params, socket) do
     prompt = socket.assigns.prompt
 
-    %{"prompt_id" => prompt.id}
-    |> Destila.Workers.SetupWorker.new()
-    |> Oban.insert()
+    if prompt.project_id do
+      %{"prompt_id" => prompt.id}
+      |> Destila.Workers.SetupWorker.new()
+      |> Oban.insert()
+    end
+
+    if prompt.title_generating do
+      workflow_type = to_string(prompt.workflow_type)
+      # Re-enqueue title generation with a placeholder idea (title gen is idempotent)
+      %{"prompt_id" => prompt.id, "workflow_type" => workflow_type, "idea" => ""}
+      |> Destila.Workers.TitleGenerationWorker.new()
+      |> Oban.insert()
+    end
 
     {:noreply, refresh_state(socket)}
   end
@@ -236,16 +247,15 @@ defmodule DestilaWeb.PromptDetailLive do
     {:noreply, refresh_state(socket)}
   end
 
-  # PubSub handlers
+  # PubSub handlers — use broadcast data directly instead of re-querying DB
   def handle_info({:prompt_updated, updated_prompt}, socket) do
     if updated_prompt.id == socket.assigns.prompt.id do
-      messages = Destila.Messages.list_messages(updated_prompt.id)
+      messages = socket.assigns.messages
       current_step = current_step_info(messages, updated_prompt)
 
       {:noreply,
        socket
        |> assign(:prompt, updated_prompt)
-       |> assign(:messages, messages)
        |> assign(:current_step, current_step)
        |> assign(:page_title, updated_prompt.title)}
     else
@@ -255,7 +265,21 @@ defmodule DestilaWeb.PromptDetailLive do
 
   def handle_info({:message_added, message}, socket) do
     if message.prompt_id == socket.assigns.prompt.id do
-      {:noreply, refresh_state(socket)}
+      messages = socket.assigns.messages ++ [message]
+      prompt = socket.assigns.prompt
+      current_step = current_step_info(messages, prompt)
+
+      socket =
+        if current_step.questions != socket.assigns.current_step.questions do
+          assign(socket, :question_answers, %{})
+        else
+          socket
+        end
+
+      {:noreply,
+       socket
+       |> assign(:messages, messages)
+       |> assign(:current_step, current_step)}
     else
       {:noreply, socket}
     end
@@ -471,17 +495,11 @@ defmodule DestilaWeb.PromptDetailLive do
     # Deduplicate: keep only the latest message per setup_step
     deduped =
       phase0
-      |> Enum.reduce(%{}, fn msg, acc ->
-        step = msg.raw_response && msg.raw_response["setup_step"]
-
-        if step do
-          Map.put(acc, step, msg)
-        else
-          Map.put(acc, msg.id, msg)
-        end
+      |> Enum.reverse()
+      |> Enum.uniq_by(fn msg ->
+        (msg.raw_response && msg.raw_response["setup_step"]) || msg.id
       end)
-      |> Map.values()
-      |> Enum.sort_by(& &1.inserted_at, DateTime)
+      |> Enum.reverse()
 
     {deduped, rest}
   end
@@ -494,12 +512,8 @@ defmodule DestilaWeb.PromptDetailLive do
 
   defp setup_step_item(assigns) do
     status = assigns.message.raw_response && assigns.message.raw_response["status"]
-    step = assigns.message.raw_response && assigns.message.raw_response["setup_step"]
 
-    assigns =
-      assigns
-      |> assign(:status, status)
-      |> assign(:step, step)
+    assigns = assign(assigns, :status, status)
 
     ~H"""
     <div class="flex items-center gap-3 text-sm pl-2">

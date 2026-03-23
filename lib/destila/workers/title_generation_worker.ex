@@ -35,7 +35,7 @@ defmodule Destila.Workers.TitleGenerationWorker do
       phase: 0
     })
 
-    Prompts.maybe_finish_phase0(prompt_id)
+    Destila.Setup.maybe_finish_phase0(prompt_id)
 
     :ok
   end

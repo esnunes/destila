@@ -7,21 +7,21 @@ defmodule Destila.Workers.SetupWorker do
   def perform(%Oban.Job{args: %{"prompt_id" => prompt_id}}) do
     prompt = Prompts.get_prompt!(prompt_id)
 
-    with :ok <- maybe_sync_repo(prompt),
-         :ok <- maybe_create_worktree(prompt),
+    project =
+      if prompt.project_id,
+        do: Destila.Projects.get_project(prompt.project_id)
+
+    with :ok <- maybe_sync_repo(prompt, project),
+         :ok <- maybe_create_worktree(prompt, project),
          :ok <- start_ai_session_and_trigger(prompt) do
       :ok
     end
   end
 
-  defp maybe_sync_repo(prompt) do
-    project = prompt.project && Destila.Repo.preload(prompt, :project).project
+  defp maybe_sync_repo(_prompt, nil), do: :ok
 
-    if project do
-      sync_repo(prompt, project)
-    else
-      :ok
-    end
+  defp maybe_sync_repo(prompt, project) do
+    sync_repo(prompt, project)
   end
 
   defp sync_repo(prompt, project) do
@@ -57,14 +57,10 @@ defmodule Destila.Workers.SetupWorker do
     end
   end
 
-  defp maybe_create_worktree(prompt) do
-    project = prompt.project && Destila.Repo.preload(prompt, :project).project
+  defp maybe_create_worktree(_prompt, nil), do: :ok
 
-    if project do
-      create_worktree(prompt, project)
-    else
-      :ok
-    end
+  defp maybe_create_worktree(prompt, project) do
+    create_worktree(prompt, project)
   end
 
   defp create_worktree(prompt, project) do
@@ -108,7 +104,7 @@ defmodule Destila.Workers.SetupWorker do
         broadcast_step(prompt.id, "ai_session", "completed", "AI session ready")
 
         # Check if title generation is also done; if so, transition to Phase 1
-        Prompts.maybe_finish_phase0(prompt.id)
+        Destila.Setup.maybe_finish_phase0(prompt.id)
         :ok
 
       {:error, reason} ->
@@ -135,6 +131,13 @@ defmodule Destila.Workers.SetupWorker do
   end
 
   defp broadcast_step(prompt_id, step, status, content) do
+    content =
+      if status == "failed" do
+        sanitize_error(content)
+      else
+        content
+      end
+
     Messages.create_message(prompt_id, %{
       role: :system,
       content: content,
@@ -142,4 +145,15 @@ defmodule Destila.Workers.SetupWorker do
       phase: 0
     })
   end
+
+  defp sanitize_error(message) when is_binary(message) do
+    # Remove filesystem paths and keep only the meaningful error
+    message
+    |> String.split("\n")
+    |> List.first()
+    |> String.replace(~r{/[^\s]+}, "[path]")
+    |> String.slice(0, 200)
+  end
+
+  defp sanitize_error(other), do: inspect(other) |> String.slice(0, 200)
 end
