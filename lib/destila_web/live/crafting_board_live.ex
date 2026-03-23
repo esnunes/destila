@@ -162,12 +162,28 @@ defmodule DestilaWeb.CraftingBoardLive do
 
   # --- Render ---
 
+  @section_icons %{
+    setup: "hero-cog-6-tooth-micro",
+    waiting: "hero-clock-micro",
+    in_progress: "hero-bolt-micro",
+    done: "hero-check-circle-micro"
+  }
+
+  @section_empty_messages %{
+    setup: "No prompts being set up",
+    waiting: "No prompts awaiting a reply",
+    in_progress: "No prompts in progress",
+    done: "No completed prompts yet"
+  }
+
   @impl true
   def render(assigns) do
     assigns =
       assigns
       |> assign(:section_keys, @sections)
       |> assign(:section_labels, @section_labels)
+      |> assign(:section_icons, @section_icons)
+      |> assign(:section_empty_messages, @section_empty_messages)
 
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
@@ -237,9 +253,10 @@ defmodule DestilaWeb.CraftingBoardLive do
 
               <div
                 :if={@sections[section] == []}
-                class="flex items-center justify-center h-16 text-base-content/30 text-sm bg-base-200/30 rounded-xl"
+                class="flex items-center justify-center gap-2 h-16 text-base-content/20 text-sm bg-base-200/20 rounded-xl border border-dashed border-base-300/50"
               >
-                No prompts
+                <.icon name={@section_icons[section]} class="size-4" />
+                {@section_empty_messages[section]}
               </div>
             </div>
           </div>
@@ -248,8 +265,8 @@ defmodule DestilaWeb.CraftingBoardLive do
         <% else %>
           <div id="crafting-workflow-boards" class="space-y-8">
             <%= if @workflow_boards == [] do %>
-              <div class="flex items-center justify-center h-32 text-base-content/30 text-sm bg-base-200/30 rounded-xl">
-                No prompts match your filter
+              <div class="flex flex-col items-center justify-center h-32 gap-2 text-base-content/20 text-sm bg-base-200/20 rounded-xl border border-dashed border-base-300/50">
+                <.icon name="hero-funnel-micro" class="size-5" /> No prompts match your filter
               </div>
             <% else %>
               <div
