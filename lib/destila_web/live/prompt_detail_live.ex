@@ -25,14 +25,6 @@ defmodule DestilaWeb.PromptDetailLive do
           messages
         end
 
-      # For AI workflows, ensure session is alive and trigger initial response if needed
-      socket =
-        if ai_workflow?(prompt) && connected?(socket) do
-          ensure_ai_session(socket, prompt, messages)
-        else
-          socket
-        end
-
       current_step = current_step_info(messages, prompt)
 
       {:ok,
@@ -143,6 +135,17 @@ defmodule DestilaWeb.PromptDetailLive do
     handle_ai_message(socket, content)
   end
 
+  # Retry failed Phase 0 setup
+  def handle_event("retry_setup", _params, socket) do
+    prompt = socket.assigns.prompt
+
+    %{"prompt_id" => prompt.id}
+    |> Destila.Workers.SetupWorker.new()
+    |> Oban.insert()
+
+    {:noreply, refresh_state(socket)}
+  end
+
   # Mock file upload (static workflows only)
   def handle_event("mock_upload", _params, socket) do
     handle_static_response(socket, "Uploaded: mockup-screenshot.png", nil)
@@ -195,12 +198,13 @@ defmodule DestilaWeb.PromptDetailLive do
           phase_status: :generating
         })
 
-      # Trigger AI response for the new phase — send phase system prompt only
-      # (session already has full conversation history)
+      # Trigger AI response for the new phase via Oban
       updated_prompt = Destila.Prompts.get_prompt!(prompt.id)
       phase_prompt = ChoreTaskPhases.system_prompt(next_phase, updated_prompt)
-      {:ok, session} = Destila.AI.Session.for_prompt(prompt.id)
-      spawn_ai_query(prompt.id, next_phase, phase_prompt, session)
+
+      %{"prompt_id" => prompt.id, "phase" => next_phase, "query" => phase_prompt}
+      |> Destila.Workers.AiQueryWorker.new()
+      |> Oban.insert()
 
       {:noreply, refresh_state(socket)}
     end
@@ -317,7 +321,7 @@ defmodule DestilaWeb.PromptDetailLive do
     prompt = socket.assigns.prompt
 
     # Prevent sending while AI is generating
-    if prompt.phase_status == :generating do
+    if prompt.phase_status in [:setup, :generating] do
       {:noreply, socket}
     else
       phase = prompt.steps_completed
@@ -334,110 +338,12 @@ defmodule DestilaWeb.PromptDetailLive do
       # Set generating status
       Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
 
-      # Look up the shared session for this prompt
-      {:ok, session} = Destila.AI.Session.for_prompt(prompt.id)
-      spawn_ai_query(prompt.id, phase, content, session)
+      # Enqueue AI query as an Oban job
+      %{"prompt_id" => prompt.id, "phase" => phase, "query" => content}
+      |> Destila.Workers.AiQueryWorker.new()
+      |> Oban.insert()
 
       {:noreply, refresh_state(socket)}
-    end
-  end
-
-  defp spawn_ai_query(prompt_id, phase, query_text, session) do
-    Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
-      handle_ai_query_result(prompt_id, phase, session, query_text)
-    end)
-  end
-
-  defp handle_ai_query_result(prompt_id, phase, session, query_text) do
-    case Destila.AI.Session.query(session, query_text) do
-      {:ok, result} ->
-        response_text = Destila.Messages.response_text(result)
-        new_phase_status = Destila.Messages.derive_phase_status(response_text)
-
-        {:ok, _} =
-          Destila.Messages.create_message(prompt_id, %{
-            role: :system,
-            content: response_text,
-            raw_response: result,
-            phase: phase
-          })
-
-        # Check for skip_phase marker
-        if String.contains?(response_text, "<<SKIP_PHASE>>") do
-          handle_skip_phase(prompt_id, phase, session)
-        else
-          update_attrs = %{phase_status: new_phase_status}
-
-          update_attrs =
-            if result[:session_id],
-              do: Map.put(update_attrs, :session_id, result[:session_id]),
-              else: update_attrs
-
-          Destila.Prompts.update_prompt(prompt_id, update_attrs)
-        end
-
-      {:error, _} ->
-        {:ok, _} =
-          Destila.Messages.create_message(prompt_id, %{
-            role: :system,
-            content: "Something went wrong. Please try sending your message again.",
-            phase: phase
-          })
-
-        Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
-    end
-  end
-
-  defp handle_skip_phase(prompt_id, current_phase, session) do
-    next_phase = current_phase + 1
-
-    # Advance to next phase
-    Destila.Prompts.update_prompt(prompt_id, %{
-      steps_completed: next_phase,
-      phase_status: :generating
-    })
-
-    # Trigger AI for the next phase — send phase system prompt only
-    # Call directly since we're already in a task
-    prompt = Destila.Prompts.get_prompt!(prompt_id)
-    phase_prompt = ChoreTaskPhases.system_prompt(next_phase, prompt)
-    handle_ai_query_result(prompt_id, next_phase, session, phase_prompt)
-  end
-
-  defp ensure_ai_session(socket, prompt, messages) do
-    session_opts = [timeout_ms: :timer.minutes(15)]
-
-    session_opts =
-      if prompt.session_id do
-        Keyword.put(session_opts, :resume, prompt.session_id)
-      else
-        session_opts
-      end
-
-    case Destila.AI.Session.for_prompt(prompt.id, session_opts) do
-      {:ok, session} ->
-        last_msg = List.last(messages)
-
-        if last_msg && last_msg.role == :user && prompt.phase_status != :generating do
-          phase = prompt.steps_completed
-
-          query =
-            if prompt.session_id do
-              last_msg.content
-            else
-              system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
-              context = ChoreTaskPhases.build_conversation_context(messages)
-              system_prompt <> "\n\n" <> context
-            end
-
-          Destila.Prompts.update_prompt(prompt, %{phase_status: :generating})
-          spawn_ai_query(prompt.id, phase, query, session)
-        end
-
-        socket
-
-      {:error, _} ->
-        put_flash(socket, :error, "Failed to start AI session")
     end
   end
 
@@ -484,6 +390,9 @@ defmodule DestilaWeb.PromptDetailLive do
     cond do
       completed >= total && prompt.column == :done ->
         %{input_type: nil, options: nil, questions: [], completed: true}
+
+      prompt.phase_status == :setup ->
+        %{input_type: nil, options: nil, questions: [], completed: false}
 
       prompt.phase_status == :advance_suggested ->
         %{input_type: nil, options: nil, questions: [], completed: false}
@@ -554,6 +463,56 @@ defmodule DestilaWeb.PromptDetailLive do
     |> assign(:messages, messages)
     |> assign(:current_step, current_step)
     |> assign(:page_title, prompt.title)
+  end
+
+  defp split_phase0(messages) do
+    Enum.split_with(messages, &(&1.phase == 0))
+  end
+
+  defp has_failed_step?(phase0_messages) do
+    Enum.any?(phase0_messages, fn msg ->
+      msg.raw_response && msg.raw_response["status"] == "failed"
+    end)
+  end
+
+  defp setup_step_item(assigns) do
+    status = assigns.message.raw_response && assigns.message.raw_response["status"]
+    step = assigns.message.raw_response && assigns.message.raw_response["setup_step"]
+
+    assigns =
+      assigns
+      |> assign(:status, status)
+      |> assign(:step, step)
+
+    ~H"""
+    <div class="flex items-center gap-3 text-sm pl-2">
+      <%= cond do %>
+        <% @status == "completed" -> %>
+          <.icon name="hero-check-circle-solid" class="size-4 text-success shrink-0" />
+        <% @status == "in_progress" -> %>
+          <span class="loading loading-spinner loading-xs shrink-0" />
+        <% @status == "failed" -> %>
+          <.icon name="hero-x-circle-solid" class="size-4 text-error shrink-0" />
+        <% true -> %>
+          <.icon name="hero-information-circle-solid" class="size-4 text-base-content/40 shrink-0" />
+      <% end %>
+      <span class={[
+        "flex-1",
+        @status == "completed" && "text-base-content/60",
+        @status == "in_progress" && "text-base-content/80",
+        @status == "failed" && "text-error"
+      ]}>
+        {@message.content}
+      </span>
+      <button
+        :if={@status == "failed"}
+        phx-click="retry_setup"
+        class="btn btn-xs btn-outline btn-error"
+      >
+        Retry
+      </button>
+    </div>
+    """
   end
 
   defp phase_name(phase), do: ChoreTaskPhases.phase_name(phase)
@@ -686,9 +645,45 @@ defmodule DestilaWeb.PromptDetailLive do
           <div class="max-w-2xl mx-auto">
             <%= if ai_workflow?(@prompt) do %>
               <% current_phase = max(@prompt.steps_completed, 1) %>
-              <%= for {phase, group} <- phase_groups(@messages, current_phase) do %>
+              <% {phase0_messages, conversation_messages} = split_phase0(@messages) %>
+
+              <%!-- Phase 0 — Setup --%>
+              <%= if phase0_messages != [] || @prompt.phase_status == :setup do %>
                 <details
-                  class={["phase-section", phase == 1 && "first-phase"]}
+                  class="phase-section first-phase"
+                  open={@prompt.phase_status == :setup}
+                >
+                  <summary class="flex items-center gap-3 my-6 cursor-pointer group list-none">
+                    <div class="flex-1 h-px bg-base-300" />
+                    <span class="flex items-center gap-1.5 text-xs font-medium text-base-content/40 uppercase tracking-wide group-hover:text-base-content/60 transition-colors">
+                      Phase 0 — Setup
+                      <.icon
+                        name="hero-chevron-down-micro"
+                        class="size-3 phase-chevron"
+                      />
+                    </span>
+                    <div class="flex-1 h-px bg-base-300" />
+                  </summary>
+                  <div class="space-y-2 py-2">
+                    <.setup_step_item
+                      :for={msg <- phase0_messages}
+                      message={msg}
+                    />
+                    <div
+                      :if={@prompt.phase_status == :setup && !has_failed_step?(phase0_messages)}
+                      class="flex items-center gap-3 text-sm text-base-content/50 pl-2"
+                    >
+                      <span class="loading loading-spinner loading-xs" />
+                      <span>Setting up...</span>
+                    </div>
+                  </div>
+                </details>
+              <% end %>
+
+              <%!-- Conversation phases (1+) --%>
+              <%= for {phase, group} <- phase_groups(conversation_messages, current_phase) do %>
+                <details
+                  class={["phase-section", phase == 1 && phase0_messages == [] && "first-phase"]}
                   open={phase >= current_phase}
                 >
                   <summary class="flex items-center gap-3 my-6 cursor-pointer group list-none">
@@ -753,7 +748,8 @@ defmodule DestilaWeb.PromptDetailLive do
             input_type={@current_step.input_type}
             options={@current_step.options}
             disabled={
-              ai_workflow?(@prompt) && @prompt.phase_status in [:generating, :advance_suggested]
+              ai_workflow?(@prompt) &&
+                @prompt.phase_status in [:setup, :generating, :advance_suggested]
             }
           />
         </div>

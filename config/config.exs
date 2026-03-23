@@ -11,6 +11,11 @@ config :destila,
   ecto_repos: [Destila.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
+config :destila, Oban,
+  engine: Oban.Engines.Lite,
+  queues: [default: 2, setup: 1],
+  repo: Destila.Repo
+
 # Configure the endpoint
 config :destila, DestilaWeb.Endpoint,
   url: [host: "localhost"],

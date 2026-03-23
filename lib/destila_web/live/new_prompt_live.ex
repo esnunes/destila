@@ -146,10 +146,12 @@ defmodule DestilaWeb.NewPromptLive do
     end
   end
 
-  defp create_prompt_with_idea(socket, idea, action) do
+  defp create_prompt_with_idea(socket, idea, _action) do
     workflow_type = socket.assigns.workflow_type
     steps = Destila.Workflows.steps(workflow_type)
     first_step = List.first(steps)
+
+    is_ai_workflow = workflow_type == :chore_task
 
     {:ok, prompt} =
       Destila.Repo.transaction(fn ->
@@ -163,7 +165,7 @@ defmodule DestilaWeb.NewPromptLive do
             column: :request,
             steps_completed: 1,
             steps_total: Destila.Workflows.total_steps(workflow_type),
-            phase_status: if(workflow_type == :chore_task, do: :generating, else: nil)
+            phase_status: if(is_ai_workflow, do: :setup, else: nil)
           })
 
         # Add system message for phase 1 (the question)
@@ -184,7 +186,7 @@ defmodule DestilaWeb.NewPromptLive do
 
         # For static workflows, add the second system message so the chat picks up from there
         # For AI-driven workflows (chore_task), skip — the AI will generate the next response
-        if workflow_type != :chore_task do
+        if !is_ai_workflow do
           second_step = Enum.at(steps, 1)
 
           {:ok, _} =
@@ -198,92 +200,25 @@ defmodule DestilaWeb.NewPromptLive do
         prompt
       end)
 
-    # Start an AI session registered to this prompt
-    session_opts =
-      case action do
-        :continue -> [timeout_ms: :timer.minutes(15)]
-        :close -> [timeout_ms: :timer.seconds(30)]
-      end
-
-    {:ok, session} = Destila.AI.Session.for_prompt(prompt.id, session_opts)
-
-    # Generate title asynchronously
-    prompt_id = prompt.id
-
-    Task.Supervisor.start_child(Destila.TaskSupervisor, fn ->
-      case Destila.AI.generate_title(session, workflow_type, idea) do
-        {:ok, title} ->
-          Destila.Prompts.update_prompt(prompt_id, %{title: title, title_generating: false})
-
-        {:error, _} ->
-          Destila.Prompts.update_prompt(prompt_id, %{
-            title: default_title(workflow_type),
-            title_generating: false
-          })
-      end
-
-      # For AI-driven workflows on :continue, trigger the first AI response
-      if workflow_type == :chore_task && action == :continue do
-        trigger_ai_response(prompt_id, session, 1)
-      end
-
-      if action == :close do
-        Destila.AI.Session.stop(session)
-      end
-    end)
+    # Enqueue Oban jobs for background processing
+    enqueue_setup_jobs(prompt, workflow_type, idea)
 
     prompt
   end
 
-  defp trigger_ai_response(prompt_id, session, phase) do
-    prompt = Destila.Prompts.get_prompt!(prompt_id)
-    messages = Destila.Messages.list_messages(prompt_id)
+  defp enqueue_setup_jobs(prompt, workflow_type, idea) do
+    # Always enqueue title generation
+    %{"prompt_id" => prompt.id, "workflow_type" => to_string(workflow_type), "idea" => idea}
+    |> Destila.Workers.TitleGenerationWorker.new()
+    |> Oban.insert()
 
-    system_prompt = Destila.Workflows.ChoreTaskPhases.system_prompt(phase, prompt)
-    conversation_context = Destila.Workflows.ChoreTaskPhases.build_conversation_context(messages)
-
-    query = system_prompt <> "\n\n" <> conversation_context
-
-    Destila.Prompts.update_prompt(prompt_id, %{phase_status: :generating})
-
-    case Destila.AI.Session.query(session, query) do
-      {:ok, result} ->
-        response_text = Destila.Messages.response_text(result)
-        new_phase_status = Destila.Messages.derive_phase_status(response_text)
-
-        {:ok, _} =
-          Destila.Messages.create_message(prompt_id, %{
-            role: :system,
-            content: response_text,
-            raw_response: result,
-            phase: phase
-          })
-
-        # Persist session_id + phase_status
-        update_attrs = %{phase_status: new_phase_status}
-
-        update_attrs =
-          if result[:session_id],
-            do: Map.put(update_attrs, :session_id, result[:session_id]),
-            else: update_attrs
-
-        Destila.Prompts.update_prompt(prompt_id, update_attrs)
-
-      {:error, _} ->
-        {:ok, _} =
-          Destila.Messages.create_message(prompt_id, %{
-            role: :system,
-            content: "Something went wrong. Please try sending your message again.",
-            phase: phase
-          })
-
-        Destila.Prompts.update_prompt(prompt_id, %{phase_status: :conversing})
+    # For AI workflows, enqueue setup worker (git + worktree + AI session)
+    if workflow_type == :chore_task do
+      %{"prompt_id" => prompt.id}
+      |> Destila.Workers.SetupWorker.new()
+      |> Oban.insert()
     end
   end
-
-  defp default_title(:feature_request), do: "New Feature Request"
-  defp default_title(:project), do: "New Project"
-  defp default_title(:chore_task), do: "New Chore/Task"
 
   defp initial_idea_question(workflow_type) do
     steps = Destila.Workflows.steps(workflow_type)

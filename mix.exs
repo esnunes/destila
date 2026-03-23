@@ -64,7 +64,8 @@ defmodule Destila.MixProject do
       {:ecto_sql, "~> 3.12"},
       {:ecto_sqlite3, "~> 0.17"},
       {:earmark, "~> 1.4"},
-      {:html_sanitize_ex, "~> 1.4"}
+      {:html_sanitize_ex, "~> 1.4"},
+      {:oban, "~> 2.20"}
     ]
   end
 

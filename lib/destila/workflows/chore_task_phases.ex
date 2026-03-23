@@ -9,6 +9,7 @@ defmodule Destila.Workflows.ChoreTaskPhases do
   """
 
   @phase_names %{
+    0 => "Setup",
     1 => "Task Description",
     2 => "Gherkin Review",
     3 => "Technical Concerns",

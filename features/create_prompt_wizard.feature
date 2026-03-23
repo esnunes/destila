@@ -23,8 +23,8 @@ Feature: Create Prompt Wizard
     When I enter an initial idea
     And I click "Save & Continue"
     Then a new prompt should be created linked to the selected project
-    And the prompt title should be AI-generated based on the user input
     And I should be redirected to the prompt detail page
+    And I should see a "Phase 0 — Setup" section in progress
     And the chat should show the initial idea as the first user message
 
   Scenario: Complete the wizard with Save & Close
