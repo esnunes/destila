@@ -22,7 +22,7 @@ defmodule DestilaWeb.CraftingBoardLive do
     {:ok,
      socket
      |> assign(:current_user, session["current_user"])
-     |> assign(:page_title, "Crafting Board")}
+     |> assign(:page_title, "Prompt Crafting")}
   end
 
   @impl true
