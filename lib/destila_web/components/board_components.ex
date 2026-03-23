@@ -102,6 +102,104 @@ defmodule DestilaWeb.BoardComponents do
     """
   end
 
+  attr :card, :map, required: true
+  attr :project_filter, :string, default: nil
+  attr :compact, :boolean, default: false
+
+  def crafting_card(assigns) do
+    ~H"""
+    <div
+      id={"crafting-card-#{@card.id}"}
+      class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow"
+    >
+      <div class={["card-body gap-2", if(@compact, do: "p-3", else: "p-4")]}>
+        <div class={["flex gap-2", if(@compact, do: "items-start", else: "items-center")]}>
+          <.link
+            navigate={"/prompts/#{@card.id}"}
+            class={[
+              "text-sm font-medium leading-tight hover:text-primary transition-colors flex-1 min-w-0",
+              if(@compact, do: "line-clamp-3", else: "truncate")
+            ]}
+          >
+            <span class={[
+              @card.title_generating && "animate-pulse text-base-content/50"
+            ]}>
+              {@card.title}
+            </span>
+          </.link>
+          <.status_dot :if={@compact} card={@card} />
+        </div>
+
+        <%= if @compact do %>
+          <span :if={@card.project} class="text-xs text-base-content/50 truncate">
+            {@card.project.name}
+          </span>
+        <% else %>
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <.workflow_badge type={@card.workflow_type} />
+              <%= if @card.project do %>
+                <.link
+                  patch={
+                    if @project_filter == @card.project_id,
+                      do: "/crafting",
+                      else: "/crafting?project=#{@card.project_id}"
+                  }
+                  class="text-xs text-base-content/60 hover:text-primary transition-colors truncate max-w-[120px]"
+                >
+                  {@card.project.name}
+                </.link>
+              <% end %>
+            </div>
+            <span class="text-xs text-base-content/40 whitespace-nowrap">
+              {phase_label(@card)}
+            </span>
+          </div>
+        <% end %>
+
+        <.progress_indicator
+          :if={!@compact}
+          completed={@card.steps_completed}
+          total={@card.steps_total}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  attr :card, :map, required: true
+
+  defp status_dot(assigns) do
+    {color, title} = status_dot_style(assigns.card)
+    assigns = assigns |> assign(:dot_color, color) |> assign(:dot_title, title)
+
+    ~H"""
+    <span title={@dot_title} class={["inline-flex size-2 shrink-0 rounded-full", @dot_color]} />
+    """
+  end
+
+  defp status_dot_style(%{phase_status: s}) when s in [:conversing, :advance_suggested],
+    do: {"bg-warning", "Waiting for your reply"}
+
+  defp status_dot_style(%{phase_status: :generating}),
+    do: {"bg-info animate-pulse", "AI is responding"}
+
+  defp status_dot_style(%{phase_status: :setup}),
+    do: {"bg-base-content/20", "Setting up"}
+
+  defp status_dot_style(%{column: :done}),
+    do: {"bg-success", "Done"}
+
+  defp status_dot_style(_card),
+    do: {"bg-primary/40", "In progress"}
+
+  defp phase_label(%{column: :done}), do: "Done"
+
+  defp phase_label(card),
+    do:
+      Destila.Workflows.phase_name(card.workflow_type, card.steps_completed) ||
+        "Phase #{card.steps_completed}"
+
   # Helpers
 
   defp column_label(:request), do: "Request"
@@ -113,9 +211,9 @@ defmodule DestilaWeb.BoardComponents do
   defp column_label(:qa), do: "QA"
   defp column_label(:impl_done), do: "Done"
 
-  defp workflow_label(:feature_request), do: "Feature Request"
-  defp workflow_label(:project), do: "Project"
-  defp workflow_label(:chore_task), do: "Chore/Task"
+  def workflow_label(:feature_request), do: "Feature Request"
+  def workflow_label(:project), do: "Project"
+  def workflow_label(:chore_task), do: "Chore/Task"
 
   defp workflow_badge_class(:feature_request), do: "badge-info"
   defp workflow_badge_class(:project), do: "badge-secondary"

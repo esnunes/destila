@@ -37,9 +37,28 @@ defmodule DestilaWeb.DashboardLive do
     end)
   end
 
-  defp column_label(:request), do: "Request"
-  defp column_label(:distill), do: "Distill"
-  defp column_label(:done), do: "Done"
+  defp crafting_summary(prompts) do
+    grouped = Enum.group_by(prompts, &classify_crafting_prompt/1)
+
+    Enum.map([:setup, :waiting, :in_progress, :done], fn section ->
+      {section, Map.get(grouped, section, [])}
+    end)
+  end
+
+  defp classify_crafting_prompt(prompt) do
+    cond do
+      prompt.column == :done -> :done
+      prompt.phase_status == :setup -> :setup
+      prompt.phase_status in [:generating, :conversing, :advance_suggested] -> :waiting
+      true -> :in_progress
+    end
+  end
+
+  defp section_label(:setup), do: "Setup"
+  defp section_label(:waiting), do: "Waiting"
+  defp section_label(:in_progress), do: "In Progress"
+  defp section_label(:done), do: "Done"
+
   defp column_label(:impl_done), do: "Done"
   defp column_label(:todo), do: "Todo"
   defp column_label(:in_progress), do: "In Progress"
@@ -47,7 +66,7 @@ defmodule DestilaWeb.DashboardLive do
   defp column_label(:qa), do: "QA"
 
   def render(assigns) do
-    crafting_summary = board_summary(assigns.crafting_prompts, [:request, :distill, :done])
+    crafting_summary = crafting_summary(assigns.crafting_prompts)
 
     implementation_summary =
       board_summary(assigns.implementation_prompts, [
@@ -80,8 +99,8 @@ defmodule DestilaWeb.DashboardLive do
               <h2 class="card-title text-lg mb-1">Prompt Crafting</h2>
 
               <div class="flex gap-3 text-xs text-base-content/50 mb-3">
-                <span :for={{col, cards} <- @crafting_summary}>
-                  {length(cards)} {column_label(col)}
+                <span :for={{section, cards} <- @crafting_summary}>
+                  {length(cards)} {section_label(section)}
                 </span>
               </div>
 
