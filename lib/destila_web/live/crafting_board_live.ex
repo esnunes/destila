@@ -13,7 +13,6 @@ defmodule DestilaWeb.CraftingBoardLive do
     done: "Done"
   }
 
-  @impl true
   def mount(_params, session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
@@ -25,9 +24,8 @@ defmodule DestilaWeb.CraftingBoardLive do
      |> assign(:page_title, "Prompt Crafting")}
   end
 
-  @impl true
   def handle_params(params, _uri, socket) do
-    prompts = Destila.Prompts.list_prompts(:crafting)
+    prompts = socket.assigns[:all_prompts] || Destila.Prompts.list_prompts(:crafting)
     view_mode = if params["view"] == "workflow", do: :workflow, else: :list
     project_filter = params["project"]
 
@@ -39,7 +37,6 @@ defmodule DestilaWeb.CraftingBoardLive do
      |> assign_derived_state()}
   end
 
-  @impl true
   def handle_event("toggle_view", %{"mode" => mode}, socket) do
     new_mode = if mode == "workflow", do: :workflow, else: :list
     {:noreply, push_patch(socket, to: build_path(new_mode, socket.assigns.project_filter))}
@@ -53,7 +50,6 @@ defmodule DestilaWeb.CraftingBoardLive do
     {:noreply, push_patch(socket, to: build_path(socket.assigns.view_mode, project_id))}
   end
 
-  @impl true
   def handle_info({_event, _data}, socket) do
     prompts = Destila.Prompts.list_prompts(:crafting)
 
@@ -65,7 +61,7 @@ defmodule DestilaWeb.CraftingBoardLive do
 
   # --- Classification ---
 
-  def classify_prompt(prompt) do
+  defp classify_prompt(prompt) do
     cond do
       prompt.column == :done -> :done
       prompt.phase_status == :setup -> :setup
@@ -101,49 +97,53 @@ defmodule DestilaWeb.CraftingBoardLive do
   end
 
   defp assign_view_data(socket, filtered) do
-    sections =
-      filtered
-      |> Enum.group_by(&classify_prompt/1)
-      |> then(fn grouped ->
-        Map.new(@sections, fn s -> {s, Map.get(grouped, s, [])} end)
-      end)
-
-    workflow_boards =
-      filtered
-      |> Enum.group_by(& &1.workflow_type)
-      |> Enum.map(fn {wf_type, wf_prompts} ->
-        columns = Workflows.phase_columns(wf_type)
-
-        column_data =
-          Enum.map(columns, fn {phase, name} ->
-            matching =
-              case phase do
-                :done ->
-                  Enum.filter(wf_prompts, &(&1.column == :done))
-
-                n when is_integer(n) ->
-                  Enum.filter(wf_prompts, &(&1.column != :done && &1.steps_completed == n))
-              end
-
-            {phase, name, matching}
+    case socket.assigns.view_mode do
+      :list ->
+        sections =
+          filtered
+          |> Enum.group_by(&classify_prompt/1)
+          |> then(fn grouped ->
+            Map.new(@sections, fn s -> {s, Map.get(grouped, s, [])} end)
           end)
 
-        {wf_type, column_data}
-      end)
-      |> Enum.reject(fn {_wf_type, column_data} ->
-        Enum.all?(column_data, fn {_, _, prompts_in_col} -> prompts_in_col == [] end)
-      end)
-      |> Enum.sort_by(fn {wf_type, _} ->
-        case wf_type do
-          :chore_task -> 0
-          :feature_request -> 1
-          :project -> 2
-        end
-      end)
+        assign(socket, :sections, sections)
 
-    socket
-    |> assign(:sections, sections)
-    |> assign(:workflow_boards, workflow_boards)
+      :workflow ->
+        workflow_boards =
+          filtered
+          |> Enum.group_by(& &1.workflow_type)
+          |> Enum.map(fn {wf_type, wf_prompts} ->
+            columns = Workflows.phase_columns(wf_type)
+
+            column_data =
+              Enum.map(columns, fn {phase, name} ->
+                matching =
+                  case phase do
+                    :done ->
+                      Enum.filter(wf_prompts, &(&1.column == :done))
+
+                    n when is_integer(n) ->
+                      Enum.filter(wf_prompts, &(&1.column != :done && &1.steps_completed == n))
+                  end
+
+                {phase, name, matching}
+              end)
+
+            {wf_type, column_data}
+          end)
+          |> Enum.reject(fn {_wf_type, column_data} ->
+            Enum.all?(column_data, fn {_, _, prompts_in_col} -> prompts_in_col == [] end)
+          end)
+          |> Enum.sort_by(fn {wf_type, _} ->
+            case wf_type do
+              :chore_task -> 0
+              :feature_request -> 1
+              :project -> 2
+            end
+          end)
+
+        assign(socket, :workflow_boards, workflow_boards)
+    end
   end
 
   # --- URL helpers ---
@@ -176,7 +176,6 @@ defmodule DestilaWeb.CraftingBoardLive do
     done: "No completed prompts yet"
   }
 
-  @impl true
   def render(assigns) do
     assigns =
       assigns
@@ -321,8 +320,4 @@ defmodule DestilaWeb.CraftingBoardLive do
     </Layouts.app>
     """
   end
-
-  defp workflow_label(:feature_request), do: "Feature Request"
-  defp workflow_label(:project), do: "Project"
-  defp workflow_label(:chore_task), do: "Chore/Task"
 end

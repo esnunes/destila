@@ -125,6 +125,8 @@ defmodule Destila.Workflows do
   including a final {:done, "Done"} column.
   """
   def phase_columns(workflow_type) do
+    # chore_task starts at phase 0 (Setup — git/worktree init) while
+    # static workflows (feature_request, project) have no phase 0.
     range =
       case workflow_type do
         :chore_task -> 0..total_steps(workflow_type)

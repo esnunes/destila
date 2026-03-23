@@ -211,9 +211,9 @@ defmodule DestilaWeb.BoardComponents do
   defp column_label(:qa), do: "QA"
   defp column_label(:impl_done), do: "Done"
 
-  defp workflow_label(:feature_request), do: "Feature Request"
-  defp workflow_label(:project), do: "Project"
-  defp workflow_label(:chore_task), do: "Chore/Task"
+  def workflow_label(:feature_request), do: "Feature Request"
+  def workflow_label(:project), do: "Project"
+  def workflow_label(:chore_task), do: "Chore/Task"
 
   defp workflow_badge_class(:feature_request), do: "badge-info"
   defp workflow_badge_class(:project), do: "badge-secondary"
