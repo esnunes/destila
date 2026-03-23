@@ -1,6 +1,8 @@
 defmodule DestilaWeb.Router do
   use DestilaWeb, :router
 
+  import Oban.Web.Router
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -21,6 +23,13 @@ defmodule DestilaWeb.Router do
     live "/login", SessionLive
     post "/login", SessionController, :create
     get "/logout", SessionController, :delete
+  end
+
+  # Oban Web dashboard
+  scope "/" do
+    pipe_through [:browser, :require_auth]
+
+    oban_dashboard("/oban")
   end
 
   # Authenticated routes
