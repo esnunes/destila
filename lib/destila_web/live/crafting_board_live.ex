@@ -190,7 +190,12 @@ defmodule DestilaWeb.CraftingBoardLive do
       <div class="p-6 lg:p-8">
         <%!-- Header --%>
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <h1 class="text-2xl font-bold tracking-tight">Crafting Board</h1>
+          <div class="flex items-center gap-4">
+            <h1 class="text-2xl font-bold tracking-tight">Prompt Crafting</h1>
+            <.link navigate={~p"/prompts/new?from=/crafting"} class="btn btn-primary btn-sm">
+              <.icon name="hero-plus-micro" class="size-4" /> New Prompt
+            </.link>
+          </div>
 
           <div class="flex items-center gap-3">
             <%!-- Project filter --%>
@@ -211,6 +216,8 @@ defmodule DestilaWeb.CraftingBoardLive do
               </select>
             </form>
 
+            <div class="w-px h-5 bg-base-300" />
+
             <%!-- View toggle --%>
             <label id="view-toggle" class="flex items-center gap-2 cursor-pointer select-none">
               <span class="text-xs text-base-content/60">Group by Workflow</span>
@@ -221,11 +228,6 @@ defmodule DestilaWeb.CraftingBoardLive do
                 phx-click="toggle_view"
               />
             </label>
-
-            <%!-- New Prompt --%>
-            <.link navigate={~p"/prompts/new?from=/crafting"} class="btn btn-primary btn-sm">
-              <.icon name="hero-plus-micro" class="size-4" /> New Prompt
-            </.link>
           </div>
         </div>
 
