@@ -216,13 +216,13 @@ defmodule DestilaWeb.CraftingBoardLive do
           </form>
 
           <label id="view-toggle" class="flex items-center gap-2 cursor-pointer select-none">
-            <span class="text-xs text-base-content/60">Group by Workflow</span>
             <input
               type="checkbox"
               class="toggle toggle-sm toggle-primary"
               checked={@view_mode == :workflow}
               phx-click="toggle_view"
             />
+            <span class="text-xs text-base-content/60">Group by Workflow</span>
           </label>
         </div>
 
