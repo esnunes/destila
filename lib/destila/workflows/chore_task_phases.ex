@@ -60,6 +60,10 @@ defmodule Destila.Workflows.ChoreTaskPhases do
 
     Keep your questions concise and specific. When you believe you have a clear understanding \
     of the task, end your message with <<READY_TO_ADVANCE>>
+
+    IMPORTANT: Never use <<READY_TO_ADVANCE>> in a message that contains unanswered questions. \
+    If you still need information from the user, ask your questions and wait for their answers \
+    before using the marker.
     """ <> @tool_instructions
   end
 
@@ -100,6 +104,10 @@ defmodule Destila.Workflows.ChoreTaskPhases do
 
     3. If the task doesn't require Gherkin changes:
        - Explain why and end your message with <<SKIP_PHASE>>
+
+    IMPORTANT: Never use <<READY_TO_ADVANCE>> or <<SKIP_PHASE>> in a message that contains \
+    unanswered questions. If you still need information from the user, ask your questions and \
+    wait for their answers before using the marker.
     """ <> @tool_instructions
   end
 
@@ -120,6 +128,10 @@ defmodule Destila.Workflows.ChoreTaskPhases do
 
     When the technical approach is sufficiently clear, \
     end your message with <<READY_TO_ADVANCE>>
+
+    IMPORTANT: Never use <<READY_TO_ADVANCE>> in a message that contains unanswered questions. \
+    If you still need information from the user, ask your questions and wait for their answers \
+    before using the marker.
     """ <> @tool_instructions
   end
 
