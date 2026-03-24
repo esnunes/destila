@@ -241,28 +241,6 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
       # Mark as Done button disappears
       refute has_element?(view, "button[phx-click='mark_done']")
-
-      # Send to Implementation button appears
-      assert has_element?(view, "button[phx-click='send_to_implementation']")
-    end
-  end
-
-  describe "post-completion" do
-    @tag feature: @feature, scenario: "Send completed prompt to Implementation Board"
-    test "sends completed prompt to implementation board", %{conn: conn} do
-      prompt = create_prompt_in_phase(4, column: :done, phase_status: nil)
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
-
-      # Workflow shows as complete
-      assert render(view) =~ "Workflow complete"
-
-      # Send to Implementation button is available
-      assert has_element?(view, "button[phx-click='send_to_implementation']")
-
-      # Click it
-      view |> element("button[phx-click='send_to_implementation']") |> render_click()
-
-      assert render(view) =~ "Moved to Implementation Board"
     end
   end
 

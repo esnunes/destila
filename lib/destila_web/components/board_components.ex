@@ -205,11 +205,6 @@ defmodule DestilaWeb.BoardComponents do
   defp column_label(:request), do: "Request"
   defp column_label(:distill), do: "Distill"
   defp column_label(:done), do: "Done"
-  defp column_label(:todo), do: "Todo"
-  defp column_label(:in_progress), do: "In Progress"
-  defp column_label(:review), do: "Review"
-  defp column_label(:qa), do: "QA"
-  defp column_label(:impl_done), do: "Done"
 
   def workflow_label(:feature_request), do: "Feature Request"
   def workflow_label(:project), do: "Project"

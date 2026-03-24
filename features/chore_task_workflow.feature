@@ -1,11 +1,11 @@
 Feature: Chore/Task AI-Driven Workflow
   The Chore/Task workflow uses AI-driven conversational phases to refine
-  a coding task into an implementation prompt. It progresses through four
+  a coding task into a prompt. It progresses through four
   phases:
   1. Task Description - AI asks clarifying questions about the task
   2. Gherkin Review - AI reviews or proposes BDD feature scenarios
   3. Technical Concerns - AI explores technical approach and trade-offs
-  4. Prompt Generation - AI generates the final implementation prompt
+  4. Prompt Generation - AI generates the final prompt
 
   Background:
     Given I am logged in
@@ -51,15 +51,10 @@ Feature: Chore/Task AI-Driven Workflow
 
   Scenario: Phase 4 - Prompt Generation and mark as done
     Given the prompt is in Phase 4 - Prompt Generation
-    Then the AI should generate an implementation prompt
+    Then the AI should generate a prompt
     And the prompt should be displayed in a styled card
     When I am satisfied with the generated prompt
     And I click "Mark as Done"
     Then the workflow should be marked as complete
     And the prompt should move to the done column
 
-  Scenario: Send completed prompt to Implementation Board
-    Given I have a completed Chore/Task prompt on the crafting board
-    When I click "Send to Implementation"
-    Then the prompt should move to the Implementation Board
-    And it should appear in the todo column

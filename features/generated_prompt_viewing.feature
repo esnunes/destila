@@ -1,6 +1,5 @@
 Feature: Generated Prompt Viewing
-  After the prompt crafting workflow is done, the generated implementation
-  prompt is displayed in a styled card. Users can toggle between a rendered
+  After the prompt crafting workflow is done, the generated prompt is displayed in a styled card. Users can toggle between a rendered
   HTML view and a raw markdown view, and copy the markdown to their
   clipboard for use in external tools.
 

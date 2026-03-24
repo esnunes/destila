@@ -142,14 +142,14 @@ defmodule Destila.Workflows do
   end
 
   def completion_message(:feature_request) do
-    "Your feature request prompt is ready! I've gathered all the details needed to create a comprehensive, actionable prompt for your coding agent. You can now move this to the Implementation Board to start building."
+    "Your feature request prompt is ready! I've gathered all the details needed to create a comprehensive, actionable prompt for your coding agent."
   end
 
   def completion_message(:project) do
-    "Your project prompt is complete! I've captured your project vision, tech stack, and scope. This prompt is ready to guide a coding agent through the initial implementation. Move it to the Implementation Board when you're ready."
+    "Your project prompt is complete! I've captured your project vision, tech stack, and scope. This prompt is ready to guide a coding agent through the initial implementation."
   end
 
   def completion_message(:chore_task) do
-    "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed. Move it to the Implementation Board when you're ready."
+    "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
   end
 end

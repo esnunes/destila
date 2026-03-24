@@ -180,20 +180,6 @@ defmodule DestilaWeb.PromptDetailLive do
      |> assign(:page_title, title)}
   end
 
-  # Send to implementation
-  def handle_event("send_to_implementation", _params, socket) do
-    {:ok, prompt} =
-      Destila.Prompts.update_prompt(socket.assigns.prompt, %{
-        board: :implementation,
-        column: :todo
-      })
-
-    {:noreply,
-     socket
-     |> assign(:prompt, prompt)
-     |> put_flash(:info, "Moved to Implementation Board")}
-  end
-
   # Phase advance confirmation (AI workflows)
   def handle_event("confirm_advance", _params, socket) do
     prompt = socket.assigns.prompt
@@ -659,14 +645,6 @@ defmodule DestilaWeb.PromptDetailLive do
               >
                 <.icon name="hero-check-micro" class="size-4" /> Mark as Done
               </button>
-
-              <button
-                :if={@prompt.column == :done && @prompt.board == :crafting}
-                phx-click="send_to_implementation"
-                class="btn btn-primary btn-sm"
-              >
-                <.icon name="hero-rocket-launch-micro" class="size-4" /> Send to Implementation
-              </button>
             </div>
           </div>
         </div>
@@ -794,12 +772,6 @@ defmodule DestilaWeb.PromptDetailLive do
             <.icon name="hero-check-circle-solid" class="size-4 text-success" />
             <span>
               Workflow complete
-              <span :if={@prompt.board == :crafting && @prompt.column == :done}>
-                &mdash; ready to send to Implementation Board
-              </span>
-              <span :if={@prompt.board == :implementation}>
-                &mdash; moved to Implementation Board
-              </span>
             </span>
           </p>
         </div>

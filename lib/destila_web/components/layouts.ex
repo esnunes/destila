@@ -50,16 +50,9 @@ defmodule DestilaWeb.Layouts do
         <.sidebar_item
           navigate={~p"/crafting"}
           icon="hero-beaker"
-          label="Prompt Crafting"
-          active={@page_title == "Prompt Crafting"}
+          label="Crafting Board"
+          active={@page_title == "Crafting Board"}
         />
-        <.sidebar_item
-          navigate={~p"/implementation"}
-          icon="hero-rocket-launch"
-          label="Implementation"
-          active={@page_title == "Implementation"}
-        />
-
         <.sidebar_item
           navigate={~p"/projects"}
           icon="hero-folder"

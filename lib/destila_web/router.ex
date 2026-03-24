@@ -38,7 +38,6 @@ defmodule DestilaWeb.Router do
 
     live "/", DashboardLive
     live "/crafting", CraftingBoardLive
-    live "/implementation", ImplementationBoardLive
     live "/projects", ProjectsLive
     live "/prompts/new", NewPromptLive
     live "/prompts/:id", PromptDetailLive

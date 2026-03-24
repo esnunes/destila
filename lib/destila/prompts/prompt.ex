@@ -9,11 +9,9 @@ defmodule Destila.Prompts.Prompt do
 
     field(:workflow_type, Ecto.Enum, values: [:feature_request, :chore_task, :project])
 
-    field(:board, Ecto.Enum, values: [:crafting, :implementation])
+    field(:board, Ecto.Enum, values: [:crafting])
 
-    field(:column, Ecto.Enum,
-      values: [:request, :distill, :done, :todo, :in_progress, :review, :qa, :impl_done]
-    )
+    field(:column, Ecto.Enum, values: [:request, :distill, :done])
 
     field(:steps_completed, :integer, default: 0)
     field(:steps_total, :integer, default: 4)
