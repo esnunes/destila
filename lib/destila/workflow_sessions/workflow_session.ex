@@ -1,13 +1,15 @@
-defmodule Destila.Prompts.Prompt do
+defmodule Destila.WorkflowSessions.WorkflowSession do
   use Ecto.Schema
   import Ecto.Changeset
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
-  schema "prompts" do
-    field(:title, :string, default: "Untitled Prompt")
+  schema "workflow_sessions" do
+    field(:title, :string, default: "Untitled Session")
 
-    field(:workflow_type, Ecto.Enum, values: [:feature_request, :chore_task, :project])
+    field(:workflow_type, Ecto.Enum,
+      values: [:prompt_chore_task, :prompt_new_project, :implement_generic_prompt]
+    )
 
     field(:column, Ecto.Enum, values: [:request, :distill, :done])
 
@@ -19,7 +21,7 @@ defmodule Destila.Prompts.Prompt do
     )
 
     field(:title_generating, :boolean, default: false)
-    field(:session_id, :string)
+    field(:ai_session_id, :string)
     field(:worktree_path, :string)
     field(:position, :integer)
 
@@ -29,8 +31,8 @@ defmodule Destila.Prompts.Prompt do
     timestamps(type: :utc_datetime)
   end
 
-  def changeset(prompt, attrs) do
-    prompt
+  def changeset(workflow_session, attrs) do
+    workflow_session
     |> cast(attrs, [
       :title,
       :workflow_type,
@@ -40,7 +42,7 @@ defmodule Destila.Prompts.Prompt do
       :steps_total,
       :phase_status,
       :title_generating,
-      :session_id,
+      :ai_session_id,
       :worktree_path,
       :position
     ])

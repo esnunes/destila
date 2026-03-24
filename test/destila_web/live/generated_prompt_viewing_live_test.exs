@@ -41,11 +41,11 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
     {:ok, conn: conn}
   end
 
-  defp create_prompt_with_generated_prompt do
-    {:ok, prompt} =
-      Destila.Prompts.create_prompt(%{
-        title: "Test Prompt",
-        workflow_type: :chore_task,
+  defp create_session_with_generated_prompt do
+    {:ok, workflow_session} =
+      Destila.WorkflowSessions.create_workflow_session(%{
+        title: "Test Session",
+        workflow_type: :prompt_chore_task,
         project_id: nil,
         column: :done,
         steps_completed: 4,
@@ -54,7 +54,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
       })
 
     {:ok, _} =
-      Destila.Messages.create_message(prompt.id, %{
+      Destila.Messages.create_message(workflow_session.id, %{
         role: :system,
         content: @sample_markdown,
         raw_response: %{
@@ -66,14 +66,14 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
         phase: 4
       })
 
-    prompt
+    workflow_session
   end
 
   describe "default rendered view" do
     @tag feature: @feature, scenario: "Default to rendered HTML view"
     test "renders the prompt card with toggle buttons and copy button", %{conn: conn} do
-      prompt = create_prompt_with_generated_prompt()
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      ws = create_session_with_generated_prompt()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # Card exists with ID and data-content
       assert has_element?(view, "[id^='prompt-card-']")
@@ -102,8 +102,8 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
   describe "markdown view structure" do
     @tag feature: @feature, scenario: "Toggle to markdown view"
     test "markdown view contains raw markdown in pre/code block", %{conn: conn} do
-      prompt = create_prompt_with_generated_prompt()
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      ws = create_session_with_generated_prompt()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # Use render(element) to get the code block content
       code_html = view |> element("[data-markdown] pre code") |> render()
@@ -116,8 +116,8 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
   describe "rendered view structure" do
     @tag feature: @feature, scenario: "Toggle back to rendered view"
     test "rendered view contains HTML-rendered markdown", %{conn: conn} do
-      prompt = create_prompt_with_generated_prompt()
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      ws = create_session_with_generated_prompt()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # Rendered view should contain HTML elements from Earmark conversion
       assert has_element?(view, "[data-rendered] h1")
@@ -128,8 +128,8 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
   describe "copy button" do
     @tag feature: @feature, scenario: "Copy markdown to clipboard"
     test "copy button has correct aria-label and icon", %{conn: conn} do
-      prompt = create_prompt_with_generated_prompt()
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      ws = create_session_with_generated_prompt()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "button[aria-label='Copy markdown to clipboard']")
       assert has_element?(view, "button.prompt-copy-btn .hero-clipboard-document-micro")
@@ -137,8 +137,8 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
 
     @tag feature: @feature, scenario: "Copy works from either view"
     test "data-content attribute contains the raw markdown for JS hook", %{conn: conn} do
-      prompt = create_prompt_with_generated_prompt()
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      ws = create_session_with_generated_prompt()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # The card's data-content holds the raw markdown for the JS hook to copy
       card_html = view |> element("[id^='prompt-card-']") |> render()

@@ -62,7 +62,7 @@ defmodule DestilaWeb.Layouts do
 
         <div class="my-2 mx-1 border-t border-base-300/50" />
 
-        <.sidebar_item navigate={~p"/prompts/new"} icon="hero-plus-circle" label="Create Prompt" />
+        <.sidebar_item navigate={~p"/sessions/new"} icon="hero-plus-circle" label="New Session" />
       </nav>
 
       <%!-- Bottom --%>

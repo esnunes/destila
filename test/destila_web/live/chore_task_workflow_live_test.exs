@@ -36,9 +36,9 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
         else: "I have some questions about this task."
 
     {:ok, prompt} =
-      Destila.Prompts.create_prompt(%{
+      Destila.WorkflowSessions.create_workflow_session(%{
         title: "Test Chore Task",
-        workflow_type: :chore_task,
+        workflow_type: :prompt_chore_task,
         project_id: nil,
         column: column,
         steps_completed: phase,
@@ -88,7 +88,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     @tag feature: @feature, scenario: "Phase 1 - AI asks clarifying questions"
     test "shows phase info, AI message, and accepts user input", %{conn: conn} do
       prompt = create_prompt_in_phase(1)
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       # Header shows Phase 1
       assert render(view) =~ "Phase 1/4"
@@ -118,7 +118,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
           last_message_type: :phase_advance
         )
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       # Advance button is shown
       assert has_element?(view, "button[phx-click='confirm_advance']")
@@ -142,7 +142,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
           last_message_type: :phase_advance
         )
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       # Both buttons shown
       assert has_element?(view, "button[phx-click='confirm_advance']")
@@ -180,7 +180,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
           last_message_type: :phase_advance
         )
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       # Advance to Phase 2 (Gherkin Review) — AI will return SKIP_PHASE,
       # which triggers handle_skip_phase to auto-advance to Phase 3
@@ -200,7 +200,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     @tag feature: @feature, scenario: "Phase 2 - Gherkin Review"
     test "shows Gherkin Review phase with conversation input", %{conn: conn} do
       prompt = create_prompt_in_phase(2)
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       assert render(view) =~ "Phase 2/4"
       assert render(view) =~ "Gherkin Review"
@@ -212,7 +212,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     @tag feature: @feature, scenario: "Phase 3 - Technical Concerns"
     test "shows Technical Concerns phase with conversation input", %{conn: conn} do
       prompt = create_prompt_in_phase(3)
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       assert render(view) =~ "Phase 3/4"
       assert render(view) =~ "Technical Concerns"
@@ -224,7 +224,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     @tag feature: @feature, scenario: "Phase 4 - Prompt Generation and mark as done"
     test "shows Mark as Done button and completes workflow on click", %{conn: conn} do
       prompt = create_prompt_in_phase(4)
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       assert render(view) =~ "Phase 4/4"
       assert render(view) =~ "Prompt Generation"

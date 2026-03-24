@@ -14,7 +14,7 @@ defmodule DestilaWeb.ProjectsLive do
      |> assign(:page_title, "Projects")
      |> stream(:projects, projects)
      |> assign(:projects_empty?, projects == [])
-     |> assign(:prompt_counts, Destila.Prompts.count_by_projects())
+     |> assign(:session_counts, Destila.WorkflowSessions.count_by_projects())
      |> assign(:creating, false)
      |> assign(:editing_project_id, nil)
      |> assign(:form, new_form())
@@ -135,12 +135,12 @@ defmodule DestilaWeb.ProjectsLive do
           :ok ->
             {:noreply, assign(socket, :delete_confirming_id, nil)}
 
-          {:error, :has_linked_prompts} ->
+          {:error, :has_linked_sessions} ->
             {:noreply,
              socket
              |> maybe_restream_project(id)
              |> assign(:delete_confirming_id, nil)
-             |> put_flash(:error, "Cannot delete this project while it is linked to prompts")}
+             |> put_flash(:error, "Cannot delete this project while it is linked to sessions")}
         end
     end
   end
@@ -154,7 +154,7 @@ defmodule DestilaWeb.ProjectsLive do
      socket
      |> stream(:projects, projects, reset: true)
      |> assign(:projects_empty?, projects == [])
-     |> assign(:prompt_counts, Destila.Prompts.count_by_projects())}
+     |> assign(:session_counts, Destila.WorkflowSessions.count_by_projects())}
   end
 
   def handle_info({:project_updated, _project}, socket) do
@@ -164,7 +164,7 @@ defmodule DestilaWeb.ProjectsLive do
      socket
      |> stream(:projects, projects, reset: true)
      |> assign(:projects_empty?, projects == [])
-     |> assign(:prompt_counts, Destila.Prompts.count_by_projects())}
+     |> assign(:session_counts, Destila.WorkflowSessions.count_by_projects())}
   end
 
   def handle_info({:project_deleted, _project}, socket) do
@@ -174,7 +174,7 @@ defmodule DestilaWeb.ProjectsLive do
      socket
      |> stream(:projects, projects, reset: true)
      |> assign(:projects_empty?, projects == [])
-     |> assign(:prompt_counts, Destila.Prompts.count_by_projects())}
+     |> assign(:session_counts, Destila.WorkflowSessions.count_by_projects())}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -219,11 +219,11 @@ defmodule DestilaWeb.ProjectsLive do
     end
   end
 
-  defp linked_prompt_count(prompt_counts, project_id) do
-    case Map.get(prompt_counts, project_id, 0) do
-      0 -> "No prompts"
-      1 -> "1 prompt"
-      n -> "#{n} prompts"
+  defp linked_session_count(session_counts, project_id) do
+    case Map.get(session_counts, project_id, 0) do
+      0 -> "No sessions"
+      1 -> "1 session"
+      n -> "#{n} sessions"
     end
   end
 
@@ -321,7 +321,7 @@ defmodule DestilaWeb.ProjectsLive do
 
                 <div class="flex items-center gap-1 ml-4 shrink-0">
                   <span class="text-xs text-base-content/40">
-                    {linked_prompt_count(@prompt_counts, project.id)}
+                    {linked_session_count(@session_counts, project.id)}
                   </span>
 
                   <button

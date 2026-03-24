@@ -1,11 +1,11 @@
-defmodule DestilaWeb.NewPromptLive do
+defmodule DestilaWeb.NewSessionLive do
   use DestilaWeb, :live_view
 
   def mount(_params, session, socket) do
     {:ok,
      socket
      |> assign(:current_user, session["current_user"])
-     |> assign(:page_title, "New Prompt")
+     |> assign(:page_title, "New Session")
      |> assign(:step, 1)
      |> assign(:workflow_type, nil)
      |> assign(:project_id, nil)
@@ -33,14 +33,18 @@ defmodule DestilaWeb.NewPromptLive do
   end
 
   def handle_event("continue_project", _params, socket) do
-    if socket.assigns.project_id == nil && socket.assigns.workflow_type != :project do
+    if socket.assigns.project_id == nil && socket.assigns.workflow_type != :prompt_new_project do
       {:noreply, assign(socket, :errors, %{project: "Please select a project"})}
     else
       {:noreply, assign(socket, step: 3, errors: %{})}
     end
   end
 
-  def handle_event("skip_project", _params, %{assigns: %{workflow_type: :project}} = socket) do
+  def handle_event(
+        "skip_project",
+        _params,
+        %{assigns: %{workflow_type: :prompt_new_project}} = socket
+      ) do
     {:noreply, assign(socket, step: 3, project_id: nil)}
   end
 
@@ -127,8 +131,8 @@ defmodule DestilaWeb.NewPromptLive do
 
   def handle_event("save_and_continue", %{"initial_idea" => idea}, socket)
       when idea != "" do
-    prompt = create_prompt_with_idea(socket, idea, :continue)
-    {:noreply, push_navigate(socket, to: ~p"/prompts/#{prompt.id}")}
+    workflow_session = create_workflow_session_with_idea(socket, idea, :continue)
+    {:noreply, push_navigate(socket, to: ~p"/sessions/#{workflow_session.id}")}
   end
 
   def handle_event("save_and_continue", _params, socket) do
@@ -139,24 +143,24 @@ defmodule DestilaWeb.NewPromptLive do
     idea = socket.assigns.initial_idea
 
     if idea != "" do
-      create_prompt_with_idea(socket, idea, :close)
+      create_workflow_session_with_idea(socket, idea, :close)
       {:noreply, push_navigate(socket, to: socket.assigns.return_to)}
     else
       {:noreply, assign(socket, :errors, %{idea: "Please describe your initial idea"})}
     end
   end
 
-  defp create_prompt_with_idea(socket, idea, _action) do
+  defp create_workflow_session_with_idea(socket, idea, _action) do
     workflow_type = socket.assigns.workflow_type
     steps = Destila.Workflows.steps(workflow_type)
     first_step = List.first(steps)
 
-    is_ai_workflow = workflow_type == :chore_task
+    is_ai_workflow = workflow_type == :prompt_chore_task
 
-    {:ok, prompt} =
+    {:ok, workflow_session} =
       Destila.Repo.transaction(fn ->
-        {:ok, prompt} =
-          Destila.Prompts.create_prompt(%{
+        {:ok, workflow_session} =
+          Destila.WorkflowSessions.create_workflow_session(%{
             title: "Generating title...",
             title_generating: true,
             workflow_type: workflow_type,
@@ -169,7 +173,7 @@ defmodule DestilaWeb.NewPromptLive do
 
         # Add system message for phase 1 (the question)
         {:ok, _} =
-          Destila.Messages.create_message(prompt.id, %{
+          Destila.Messages.create_message(workflow_session.id, %{
             role: :system,
             content: first_step.content,
             phase: 1
@@ -177,43 +181,49 @@ defmodule DestilaWeb.NewPromptLive do
 
         # Add user message for phase 1 (the initial idea)
         {:ok, _} =
-          Destila.Messages.create_message(prompt.id, %{
+          Destila.Messages.create_message(workflow_session.id, %{
             role: :user,
             content: idea,
             phase: 1
           })
 
         # For static workflows, add the second system message so the chat picks up from there
-        # For AI-driven workflows (chore_task), skip — the AI will generate the next response
+        # For AI-driven workflows (prompt_chore_task), skip — the AI will generate the next response
         if !is_ai_workflow do
           second_step = Enum.at(steps, 1)
 
-          {:ok, _} =
-            Destila.Messages.create_message(prompt.id, %{
-              role: :system,
-              content: second_step.content,
-              phase: second_step.step
-            })
+          if second_step do
+            {:ok, _} =
+              Destila.Messages.create_message(workflow_session.id, %{
+                role: :system,
+                content: second_step.content,
+                phase: second_step.step
+              })
+          end
         end
 
-        prompt
+        workflow_session
       end)
 
     # Enqueue Oban jobs for background processing
-    enqueue_setup_jobs(prompt, workflow_type, idea)
+    enqueue_setup_jobs(workflow_session, workflow_type, idea)
 
-    prompt
+    workflow_session
   end
 
-  defp enqueue_setup_jobs(prompt, workflow_type, idea) do
+  defp enqueue_setup_jobs(workflow_session, workflow_type, idea) do
     # Always enqueue title generation
-    %{"prompt_id" => prompt.id, "workflow_type" => to_string(workflow_type), "idea" => idea}
+    %{
+      "workflow_session_id" => workflow_session.id,
+      "workflow_type" => to_string(workflow_type),
+      "idea" => idea
+    }
     |> Destila.Workers.TitleGenerationWorker.new()
     |> Oban.insert()
 
     # For AI workflows, enqueue setup worker (git + worktree + AI session)
-    if workflow_type == :chore_task do
-      %{"prompt_id" => prompt.id}
+    if workflow_type == :prompt_chore_task do
+      %{"workflow_session_id" => workflow_session.id}
       |> Destila.Workers.SetupWorker.new()
       |> Oban.insert()
     end
@@ -273,26 +283,12 @@ defmodule DestilaWeb.NewPromptLive do
             <div class="grid grid-cols-3 gap-4">
               <button
                 phx-click="select_type"
-                phx-value-type="feature_request"
-                class="card bg-base-100 border-2 border-base-300 hover:border-primary transition-colors cursor-pointer text-left"
-              >
-                <div class="card-body p-5">
-                  <.icon name="hero-light-bulb" class="size-8 text-info mb-2" />
-                  <h3 class="font-semibold">Feature Request</h3>
-                  <p class="text-xs text-base-content/50">
-                    Describe a new feature or enhancement for an existing project
-                  </p>
-                </div>
-              </button>
-
-              <button
-                phx-click="select_type"
-                phx-value-type="chore_task"
+                phx-value-type="prompt_chore_task"
                 class="card bg-base-100 border-2 border-base-300 hover:border-primary transition-colors cursor-pointer text-left"
               >
                 <div class="card-body p-5">
                   <.icon name="hero-wrench-screwdriver" class="size-8 text-warning mb-2" />
-                  <h3 class="font-semibold">Chore / Task</h3>
+                  <h3 class="font-semibold">Prompt for a Chore / Task</h3>
                   <p class="text-xs text-base-content/50">
                     Straightforward coding tasks, bug fixes, or refactors
                   </p>
@@ -301,14 +297,28 @@ defmodule DestilaWeb.NewPromptLive do
 
               <button
                 phx-click="select_type"
-                phx-value-type="project"
+                phx-value-type="prompt_new_project"
                 class="card bg-base-100 border-2 border-base-300 hover:border-primary transition-colors cursor-pointer text-left"
               >
                 <div class="card-body p-5">
                   <.icon name="hero-rocket-launch" class="size-8 text-secondary mb-2" />
-                  <h3 class="font-semibold">Project</h3>
+                  <h3 class="font-semibold">Prompt for a New Project</h3>
                   <p class="text-xs text-base-content/50">
                     Start a brand new project from scratch
+                  </p>
+                </div>
+              </button>
+
+              <button
+                phx-click="select_type"
+                phx-value-type="implement_generic_prompt"
+                class="card bg-base-100 border-2 border-base-300 hover:border-primary transition-colors cursor-pointer text-left"
+              >
+                <div class="card-body p-5">
+                  <.icon name="hero-code-bracket" class="size-8 text-accent mb-2" />
+                  <h3 class="font-semibold">Implement a Generic Prompt</h3>
+                  <p class="text-xs text-base-content/50">
+                    Implement from an existing prompt or specification
                   </p>
                 </div>
               </button>
@@ -322,7 +332,7 @@ defmodule DestilaWeb.NewPromptLive do
               <div class="text-center mb-6">
                 <h2 class="text-xl font-bold">Link a project</h2>
                 <p class="text-sm text-base-content/50 mt-1">
-                  <%= if @workflow_type == :project do %>
+                  <%= if @workflow_type == :prompt_new_project do %>
                     Select a project to give context, or skip for new projects
                   <% else %>
                     Select the project this task belongs to
@@ -386,7 +396,7 @@ defmodule DestilaWeb.NewPromptLive do
                   Continue
                 </button>
                 <button
-                  :if={@workflow_type == :project}
+                  :if={@workflow_type == :prompt_new_project}
                   phx-click="skip_project"
                   class="btn btn-ghost flex-1"
                   id="skip-project-btn"

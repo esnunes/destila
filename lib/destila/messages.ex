@@ -4,14 +4,19 @@ defmodule Destila.Messages do
   alias Destila.Repo
   alias Destila.Messages.Message
 
-  def list_messages(prompt_id) do
-    Repo.all(from(m in Message, where: m.prompt_id == ^prompt_id, order_by: m.inserted_at))
+  def list_messages(workflow_session_id) do
+    Repo.all(
+      from(m in Message,
+        where: m.workflow_session_id == ^workflow_session_id,
+        order_by: m.inserted_at
+      )
+    )
   end
 
-  def create_message(prompt_id, attrs) do
+  def create_message(workflow_session_id, attrs) do
     attrs =
       attrs
-      |> Map.put(:prompt_id, prompt_id)
+      |> Map.put(:workflow_session_id, workflow_session_id)
       |> Map.update(:raw_response, nil, &normalize_keys/1)
 
     %Message{}
@@ -31,7 +36,7 @@ defmodule Destila.Messages do
 
   For user messages, passes through content and selected.
   """
-  def process(%Message{role: :user} = msg, _prompt) do
+  def process(%Message{role: :user} = msg, _workflow_session) do
     %{
       id: msg.id,
       role: :user,
@@ -46,9 +51,9 @@ defmodule Destila.Messages do
     }
   end
 
-  def process(%Message{role: :system, raw_response: raw} = msg, prompt)
+  def process(%Message{role: :system, raw_response: raw} = msg, workflow_session)
       when is_map(raw) do
-    {content, message_type} = parse_markers(msg.content, msg.phase, prompt)
+    {content, message_type} = parse_markers(msg.content, msg.phase, workflow_session)
     {input_type, options, questions} = extract_tool_input(raw)
 
     # If AI text is empty/generic but questions exist, use question texts as content
@@ -73,9 +78,9 @@ defmodule Destila.Messages do
     }
   end
 
-  def process(%Message{role: :system} = msg, prompt) do
+  def process(%Message{role: :system} = msg, workflow_session) do
     # Static workflow message — look up input_type/options from workflow definition
-    {input_type, options} = lookup_static_step(prompt.workflow_type, msg.phase)
+    {input_type, options} = lookup_static_step(workflow_session.workflow_type, msg.phase)
 
     %{
       id: msg.id,
@@ -93,7 +98,7 @@ defmodule Destila.Messages do
 
   # Strips <<READY_TO_ADVANCE>> and <<SKIP_PHASE>> markers from AI text.
   # Returns {cleaned_content, message_type}.
-  defp parse_markers(text, phase, prompt) do
+  defp parse_markers(text, phase, workflow_session) do
     cond do
       String.contains?(text, "<<SKIP_PHASE>>") ->
         content = String.replace(text, "<<SKIP_PHASE>>", "") |> String.trim()
@@ -105,7 +110,7 @@ defmodule Destila.Messages do
         content = if content == "", do: "Ready to move to the next phase.", else: content
         {content, :phase_advance}
 
-      phase == prompt.steps_total ->
+      phase == workflow_session.steps_total ->
         {String.trim(text), :generated_prompt}
 
       true ->

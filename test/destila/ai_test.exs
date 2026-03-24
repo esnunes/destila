@@ -2,7 +2,7 @@ defmodule Destila.AITest do
   use ExUnit.Case, async: true
 
   describe "generate_title/2 (one-off, no session)" do
-    test "returns title for a feature request" do
+    test "returns title for a chore/task" do
       ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
         [
           ClaudeCode.Test.text("Dark Mode Toggle"),
@@ -11,7 +11,7 @@ defmodule Destila.AITest do
       end)
 
       assert {:ok, "Dark Mode Toggle"} =
-               Destila.AI.generate_title(:feature_request, "add dark mode")
+               Destila.AI.generate_title(:prompt_chore_task, "add dark mode")
     end
 
     test "returns title for a project" do
@@ -23,7 +23,7 @@ defmodule Destila.AITest do
       end)
 
       assert {:ok, "Recipe Sharing Platform"} =
-               Destila.AI.generate_title(:project, "a platform to share recipes")
+               Destila.AI.generate_title(:prompt_new_project, "a platform to share recipes")
     end
 
     test "trims whitespace from the title" do
@@ -34,7 +34,7 @@ defmodule Destila.AITest do
         ]
       end)
 
-      assert {:ok, "Trimmed Title"} = Destila.AI.generate_title(:feature_request, "something")
+      assert {:ok, "Trimmed Title"} = Destila.AI.generate_title(:prompt_chore_task, "something")
     end
 
     test "returns error when response is empty" do
@@ -45,7 +45,8 @@ defmodule Destila.AITest do
         ]
       end)
 
-      assert {:error, :empty_response} = Destila.AI.generate_title(:feature_request, "something")
+      assert {:error, :empty_response} =
+               Destila.AI.generate_title(:prompt_chore_task, "something")
     end
 
     test "returns error when response is only whitespace" do
@@ -56,7 +57,8 @@ defmodule Destila.AITest do
         ]
       end)
 
-      assert {:error, :empty_response} = Destila.AI.generate_title(:feature_request, "something")
+      assert {:error, :empty_response} =
+               Destila.AI.generate_title(:prompt_chore_task, "something")
     end
 
     test "returns error on API failure" do
@@ -66,7 +68,7 @@ defmodule Destila.AITest do
         ]
       end)
 
-      assert {:error, _reason} = Destila.AI.generate_title(:project, "something")
+      assert {:error, _reason} = Destila.AI.generate_title(:prompt_new_project, "something")
     end
 
     test "passes correct options to ClaudeCode" do
@@ -81,12 +83,12 @@ defmodule Destila.AITest do
         ]
       end)
 
-      Destila.AI.generate_title(:feature_request, "test idea")
+      Destila.AI.generate_title(:prompt_chore_task, "test idea")
     end
 
     test "includes workflow type in the prompt" do
       ClaudeCode.Test.stub(ClaudeCode, fn query, _opts ->
-        assert query =~ "feature request"
+        assert query =~ "chore/task"
 
         [
           ClaudeCode.Test.text("Test Title"),
@@ -94,7 +96,7 @@ defmodule Destila.AITest do
         ]
       end)
 
-      Destila.AI.generate_title(:feature_request, "test idea")
+      Destila.AI.generate_title(:prompt_chore_task, "test idea")
 
       ClaudeCode.Test.stub(ClaudeCode, fn query, _opts ->
         assert query =~ "project"
@@ -105,7 +107,7 @@ defmodule Destila.AITest do
         ]
       end)
 
-      Destila.AI.generate_title(:project, "test idea")
+      Destila.AI.generate_title(:prompt_new_project, "test idea")
     end
 
     test "includes idea in the prompt" do
@@ -118,7 +120,7 @@ defmodule Destila.AITest do
         ]
       end)
 
-      Destila.AI.generate_title(:project, "build a REST API")
+      Destila.AI.generate_title(:prompt_new_project, "build a REST API")
     end
   end
 
@@ -135,7 +137,7 @@ defmodule Destila.AITest do
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
       assert {:ok, "Session Title"} =
-               Destila.AI.generate_title(session, :feature_request, "add dark mode")
+               Destila.AI.generate_title(session, :prompt_chore_task, "add dark mode")
 
       Destila.AI.Session.stop(session)
     end
@@ -152,7 +154,7 @@ defmodule Destila.AITest do
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
       assert {:ok, "Padded Title"} =
-               Destila.AI.generate_title(session, :project, "something")
+               Destila.AI.generate_title(session, :prompt_new_project, "something")
 
       Destila.AI.Session.stop(session)
     end
@@ -169,7 +171,7 @@ defmodule Destila.AITest do
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
       assert {:error, :empty_response} =
-               Destila.AI.generate_title(session, :feature_request, "something")
+               Destila.AI.generate_title(session, :prompt_chore_task, "something")
 
       Destila.AI.Session.stop(session)
     end
@@ -185,7 +187,7 @@ defmodule Destila.AITest do
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
       assert {:error, _reason} =
-               Destila.AI.generate_title(session, :project, "something")
+               Destila.AI.generate_title(session, :prompt_new_project, "something")
 
       Destila.AI.Session.stop(session)
     end

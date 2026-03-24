@@ -53,18 +53,18 @@ defmodule Destila.AI.Session do
   end
 
   @doc """
-  Gets or creates an AI session for a prompt.
+  Gets or creates an AI session for a workflow session.
 
-  If a session already exists for this prompt_id (registered in the Registry),
+  If a session already exists for this workflow_session_id (registered in the Registry),
   returns it. Otherwise starts a new one. This ensures multiple tabs/LiveViews
-  for the same prompt share a single AI session.
+  for the same workflow session share a single AI session.
 
   ## Options
 
   Same as `start_link/1`.
   """
-  def for_prompt(prompt_id, opts \\ []) do
-    name = {:via, Registry, {Destila.AI.SessionRegistry, prompt_id}}
+  def for_workflow_session(workflow_session_id, opts \\ []) do
+    name = {:via, Registry, {Destila.AI.SessionRegistry, workflow_session_id}}
 
     case GenServer.whereis(name) do
       nil ->

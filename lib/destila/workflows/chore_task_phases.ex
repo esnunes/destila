@@ -39,9 +39,9 @@ defmodule Destila.Workflows.ChoreTaskPhases do
   """
 
   @doc """
-  Returns the AI system prompt for a given phase and prompt context.
+  Returns the AI system prompt for a given phase and workflow session context.
   """
-  def system_prompt(1, _prompt) do
+  def system_prompt(1, _workflow_session) do
     """
     You are helping clarify a coding task. The user has described their initial idea. \
     Your job is to ask focused questions to understand exactly what they want and how it should work.
@@ -63,9 +63,10 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     """ <> @tool_instructions
   end
 
-  def system_prompt(2, prompt) do
+  def system_prompt(2, workflow_session) do
     project =
-      if prompt.project_id, do: Destila.Projects.get_project(prompt.project_id)
+      if workflow_session.project_id,
+        do: Destila.Projects.get_project(workflow_session.project_id)
 
     repo_context =
       cond do
@@ -102,7 +103,7 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     """ <> @tool_instructions
   end
 
-  def system_prompt(3, _prompt) do
+  def system_prompt(3, _workflow_session) do
     """
     You are exploring technical concerns for a coding task. Based on the prior conversation, \
     ask about the technical approach to implementing this task.
@@ -122,7 +123,7 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     """ <> @tool_instructions
   end
 
-  def system_prompt(4, _prompt) do
+  def system_prompt(4, _workflow_session) do
     """
     Generate a high-level implementation prompt based on the entire conversation so far. \
     This prompt should be ready to hand to a developer or coding agent.

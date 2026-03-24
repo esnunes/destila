@@ -1,50 +1,55 @@
 defmodule Destila.Workers.SetupWorker do
   use Oban.Worker, queue: :setup, max_attempts: 3
 
-  alias Destila.{Git, Messages, Prompts}
+  alias Destila.{Git, Messages, WorkflowSessions}
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"prompt_id" => prompt_id}}) do
-    prompt = Prompts.get_prompt!(prompt_id)
+  def perform(%Oban.Job{args: %{"workflow_session_id" => workflow_session_id}}) do
+    workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
 
     project =
-      if prompt.project_id,
-        do: Destila.Projects.get_project(prompt.project_id)
+      if workflow_session.project_id,
+        do: Destila.Projects.get_project(workflow_session.project_id)
 
-    with :ok <- sync_repo(prompt, project),
-         :ok <- create_worktree(prompt, project),
-         :ok <- start_ai_session_and_trigger(prompt) do
+    with :ok <- sync_repo(workflow_session, project),
+         :ok <- create_worktree(workflow_session, project),
+         :ok <- start_ai_session_and_trigger(workflow_session) do
       :ok
     end
   end
 
-  defp sync_repo(_prompt, nil), do: :ok
+  defp sync_repo(_workflow_session, nil), do: :ok
 
-  defp sync_repo(prompt, project) do
+  defp sync_repo(workflow_session, project) do
     cond do
       project.local_folder && project.local_folder != "" ->
-        broadcast_step(prompt.id, "repo_sync", "in_progress", "Pulling latest changes...")
+        broadcast_step(
+          workflow_session.id,
+          "repo_sync",
+          "in_progress",
+          "Pulling latest changes..."
+        )
 
         case Git.pull(project.local_folder) do
           {:ok, _} ->
-            broadcast_step(prompt.id, "repo_sync", "completed", "Repository up to date")
+            broadcast_step(workflow_session.id, "repo_sync", "completed", "Repository up to date")
             :ok
 
           {:error, reason} ->
-            broadcast_step(prompt.id, "repo_sync", "failed", reason)
+            broadcast_step(workflow_session.id, "repo_sync", "failed", reason)
             {:error, reason}
         end
 
       project.git_repo_url && project.git_repo_url != "" ->
-        broadcast_step(prompt.id, "repo_sync", "in_progress", "Cloning repository...")
+        broadcast_step(workflow_session.id, "repo_sync", "in_progress", "Cloning repository...")
 
         case Git.effective_local_folder(project) do
           {:ok, _path} ->
-            broadcast_step(prompt.id, "repo_sync", "completed", "Repository cloned")
+            broadcast_step(workflow_session.id, "repo_sync", "completed", "Repository cloned")
             :ok
 
           {:error, reason} ->
-            broadcast_step(prompt.id, "repo_sync", "failed", reason)
+            broadcast_step(workflow_session.id, "repo_sync", "failed", reason)
             {:error, reason}
         end
 
@@ -53,76 +58,81 @@ defmodule Destila.Workers.SetupWorker do
     end
   end
 
-  defp create_worktree(_prompt, nil), do: :ok
+  defp create_worktree(_workflow_session, nil), do: :ok
 
-  defp create_worktree(prompt, project) do
+  defp create_worktree(workflow_session, project) do
     case Git.effective_local_folder(project) do
       {:ok, local_folder} ->
-        worktree_path = Path.join([local_folder, ".claude", "worktrees", prompt.id])
+        worktree_path = Path.join([local_folder, ".claude", "worktrees", workflow_session.id])
 
         if Git.worktree_exists?(worktree_path) do
-          Prompts.update_prompt(prompt.id, %{worktree_path: worktree_path})
-          broadcast_step(prompt.id, "worktree", "completed", "Worktree ready")
+          WorkflowSessions.update_workflow_session(workflow_session.id, %{
+            worktree_path: worktree_path
+          })
+
+          broadcast_step(workflow_session.id, "worktree", "completed", "Worktree ready")
           :ok
         else
-          broadcast_step(prompt.id, "worktree", "in_progress", "Creating worktree...")
+          broadcast_step(workflow_session.id, "worktree", "in_progress", "Creating worktree...")
 
-          case Git.worktree_add(local_folder, worktree_path, prompt.id) do
+          case Git.worktree_add(local_folder, worktree_path, workflow_session.id) do
             {:ok, _} ->
-              Prompts.update_prompt(prompt.id, %{worktree_path: worktree_path})
-              broadcast_step(prompt.id, "worktree", "completed", "Worktree ready")
+              WorkflowSessions.update_workflow_session(workflow_session.id, %{
+                worktree_path: worktree_path
+              })
+
+              broadcast_step(workflow_session.id, "worktree", "completed", "Worktree ready")
               :ok
 
             {:error, reason} ->
-              broadcast_step(prompt.id, "worktree", "failed", reason)
+              broadcast_step(workflow_session.id, "worktree", "failed", reason)
               {:error, reason}
           end
         end
 
       {:error, reason} ->
-        broadcast_step(prompt.id, "worktree", "failed", reason)
+        broadcast_step(workflow_session.id, "worktree", "failed", reason)
         {:error, reason}
     end
   end
 
-  defp start_ai_session_and_trigger(prompt) do
-    broadcast_step(prompt.id, "ai_session", "in_progress", "Starting AI session...")
+  defp start_ai_session_and_trigger(workflow_session) do
+    broadcast_step(workflow_session.id, "ai_session", "in_progress", "Starting AI session...")
 
-    prompt = Prompts.get_prompt!(prompt.id)
-    session_opts = build_session_opts(prompt)
+    workflow_session = WorkflowSessions.get_workflow_session!(workflow_session.id)
+    session_opts = build_session_opts(workflow_session)
 
-    case Destila.AI.Session.for_prompt(prompt.id, session_opts) do
+    case Destila.AI.Session.for_workflow_session(workflow_session.id, session_opts) do
       {:ok, _session} ->
-        broadcast_step(prompt.id, "ai_session", "completed", "AI session ready")
+        broadcast_step(workflow_session.id, "ai_session", "completed", "AI session ready")
 
-        # Check if title generation is also done; if so, transition to Phase 1
-        Destila.Setup.maybe_finish_phase0(prompt.id)
+        Destila.Setup.maybe_finish_phase0(workflow_session.id)
         :ok
 
       {:error, reason} ->
-        broadcast_step(prompt.id, "ai_session", "failed", inspect(reason))
+        broadcast_step(workflow_session.id, "ai_session", "failed", inspect(reason))
         {:error, reason}
     end
   end
 
-  defp build_session_opts(prompt) do
+  defp build_session_opts(workflow_session) do
     opts = [timeout_ms: :timer.minutes(15)]
 
     opts =
-      if prompt.session_id do
-        Keyword.put(opts, :resume, prompt.session_id)
+      if workflow_session.ai_session_id do
+        Keyword.put(opts, :resume, workflow_session.ai_session_id)
       else
         opts
       end
 
-    if prompt.worktree_path do
-      Keyword.put(opts, :cwd, prompt.worktree_path)
+    if workflow_session.worktree_path do
+      Keyword.put(opts, :cwd, workflow_session.worktree_path)
     else
       opts
     end
   end
 
-  defp broadcast_step(prompt_id, step, status, content) do
+  defp broadcast_step(workflow_session_id, step, status, content) do
     content =
       if status == "failed" do
         sanitize_error(content)
@@ -130,7 +140,7 @@ defmodule Destila.Workers.SetupWorker do
         content
       end
 
-    Messages.create_message(prompt_id, %{
+    Messages.create_message(workflow_session_id, %{
       role: :system,
       content: content,
       raw_response: %{"setup_step" => step, "status" => status},
@@ -139,7 +149,6 @@ defmodule Destila.Workers.SetupWorker do
   end
 
   defp sanitize_error(message) when is_binary(message) do
-    # Remove filesystem paths and keep only the meaningful error
     message
     |> String.split("\n")
     |> List.first()

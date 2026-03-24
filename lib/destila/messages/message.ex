@@ -11,7 +11,7 @@ defmodule Destila.Messages.Message do
     field(:selected, {:array, :string})
     field(:phase, :integer, default: 1)
 
-    belongs_to(:prompt, Destila.Prompts.Prompt)
+    belongs_to(:workflow_session, Destila.WorkflowSessions.WorkflowSession)
 
     field(:inserted_at, :utc_datetime_usec, autogenerate: {DateTime, :utc_now, []})
   end
@@ -20,14 +20,14 @@ defmodule Destila.Messages.Message do
   def changeset(message, attrs) do
     message
     |> cast(attrs, [
-      :prompt_id,
+      :workflow_session_id,
       :role,
       :content,
       :raw_response,
       :selected,
       :phase
     ])
-    |> validate_required([:prompt_id, :role])
+    |> validate_required([:workflow_session_id, :role])
     |> validate_number(:phase, greater_than_or_equal_to: 0)
   end
 end
