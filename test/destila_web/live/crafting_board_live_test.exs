@@ -31,7 +31,6 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
     defaults = %{
       title: "Test Prompt",
       workflow_type: :chore_task,
-      board: :crafting,
       column: :request,
       steps_completed: 1,
       steps_total: 4,

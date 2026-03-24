@@ -12,7 +12,7 @@ defmodule Destila.Messages do
     attrs =
       attrs
       |> Map.put(:prompt_id, prompt_id)
-      |> Map.update(:raw_response, nil, &normalize_json/1)
+      |> Map.update(:raw_response, nil, &normalize_keys/1)
 
     %Message{}
     |> Message.changeset(attrs)
@@ -129,11 +129,10 @@ defmodule Destila.Messages do
   defp extract_questions(tool_uses) do
     tool_uses
     |> Enum.filter(fn tool ->
-      name = tool["name"] || Map.get(tool, :name)
-      name in ["ask_user_question", "mcp__destila__ask_user_question"]
+      tool["name"] in ["ask_user_question", "mcp__destila__ask_user_question"]
     end)
     |> Enum.flat_map(fn tool ->
-      input = tool["input"] || Map.get(tool, :input, %{})
+      input = tool["input"] || %{}
       questions = input["questions"] || [input]
 
       Enum.map(questions, fn q ->
@@ -179,15 +178,20 @@ defmodule Destila.Messages do
     end
   end
 
-  defp broadcast({:ok, entity}, event) do
-    Phoenix.PubSub.broadcast(Destila.PubSub, "store:updates", {event, entity})
-    {:ok, entity}
-  end
+  defdelegate broadcast(result, event), to: Destila.PubSubHelper
 
-  defp broadcast({:error, _} = error, _event), do: error
+  # Recursively converts atom keys to string keys,
+  # matching what the DB returns after JSON serialization.
+  defp normalize_keys(nil), do: nil
 
-  # Deep-converts atom keys to string keys via JSON round-trip,
-  # matching what the DB returns after serialization.
-  defp normalize_json(nil), do: nil
-  defp normalize_json(data), do: data |> Jason.encode!() |> Jason.decode!()
+  defp normalize_keys(%{__struct__: _} = struct),
+    do: struct |> Map.from_struct() |> normalize_keys()
+
+  defp normalize_keys(map) when is_map(map),
+    do: Map.new(map, fn {k, v} -> {to_string(k), normalize_keys(v)} end)
+
+  defp normalize_keys(list) when is_list(list),
+    do: Enum.map(list, &normalize_keys/1)
+
+  defp normalize_keys(other), do: other
 end

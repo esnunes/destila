@@ -16,7 +16,6 @@ defmodule Destila.Repo.Migrations.CreateProjectsPromptsMessages do
       add :title, :string, null: false, default: "Untitled Prompt"
       add :workflow_type, :string, null: false
       add :project_id, references(:projects, type: :binary_id, on_delete: :restrict)
-      add :board, :string, null: false
       add :column, :string, null: false
       add :steps_completed, :integer, default: 0
       add :steps_total, :integer, default: 4
@@ -30,7 +29,6 @@ defmodule Destila.Repo.Migrations.CreateProjectsPromptsMessages do
     end
 
     create index(:prompts, [:project_id])
-    create index(:prompts, [:board])
 
     create table(:messages, primary_key: false) do
       add :id, :binary_id, primary_key: true

@@ -158,6 +158,7 @@ defmodule Destila.AI.Session do
     {:reply, reply, state}
   end
 
+  @impl true
   def handle_call(:session_id, _from, state) do
     id = ClaudeCode.Session.session_id(state.claude_session)
     {:reply, id, state}

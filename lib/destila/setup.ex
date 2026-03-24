@@ -78,7 +78,7 @@ defmodule Destila.Setup do
 
     # Broadcast the prompt update so LiveView picks up the :generating status
     prompt = Destila.Prompts.get_prompt!(prompt.id)
-    Phoenix.PubSub.broadcast(Destila.PubSub, "store:updates", {:prompt_updated, prompt})
+    Destila.PubSubHelper.broadcast_event(:prompt_updated, prompt)
 
     %{"prompt_id" => prompt.id, "phase" => phase, "query" => query}
     |> Destila.Workers.AiQueryWorker.new()

@@ -40,7 +40,6 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
         title: "Test Chore Task",
         workflow_type: :chore_task,
         project_id: nil,
-        board: :crafting,
         column: column,
         steps_completed: phase,
         steps_total: 4,

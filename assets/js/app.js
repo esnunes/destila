@@ -24,7 +24,6 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/destila"
 import topbar from "../vendor/topbar"
-import {SortableHook} from "./hooks/sortable"
 
 const ScrollBottomHook = {
   mounted() { this.el.scrollTop = this.el.scrollHeight },
@@ -41,7 +40,6 @@ const FocusFirstErrorHook = {
 
 const Hooks = {
   ...colocatedHooks,
-  Sortable: SortableHook,
   ScrollBottom: ScrollBottomHook,
   FocusFirstError: FocusFirstErrorHook,
 }

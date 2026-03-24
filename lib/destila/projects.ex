@@ -36,7 +36,7 @@ defmodule Destila.Projects do
     else
       case Repo.delete(project) do
         {:ok, project} ->
-          Phoenix.PubSub.broadcast(Destila.PubSub, "store:updates", {:project_deleted, project})
+          Destila.PubSubHelper.broadcast_event(:project_deleted, project)
           :ok
 
         {:error, _} = error ->
@@ -45,10 +45,5 @@ defmodule Destila.Projects do
     end
   end
 
-  defp broadcast({:ok, entity}, event) do
-    Phoenix.PubSub.broadcast(Destila.PubSub, "store:updates", {event, entity})
-    {:ok, entity}
-  end
-
-  defp broadcast({:error, _} = error, _event), do: error
+  defdelegate broadcast(result, event), to: Destila.PubSubHelper
 end

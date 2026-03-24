@@ -25,7 +25,7 @@ defmodule DestilaWeb.CraftingBoardLive do
   end
 
   def handle_params(params, _uri, socket) do
-    prompts = socket.assigns[:all_prompts] || Destila.Prompts.list_prompts(:crafting)
+    prompts = socket.assigns[:all_prompts] || Destila.Prompts.list_prompts()
     view_mode = if params["view"] == "workflow", do: :workflow, else: :list
     project_filter = params["project"]
 
@@ -50,8 +50,9 @@ defmodule DestilaWeb.CraftingBoardLive do
     {:noreply, push_patch(socket, to: build_path(socket.assigns.view_mode, project_id))}
   end
 
-  def handle_info({_event, _data}, socket) do
-    prompts = Destila.Prompts.list_prompts(:crafting)
+  def handle_info({event, _data}, socket)
+      when event in [:prompt_created, :prompt_updated, :prompt_deleted] do
+    prompts = Destila.Prompts.list_prompts()
 
     {:noreply,
      socket
@@ -59,16 +60,11 @@ defmodule DestilaWeb.CraftingBoardLive do
      |> assign_derived_state()}
   end
 
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
   # --- Classification ---
 
-  defp classify_prompt(prompt) do
-    cond do
-      prompt.column == :done -> :done
-      prompt.phase_status == :setup -> :setup
-      prompt.phase_status in [:generating, :conversing, :advance_suggested] -> :waiting
-      true -> :in_progress
-    end
-  end
+  defp classify_prompt(prompt), do: Destila.Prompts.classify(prompt)
 
   # --- Derived State ---
 

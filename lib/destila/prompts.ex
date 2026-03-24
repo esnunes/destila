@@ -10,12 +10,6 @@ defmodule Destila.Prompts do
     |> Repo.all()
   end
 
-  def list_prompts(board) do
-    from(p in Prompt, where: p.board == ^board, order_by: p.position)
-    |> preload(:project)
-    |> Repo.all()
-  end
-
   def get_prompt(id) do
     Repo.get(Prompt, id)
   end
@@ -44,8 +38,13 @@ defmodule Destila.Prompts do
     get_prompt!(id) |> update_prompt(attrs)
   end
 
-  def move_card(%Prompt{} = prompt, new_column, new_position) do
-    update_prompt(prompt, %{column: new_column, position: new_position})
+  def classify(%Prompt{} = prompt) do
+    cond do
+      prompt.column == :done -> :done
+      prompt.phase_status == :setup -> :setup
+      prompt.phase_status in [:generating, :conversing, :advance_suggested] -> :waiting
+      true -> :in_progress
+    end
   end
 
   def count_by_project(project_id) do
@@ -63,10 +62,5 @@ defmodule Destila.Prompts do
     |> Map.new()
   end
 
-  defp broadcast({:ok, entity}, event) do
-    Phoenix.PubSub.broadcast(Destila.PubSub, "store:updates", {event, entity})
-    {:ok, entity}
-  end
-
-  defp broadcast({:error, _} = error, _event), do: error
+  defdelegate broadcast(result, event), to: Destila.PubSubHelper
 end

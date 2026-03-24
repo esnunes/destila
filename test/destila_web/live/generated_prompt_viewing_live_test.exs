@@ -47,7 +47,6 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
         title: "Test Prompt",
         workflow_type: :chore_task,
         project_id: nil,
-        board: :crafting,
         column: :done,
         steps_completed: 4,
         steps_total: 4,

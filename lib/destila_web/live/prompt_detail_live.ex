@@ -90,9 +90,14 @@ defmodule DestilaWeb.PromptDetailLive do
   # Answer a single question in a multi-question set (single select)
   def handle_event("answer_question", %{"index" => idx_str, "answer" => answer}, socket)
       when answer != "" do
-    idx = String.to_integer(idx_str)
-    answers = Map.put(socket.assigns.question_answers, idx, answer)
-    {:noreply, assign(socket, :question_answers, answers)}
+    case Integer.parse(idx_str) do
+      {idx, _} ->
+        answers = Map.put(socket.assigns.question_answers, idx, answer)
+        {:noreply, assign(socket, :question_answers, answers)}
+
+      :error ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("answer_question", _params, socket) do
@@ -101,19 +106,12 @@ defmodule DestilaWeb.PromptDetailLive do
 
   # Answer a multi-select question
   def handle_event("confirm_multi_answer", params, socket) do
-    idx = String.to_integer(params["index"])
-    selected = Map.get(params, "selected", [])
-    other = Map.get(params, "other", "")
+    case Integer.parse(params["index"] || "") do
+      {idx, _} ->
+        confirm_multi_answer(socket, idx, params)
 
-    all_selected =
-      if other != "", do: selected ++ [other], else: selected
-
-    if all_selected == [] do
-      {:noreply, put_flash(socket, :error, "Please select at least one option")}
-    else
-      value = Enum.join(all_selected, ", ")
-      answers = Map.put(socket.assigns.question_answers, idx, value)
-      {:noreply, assign(socket, :question_answers, answers)}
+      :error ->
+        {:noreply, socket}
     end
   end
 
@@ -233,17 +231,10 @@ defmodule DestilaWeb.PromptDetailLive do
     {:noreply, refresh_state(socket)}
   end
 
-  # PubSub handlers — use broadcast data directly instead of re-querying DB
+  # PubSub handlers — re-read from DB for consistency
   def handle_info({:prompt_updated, updated_prompt}, socket) do
     if updated_prompt.id == socket.assigns.prompt.id do
-      messages = socket.assigns.messages
-      current_step = current_step_info(messages, updated_prompt)
-
-      {:noreply,
-       socket
-       |> assign(:prompt, updated_prompt)
-       |> assign(:current_step, current_step)
-       |> assign(:page_title, updated_prompt.title)}
+      {:noreply, refresh_state(socket)}
     else
       {:noreply, socket}
     end
@@ -251,33 +242,31 @@ defmodule DestilaWeb.PromptDetailLive do
 
   def handle_info({:message_added, message}, socket) do
     if message.prompt_id == socket.assigns.prompt.id do
-      already_exists? = Enum.any?(socket.assigns.messages, &(&1.id == message.id))
-
-      messages =
-        if already_exists?,
-          do: socket.assigns.messages,
-          else: socket.assigns.messages ++ [message]
-
-      prompt = socket.assigns.prompt
-      current_step = current_step_info(messages, prompt)
-
-      socket =
-        if current_step.questions != socket.assigns.current_step.questions do
-          assign(socket, :question_answers, %{})
-        else
-          socket
-        end
-
-      {:noreply,
-       socket
-       |> assign(:messages, messages)
-       |> assign(:current_step, current_step)}
+      {:noreply, refresh_state(socket)}
     else
       {:noreply, socket}
     end
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  # --- Private helpers ---
+
+  defp confirm_multi_answer(socket, idx, params) do
+    selected = Map.get(params, "selected", [])
+    other = Map.get(params, "other", "")
+
+    all_selected =
+      if other != "", do: selected ++ [other], else: selected
+
+    if all_selected == [] do
+      {:noreply, put_flash(socket, :error, "Please select at least one option")}
+    else
+      value = Enum.join(all_selected, ", ")
+      answers = Map.put(socket.assigns.question_answers, idx, value)
+      {:noreply, assign(socket, :question_answers, answers)}
+    end
+  end
 
   # --- Static workflow response handling (unchanged logic) ---
 

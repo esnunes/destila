@@ -9,8 +9,6 @@ defmodule Destila.Prompts.Prompt do
 
     field(:workflow_type, Ecto.Enum, values: [:feature_request, :chore_task, :project])
 
-    field(:board, Ecto.Enum, values: [:crafting])
-
     field(:column, Ecto.Enum, values: [:request, :distill, :done])
 
     field(:steps_completed, :integer, default: 0)
@@ -37,7 +35,6 @@ defmodule Destila.Prompts.Prompt do
       :title,
       :workflow_type,
       :project_id,
-      :board,
       :column,
       :steps_completed,
       :steps_total,
@@ -47,6 +44,6 @@ defmodule Destila.Prompts.Prompt do
       :worktree_path,
       :position
     ])
-    |> validate_required([:title, :workflow_type, :board, :column])
+    |> validate_required([:title, :workflow_type, :column])
   end
 end

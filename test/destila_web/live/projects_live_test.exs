@@ -198,7 +198,6 @@ defmodule DestilaWeb.ProjectsLiveTest do
           title: "Test Prompt",
           project_id: project.id,
           workflow_type: :feature_request,
-          board: :crafting,
           column: :request
         })
 

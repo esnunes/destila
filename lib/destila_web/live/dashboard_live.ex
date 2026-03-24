@@ -9,7 +9,7 @@ defmodule DestilaWeb.DashboardLive do
     end
 
     current_user = session["current_user"]
-    crafting = Destila.Prompts.list_prompts(:crafting)
+    crafting = Destila.Prompts.list_prompts()
 
     {:ok,
      socket
@@ -18,13 +18,16 @@ defmodule DestilaWeb.DashboardLive do
      |> assign(:crafting_prompts, crafting)}
   end
 
-  def handle_info({_event, _data}, socket) do
-    crafting = Destila.Prompts.list_prompts(:crafting)
+  def handle_info({event, _data}, socket)
+      when event in [:prompt_created, :prompt_updated, :prompt_deleted] do
+    crafting = Destila.Prompts.list_prompts()
 
     {:noreply,
      socket
      |> assign(:crafting_prompts, crafting)}
   end
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp crafting_summary(prompts) do
     grouped = Enum.group_by(prompts, &classify_crafting_prompt/1)
@@ -34,14 +37,7 @@ defmodule DestilaWeb.DashboardLive do
     end)
   end
 
-  defp classify_crafting_prompt(prompt) do
-    cond do
-      prompt.column == :done -> :done
-      prompt.phase_status == :setup -> :setup
-      prompt.phase_status in [:generating, :conversing, :advance_suggested] -> :waiting
-      true -> :in_progress
-    end
-  end
+  defp classify_crafting_prompt(prompt), do: Destila.Prompts.classify(prompt)
 
   defp section_label(:setup), do: "Setup"
   defp section_label(:waiting), do: "Waiting"

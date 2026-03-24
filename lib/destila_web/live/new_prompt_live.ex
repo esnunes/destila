@@ -161,7 +161,6 @@ defmodule DestilaWeb.NewPromptLive do
             title_generating: true,
             workflow_type: workflow_type,
             project_id: socket.assigns.project_id,
-            board: :crafting,
             column: :request,
             steps_completed: 1,
             steps_total: Destila.Workflows.total_steps(workflow_type),
