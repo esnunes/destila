@@ -251,7 +251,13 @@ defmodule DestilaWeb.PromptDetailLive do
 
   def handle_info({:message_added, message}, socket) do
     if message.prompt_id == socket.assigns.prompt.id do
-      messages = socket.assigns.messages ++ [message]
+      already_exists? = Enum.any?(socket.assigns.messages, &(&1.id == message.id))
+
+      messages =
+        if already_exists?,
+          do: socket.assigns.messages,
+          else: socket.assigns.messages ++ [message]
+
       prompt = socket.assigns.prompt
       current_step = current_step_info(messages, prompt)
 

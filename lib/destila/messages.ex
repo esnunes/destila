@@ -12,6 +12,7 @@ defmodule Destila.Messages do
     attrs =
       attrs
       |> Map.put(:prompt_id, prompt_id)
+      |> Map.update(:raw_response, nil, &normalize_json/1)
 
     %Message{}
     |> Message.changeset(attrs)
@@ -184,4 +185,9 @@ defmodule Destila.Messages do
   end
 
   defp broadcast({:error, _} = error, _event), do: error
+
+  # Deep-converts atom keys to string keys via JSON round-trip,
+  # matching what the DB returns after serialization.
+  defp normalize_json(nil), do: nil
+  defp normalize_json(data), do: data |> Jason.encode!() |> Jason.decode!()
 end
