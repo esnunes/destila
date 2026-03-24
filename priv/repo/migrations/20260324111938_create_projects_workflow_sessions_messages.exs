@@ -24,11 +24,13 @@ defmodule Destila.Repo.Migrations.CreateProjectsWorkflowSessionsMessages do
       add :ai_session_id, :string
       add :worktree_path, :string
       add :position, :integer, null: false
+      add :archived_at, :utc_datetime
 
       timestamps(type: :utc_datetime)
     end
 
     create index(:workflow_sessions, [:project_id])
+    create index(:workflow_sessions, [:archived_at])
 
     create table(:messages, primary_key: false) do
       add :id, :binary_id, primary_key: true

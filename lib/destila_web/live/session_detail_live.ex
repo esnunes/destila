@@ -159,6 +159,27 @@ defmodule DestilaWeb.SessionDetailLive do
     handle_static_response(socket, "Uploaded: mockup-screenshot.png", nil)
   end
 
+  # Archive / Unarchive
+  def handle_event("archive_session", _params, socket) do
+    {:ok, ws} =
+      Destila.WorkflowSessions.archive_workflow_session(socket.assigns.workflow_session)
+
+    {:noreply,
+     socket
+     |> assign(:workflow_session, ws)
+     |> put_flash(:info, "Session archived")}
+  end
+
+  def handle_event("unarchive_session", _params, socket) do
+    {:ok, ws} =
+      Destila.WorkflowSessions.unarchive_workflow_session(socket.assigns.workflow_session)
+
+    {:noreply,
+     socket
+     |> assign(:workflow_session, ws)
+     |> put_flash(:info, "Session restored")}
+  end
+
   # Title editing
   def handle_event("edit_title", _params, socket) do
     {:noreply, assign(socket, editing_title: true)}
@@ -634,6 +655,25 @@ defmodule DestilaWeb.SessionDetailLive do
                 class="btn btn-success btn-sm"
               >
                 <.icon name="hero-check-micro" class="size-4" /> Mark as Done
+              </button>
+
+              <%!-- Archive / Unarchive --%>
+              <button
+                :if={is_nil(@workflow_session.archived_at)}
+                phx-click="archive_session"
+                id="archive-btn"
+                class="btn btn-soft btn-sm"
+                data-confirm="Archive this session? It will be hidden from the crafting board."
+              >
+                <.icon name="hero-archive-box-micro" class="size-4" /> Archive
+              </button>
+              <button
+                :if={@workflow_session.archived_at}
+                phx-click="unarchive_session"
+                id="unarchive-btn"
+                class="btn btn-soft btn-sm"
+              >
+                <.icon name="hero-archive-box-arrow-down-micro" class="size-4" /> Unarchive
               </button>
             </div>
           </div>

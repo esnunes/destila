@@ -190,9 +190,14 @@ defmodule DestilaWeb.CraftingBoardLive do
         <%!-- Header --%>
         <div class="flex items-center justify-between mb-4">
           <h1 class="text-2xl font-bold tracking-tight">Crafting Board</h1>
-          <.link navigate={~p"/sessions/new?from=/crafting"} class="btn btn-primary btn-sm">
-            <.icon name="hero-plus-micro" class="size-4" /> New Session
-          </.link>
+          <div class="flex items-center gap-3">
+            <.link navigate={~p"/sessions/archived"} class="btn btn-soft btn-sm">
+              <.icon name="hero-archive-box-micro" class="size-4" /> Archived
+            </.link>
+            <.link navigate={~p"/sessions/new?from=/crafting"} class="btn btn-primary btn-sm">
+              <.icon name="hero-plus-micro" class="size-4" /> New Session
+            </.link>
+          </div>
         </div>
 
         <%!-- View controls --%>
