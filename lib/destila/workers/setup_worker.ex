@@ -41,13 +41,13 @@ defmodule Destila.Workers.SetupWorker do
         end
 
       project.git_repo_url && project.git_repo_url != "" ->
-        broadcast_step(workflow_session.id, "repo_sync", "in_progress", "Cloning repository...")
+        broadcast_step(workflow_session.id, "repo_sync", "in_progress", "Syncing repository...")
 
-        case Git.effective_local_folder(project) do
-          {:ok, _path} ->
-            broadcast_step(workflow_session.id, "repo_sync", "completed", "Repository cloned")
-            :ok
-
+        with {:ok, path} <- Git.effective_local_folder(project),
+             {:ok, _} <- Git.pull(path) do
+          broadcast_step(workflow_session.id, "repo_sync", "completed", "Repository up to date")
+          :ok
+        else
           {:error, reason} ->
             broadcast_step(workflow_session.id, "repo_sync", "failed", reason)
             {:error, reason}

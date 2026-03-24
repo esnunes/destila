@@ -69,8 +69,8 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
   end
 
   describe "setup with a remote-only project" do
-    @tag feature: @feature, scenario: "Setup for a prompt with a remote-only project"
-    test "shows clone step instead of pull for remote-only projects", %{conn: conn} do
+    @tag feature: @feature, scenario: "Setup for a session with a remote-only project"
+    test "shows sync step for remote-only projects", %{conn: conn} do
       {:ok, project} =
         Destila.Projects.create_project(%{
           name: "Remote Project",
@@ -79,10 +79,10 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
 
       prompt = create_prompt_in_setup(project)
 
-      # Simulate clone completing
+      # Simulate sync completing (clone + pull)
       Destila.Messages.create_message(prompt.id, %{
         role: :system,
-        content: "Repository cloned",
+        content: "Repository up to date",
         raw_response: %{"setup_step" => "repo_sync", "status" => "completed"},
         phase: 0
       })
@@ -90,7 +90,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       assert render(view) =~ "Phase 0"
-      assert render(view) =~ "Repository cloned"
+      assert render(view) =~ "Repository up to date"
     end
   end
 
@@ -115,7 +115,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
 
       # No git or worktree steps
       refute html =~ "Pulling latest"
-      refute html =~ "Cloning repository"
+      refute html =~ "Syncing repository"
       refute html =~ "Creating worktree"
       refute html =~ "Starting AI session"
     end

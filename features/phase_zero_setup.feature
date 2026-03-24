@@ -33,9 +33,9 @@ Feature: Phase 0 - Project Setup
     Then I should be redirected to the session detail page
     And I should see a "Phase 0 — Setup" section
     And I should see the step "Generating title..."
-    And I should see the step "Cloning repository..."
-    When the clone completes
-    Then I should see "Repository cloned"
+    And I should see the step "Syncing repository..."
+    When the sync completes
+    Then I should see "Repository up to date"
     And the repository should be stored in the local cache folder
     And I should see the step "Creating worktree..."
     When the worktree is created
