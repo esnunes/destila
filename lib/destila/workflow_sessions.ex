@@ -5,7 +5,19 @@ defmodule Destila.WorkflowSessions do
   alias Destila.WorkflowSessions.WorkflowSession
 
   def list_workflow_sessions do
-    from(ws in WorkflowSession, order_by: ws.position)
+    from(ws in WorkflowSession,
+      where: is_nil(ws.archived_at),
+      order_by: ws.position
+    )
+    |> preload(:project)
+    |> Repo.all()
+  end
+
+  def list_archived_workflow_sessions do
+    from(ws in WorkflowSession,
+      where: not is_nil(ws.archived_at),
+      order_by: [desc: ws.archived_at]
+    )
     |> preload(:project)
     |> Repo.all()
   end
@@ -63,6 +75,29 @@ defmodule Destila.WorkflowSessions do
       )
     )
     |> Map.new()
+  end
+
+  def archive_workflow_session(%WorkflowSession{} = ws) do
+    Destila.AI.Session.stop_for_workflow_session(ws.id)
+
+    ws
+    |> WorkflowSession.changeset(%{archived_at: DateTime.utc_now()})
+    |> Repo.update()
+    |> broadcast(:workflow_session_updated)
+  end
+
+  def unarchive_workflow_session(%WorkflowSession{} = ws) do
+    # If the session was archived mid-generation, reset to :conversing
+    # so the user can retry instead of seeing a stuck typing indicator.
+    attrs =
+      if ws.phase_status == :generating,
+        do: %{archived_at: nil, phase_status: :conversing},
+        else: %{archived_at: nil}
+
+    ws
+    |> WorkflowSession.changeset(attrs)
+    |> Repo.update()
+    |> broadcast(:workflow_session_updated)
   end
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper

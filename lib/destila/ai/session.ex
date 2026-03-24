@@ -113,6 +113,18 @@ defmodule Destila.AI.Session do
     GenServer.stop(session, :normal)
   end
 
+  @doc """
+  Stops the AI session for a workflow session, if one is running.
+  """
+  def stop_for_workflow_session(workflow_session_id) do
+    name = {:via, Registry, {Destila.AI.SessionRegistry, workflow_session_id}}
+
+    case GenServer.whereis(name) do
+      nil -> :ok
+      pid -> stop(pid)
+    end
+  end
+
   # Server callbacks
 
   @impl true
