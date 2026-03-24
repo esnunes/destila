@@ -21,7 +21,7 @@ defmodule DestilaWeb.CraftingBoardLive do
     {:ok,
      socket
      |> assign(:current_user, session["current_user"])
-     |> assign(:page_title, "Prompt Crafting")}
+     |> assign(:page_title, "Crafting Board")}
   end
 
   def handle_params(params, _uri, socket) do
@@ -189,7 +189,7 @@ defmodule DestilaWeb.CraftingBoardLive do
       <div class="p-6 lg:p-8">
         <%!-- Header --%>
         <div class="flex items-center justify-between mb-4">
-          <h1 class="text-2xl font-bold tracking-tight">Prompt Crafting</h1>
+          <h1 class="text-2xl font-bold tracking-tight">Crafting Board</h1>
           <.link navigate={~p"/prompts/new?from=/crafting"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus-micro" class="size-4" /> New Prompt
           </.link>
