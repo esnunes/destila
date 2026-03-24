@@ -39,7 +39,7 @@ defmodule DestilaWeb.Router do
     live "/", DashboardLive
     live "/crafting", CraftingBoardLive
     live "/projects", ProjectsLive
-    live "/prompts/new", NewPromptLive
-    live "/prompts/:id", PromptDetailLive
+    live "/sessions/new", NewSessionLive
+    live "/sessions/:id", SessionDetailLive
   end
 end

@@ -1,8 +1,8 @@
 Feature: Project Management
-  Users can manage projects independently from prompts. A project has a name,
+  Users can manage projects independently from sessions. A project has a name,
   an optional git repository URL, and an optional local folder path. At least
   one of git repository URL or local folder must be provided. Projects can be
-  shared across multiple prompts.
+  shared across multiple sessions.
 
   Background:
     Given I am logged in
@@ -66,15 +66,15 @@ Feature: Project Management
     When I clear all fields and click "Save"
     Then I should see validation errors for name and location
 
-  Scenario: Delete a project not linked to any prompts
-    Given there is a project with no linked prompts
+  Scenario: Delete a project not linked to any sessions
+    Given there is a project with no linked sessions
     When I navigate to the projects page
     And I click delete on the project
     And I confirm the deletion
     Then the project should be removed from the list
 
-  Scenario: Cannot delete a project linked to prompts
-    Given there is a project linked to one or more prompts
+  Scenario: Cannot delete a project linked to sessions
+    Given there is a project linked to one or more sessions
     When I navigate to the projects page
     And I click delete on the project
-    Then I should see a message indicating the project cannot be deleted while linked to prompts
+    Then I should see a message indicating the project cannot be deleted while linked to sessions

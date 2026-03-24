@@ -1,5 +1,5 @@
 Feature: Project Inline Creation
-  Users can create a new project inline from contexts such as the Create Prompt
+  Users can create a new project inline from contexts such as the Create Session
   wizard. A project requires a name and at least one of a git repository URL or
   a local folder path.
 

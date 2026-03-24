@@ -9,7 +9,7 @@ defmodule DestilaWeb.DashboardLive do
     end
 
     current_user = session["current_user"]
-    crafting = Destila.Prompts.list_prompts()
+    crafting = Destila.WorkflowSessions.list_workflow_sessions()
 
     {:ok,
      socket
@@ -19,8 +19,12 @@ defmodule DestilaWeb.DashboardLive do
   end
 
   def handle_info({event, _data}, socket)
-      when event in [:prompt_created, :prompt_updated, :prompt_deleted] do
-    crafting = Destila.Prompts.list_prompts()
+      when event in [
+             :workflow_session_created,
+             :workflow_session_updated,
+             :workflow_session_deleted
+           ] do
+    crafting = Destila.WorkflowSessions.list_workflow_sessions()
 
     {:noreply,
      socket
@@ -37,7 +41,7 @@ defmodule DestilaWeb.DashboardLive do
     end)
   end
 
-  defp classify_crafting_prompt(prompt), do: Destila.Prompts.classify(prompt)
+  defp classify_crafting_prompt(prompt), do: Destila.WorkflowSessions.classify(prompt)
 
   defp section_label(:setup), do: "Setup"
   defp section_label(:waiting), do: "Waiting"
@@ -75,11 +79,11 @@ defmodule DestilaWeb.DashboardLive do
 
               <div class="divide-y divide-base-200">
                 <div
-                  :for={prompt <- @crafting_prompts |> Enum.take(3)}
+                  :for={ws <- @crafting_prompts |> Enum.take(3)}
                   class="flex items-center justify-between py-2"
                 >
-                  <span class="text-sm truncate mr-2">{prompt.title}</span>
-                  <.workflow_badge type={prompt.workflow_type} />
+                  <span class="text-sm truncate mr-2">{ws.title}</span>
+                  <.workflow_badge type={ws.workflow_type} />
                 </div>
               </div>
             </div>

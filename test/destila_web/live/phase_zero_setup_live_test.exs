@@ -34,7 +34,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
 
       prompt = create_prompt_with_phase0_complete(project)
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       # Phase 0 section is present
       assert render(view) =~ "Phase 0"
@@ -62,7 +62,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
         phase: 0
       })
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       assert render(view) =~ "My Generated Title"
     end
@@ -87,7 +87,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
         phase: 0
       })
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       assert render(view) =~ "Phase 0"
       assert render(view) =~ "Repository cloned"
@@ -107,7 +107,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
         phase: 0
       })
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       html = render(view)
       assert html =~ "Phase 0"
@@ -125,7 +125,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
       # Create prompt with phase_status already transitioned (setup complete)
       prompt = create_prompt_with_title_done(nil)
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       html = render(view)
       # Phase 0 section exists but is collapsed (no open attribute since phase_status != :setup)
@@ -156,7 +156,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
         phase: 0
       })
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       html = render(view)
       # Error message is visible
@@ -184,7 +184,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
         phase: 0
       })
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       messages_before = Destila.Messages.list_messages(prompt.id)
 
@@ -229,7 +229,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
       })
 
       # "Return" to the page — mount loads messages from DB
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       html = render(view)
       # Completed step is shown
@@ -246,7 +246,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
     test "chat input is disabled while setup is in progress", %{conn: conn} do
       prompt = create_prompt_in_setup(nil)
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       # Input should not be available during setup
       # When phase_status is :setup, ai_step_info returns input_type: nil,
@@ -259,9 +259,9 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
       prompt = create_prompt_with_title_done(nil)
 
       # Set to conversing (AI has responded, user can type)
-      Destila.Prompts.update_prompt(prompt.id, %{phase_status: :conversing})
+      Destila.WorkflowSessions.update_workflow_session(prompt.id, %{phase_status: :conversing})
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       assert has_element?(view, "input[name='content']:not([disabled])")
     end
@@ -270,7 +270,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
     test "sending a message is blocked during setup", %{conn: conn} do
       prompt = create_prompt_in_setup(nil)
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       messages_before = Destila.Messages.list_messages(prompt.id)
 
@@ -303,7 +303,7 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
         phase: 0
       })
 
-      {:ok, view, _html} = live(conn, ~p"/prompts/#{prompt.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
       html = render(view)
       # Should show the completed version, not the in_progress one
@@ -317,10 +317,10 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
   # Creates a chore_task prompt in :setup phase status with phase 1 messages.
   defp create_prompt_in_setup(project) do
     {:ok, prompt} =
-      Destila.Prompts.create_prompt(%{
+      Destila.WorkflowSessions.create_workflow_session(%{
         title: "Generating title...",
         title_generating: true,
-        workflow_type: :chore_task,
+        workflow_type: :prompt_chore_task,
         project_id: if(project, do: project.id),
         column: :request,
         steps_completed: 1,
@@ -348,10 +348,10 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
   # Creates a prompt where Phase 0 is complete (title done, AI responding).
   defp create_prompt_with_title_done(project) do
     {:ok, prompt} =
-      Destila.Prompts.create_prompt(%{
+      Destila.WorkflowSessions.create_workflow_session(%{
         title: "My Generated Title",
         title_generating: false,
-        workflow_type: :chore_task,
+        workflow_type: :prompt_chore_task,
         project_id: if(project, do: project.id),
         column: :request,
         steps_completed: 1,
@@ -407,10 +407,10 @@ defmodule DestilaWeb.PhaseZeroSetupLiveTest do
   # Creates a prompt where the full Phase 0 setup is complete (with project).
   defp create_prompt_with_phase0_complete(project) do
     {:ok, prompt} =
-      Destila.Prompts.create_prompt(%{
+      Destila.WorkflowSessions.create_workflow_session(%{
         title: "Test Prompt",
         title_generating: false,
-        workflow_type: :chore_task,
+        workflow_type: :prompt_chore_task,
         project_id: project.id,
         column: :request,
         steps_completed: 1,

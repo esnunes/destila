@@ -4,7 +4,7 @@ defmodule Destila.AI do
   """
 
   @doc """
-  Generates a concise title for a prompt based on the workflow type and the user's initial idea.
+  Generates a concise title for a workflow session based on the workflow type and the user's initial idea.
 
   Accepts an optional `Destila.AI.Session` pid as the first argument. When provided,
   the query runs through the existing session (preserving conversation context).
@@ -60,7 +60,7 @@ defmodule Destila.AI do
       "Respond with only the title text, nothing else."
   end
 
-  defp workflow_type_label(:feature_request), do: "feature request"
-  defp workflow_type_label(:project), do: "project"
-  defp workflow_type_label(:chore_task), do: "chore/task"
+  defp workflow_type_label(:prompt_new_project), do: "project"
+  defp workflow_type_label(:prompt_chore_task), do: "chore/task"
+  defp workflow_type_label(:implement_generic_prompt), do: "implementation"
 end

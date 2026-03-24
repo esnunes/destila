@@ -25,7 +25,7 @@ defmodule DestilaWeb.CraftingBoardLive do
   end
 
   def handle_params(params, _uri, socket) do
-    prompts = socket.assigns[:all_prompts] || Destila.Prompts.list_prompts()
+    prompts = socket.assigns[:all_prompts] || Destila.WorkflowSessions.list_workflow_sessions()
     view_mode = if params["view"] == "workflow", do: :workflow, else: :list
     project_filter = params["project"]
 
@@ -51,8 +51,12 @@ defmodule DestilaWeb.CraftingBoardLive do
   end
 
   def handle_info({event, _data}, socket)
-      when event in [:prompt_created, :prompt_updated, :prompt_deleted] do
-    prompts = Destila.Prompts.list_prompts()
+      when event in [
+             :workflow_session_created,
+             :workflow_session_updated,
+             :workflow_session_deleted
+           ] do
+    prompts = Destila.WorkflowSessions.list_workflow_sessions()
 
     {:noreply,
      socket
@@ -64,7 +68,7 @@ defmodule DestilaWeb.CraftingBoardLive do
 
   # --- Classification ---
 
-  defp classify_prompt(prompt), do: Destila.Prompts.classify(prompt)
+  defp classify_prompt(prompt), do: Destila.WorkflowSessions.classify(prompt)
 
   # --- Derived State ---
 
@@ -132,9 +136,9 @@ defmodule DestilaWeb.CraftingBoardLive do
           end)
           |> Enum.sort_by(fn {wf_type, _} ->
             case wf_type do
-              :chore_task -> 0
-              :feature_request -> 1
-              :project -> 2
+              :prompt_chore_task -> 0
+              :prompt_new_project -> 1
+              :implement_generic_prompt -> 2
             end
           end)
 
@@ -166,10 +170,10 @@ defmodule DestilaWeb.CraftingBoardLive do
   }
 
   @section_empty_messages %{
-    setup: "No prompts being set up",
-    waiting: "No prompts awaiting a reply",
-    in_progress: "No prompts in progress",
-    done: "No completed prompts yet"
+    setup: "No sessions being set up",
+    waiting: "No sessions awaiting a reply",
+    in_progress: "No sessions in progress",
+    done: "No completed sessions yet"
   }
 
   def render(assigns) do
@@ -186,8 +190,8 @@ defmodule DestilaWeb.CraftingBoardLive do
         <%!-- Header --%>
         <div class="flex items-center justify-between mb-4">
           <h1 class="text-2xl font-bold tracking-tight">Crafting Board</h1>
-          <.link navigate={~p"/prompts/new?from=/crafting"} class="btn btn-primary btn-sm">
-            <.icon name="hero-plus-micro" class="size-4" /> New Prompt
+          <.link navigate={~p"/sessions/new?from=/crafting"} class="btn btn-primary btn-sm">
+            <.icon name="hero-plus-micro" class="size-4" /> New Session
           </.link>
         </div>
 
@@ -270,7 +274,7 @@ defmodule DestilaWeb.CraftingBoardLive do
           <div id="crafting-workflow-boards" class="space-y-8">
             <%= if @workflow_boards == [] do %>
               <div class="flex flex-col items-center justify-center h-32 gap-2 text-base-content/20 text-sm bg-base-200/20 rounded-xl border border-dashed border-base-300/50">
-                <.icon name="hero-funnel-micro" class="size-5" /> No prompts match your filter
+                <.icon name="hero-funnel-micro" class="size-5" /> No sessions match your filter
               </div>
             <% else %>
               <div
@@ -303,7 +307,7 @@ defmodule DestilaWeb.CraftingBoardLive do
                         :if={col_prompts == []}
                         class="flex items-center justify-center h-16 text-base-content/30 text-sm"
                       >
-                        No prompts
+                        No sessions
                       </div>
                     </div>
                   </div>

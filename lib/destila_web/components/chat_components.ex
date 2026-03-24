@@ -13,16 +13,16 @@ defmodule DestilaWeb.ChatComponents do
   defp markdown_to_html(_), do: ""
 
   attr :message, :map, required: true
-  attr :prompt, :map, default: %{}
+  attr :workflow_session, :map, default: %{}
 
   def chat_message(assigns) do
-    processed = Destila.Messages.process(assigns.message, assigns.prompt)
+    processed = Destila.Messages.process(assigns.message, assigns.workflow_session)
     assigns = assign(assigns, :message, processed)
     render_chat_message(assigns)
   end
 
   defp render_chat_message(%{message: %{message_type: :phase_advance}} = assigns) do
-    next_phase = (assigns.prompt.steps_completed || 1) + 1
+    next_phase = (assigns.workflow_session.steps_completed || 1) + 1
 
     assigns = assign(assigns, :next_phase, next_phase)
 
@@ -39,7 +39,7 @@ defmodule DestilaWeb.ChatComponents do
           {raw(markdown_to_html(@message.content))}
         </div>
 
-        <%= if @prompt.phase_status == :advance_suggested do %>
+        <%= if @workflow_session.phase_status == :advance_suggested do %>
           <div class="flex gap-2 mt-2">
             <button
               phx-click="confirm_advance"

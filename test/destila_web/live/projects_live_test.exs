@@ -167,8 +167,8 @@ defmodule DestilaWeb.ProjectsLiveTest do
   end
 
   describe "delete project" do
-    @tag feature: @feature, scenario: "Delete a project not linked to any prompts"
-    test "deletes a project not linked to prompts", %{conn: conn} do
+    @tag feature: @feature, scenario: "Delete a project not linked to any sessions"
+    test "deletes a project not linked to sessions", %{conn: conn} do
       {:ok, project} =
         Destila.Projects.create_project(%{
           name: "Deletable Project",
@@ -185,19 +185,19 @@ defmodule DestilaWeb.ProjectsLiveTest do
       refute render(view) =~ "Deletable Project"
     end
 
-    @tag feature: @feature, scenario: "Cannot delete a project linked to prompts"
-    test "cannot delete a project linked to prompts", %{conn: conn} do
+    @tag feature: @feature, scenario: "Cannot delete a project linked to sessions"
+    test "cannot delete a project linked to sessions", %{conn: conn} do
       {:ok, project} =
         Destila.Projects.create_project(%{
           name: "Linked Project",
           git_repo_url: "https://github.com/test/repo"
         })
 
-      {:ok, _prompt} =
-        Destila.Prompts.create_prompt(%{
+      {:ok, _ws} =
+        Destila.WorkflowSessions.create_workflow_session(%{
           title: "Test Prompt",
           project_id: project.id,
-          workflow_type: :feature_request,
+          workflow_type: :prompt_chore_task,
           column: :request
         })
 
@@ -206,7 +206,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#delete-project-#{project.id}") |> render_click()
       view |> element("#confirm-delete-#{project.id}") |> render_click()
 
-      assert render(view) =~ "Cannot delete this project while it is linked to prompts"
+      assert render(view) =~ "Cannot delete this project while it is linked to sessions"
       assert render(view) =~ "Linked Project"
     end
   end

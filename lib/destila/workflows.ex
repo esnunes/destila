@@ -1,52 +1,10 @@
 defmodule Destila.Workflows do
   @moduledoc """
-  Defines mocked chat workflow scripts for each workflow type.
+  Defines workflow scripts for each workflow type.
   Each step has an AI message with an input_type and optional options.
   """
 
-  def steps(:feature_request) do
-    [
-      %{
-        step: 1,
-        content:
-          "Let's start crafting your feature request. What problem are you trying to solve? Describe the current pain point or gap in functionality.",
-        input_type: :text,
-        options: nil
-      },
-      %{
-        step: 2,
-        content:
-          "What type of feature is this? This helps us structure the prompt appropriately.",
-        input_type: :single_select,
-        options: [
-          %{label: "UI Enhancement", description: "Visual or interaction improvements"},
-          %{label: "API Change", description: "New or modified API endpoints"},
-          %{label: "Performance", description: "Speed, efficiency, or resource optimization"},
-          %{label: "Infrastructure", description: "Deployment, CI/CD, or tooling changes"}
-        ]
-      },
-      %{
-        step: 3,
-        content: "Which areas of the codebase will be affected? Select all that apply.",
-        input_type: :multi_select,
-        options: [
-          %{label: "Frontend", description: "UI components, styles, client-side logic"},
-          %{label: "Backend", description: "Server-side logic, services, controllers"},
-          %{label: "Database", description: "Schema changes, migrations, queries"},
-          %{label: "DevOps", description: "Infrastructure, deployment, monitoring"}
-        ]
-      },
-      %{
-        step: 4,
-        content:
-          "Do you have any mockups, screenshots, or reference materials that would help illustrate the desired outcome?",
-        input_type: :file_upload,
-        options: nil
-      }
-    ]
-  end
-
-  def steps(:project) do
+  def steps(:prompt_new_project) do
     [
       %{
         step: 1,
@@ -88,7 +46,7 @@ defmodule Destila.Workflows do
     ]
   end
 
-  def steps(:chore_task) do
+  def steps(:prompt_chore_task) do
     [
       %{
         step: 1,
@@ -100,23 +58,33 @@ defmodule Destila.Workflows do
     ]
   end
 
-  def total_steps(:feature_request), do: 4
-  def total_steps(:project), do: 3
-  def total_steps(:chore_task), do: 4
+  def steps(:implement_generic_prompt) do
+    [
+      %{
+        step: 1,
+        content:
+          "Describe what you want to implement. Provide as much context as possible about the desired outcome.",
+        input_type: :text,
+        options: nil
+      }
+    ]
+  end
+
+  def total_steps(:prompt_new_project), do: 3
+  def total_steps(:prompt_chore_task), do: 4
+  def total_steps(:implement_generic_prompt), do: 1
 
   @doc """
   Returns the human-readable phase name for a workflow type and phase number.
   """
-  def phase_name(:chore_task, phase), do: Destila.Workflows.ChoreTaskPhases.phase_name(phase)
+  def phase_name(:prompt_chore_task, phase),
+    do: Destila.Workflows.ChoreTaskPhases.phase_name(phase)
 
-  def phase_name(:feature_request, 1), do: "Problem"
-  def phase_name(:feature_request, 2), do: "Feature Type"
-  def phase_name(:feature_request, 3), do: "Affected Areas"
-  def phase_name(:feature_request, 4), do: "Mockups"
+  def phase_name(:prompt_new_project, 1), do: "Project Idea"
+  def phase_name(:prompt_new_project, 2), do: "Tech Stack"
+  def phase_name(:prompt_new_project, 3), do: "V1 Features"
 
-  def phase_name(:project, 1), do: "Project Idea"
-  def phase_name(:project, 2), do: "Tech Stack"
-  def phase_name(:project, 3), do: "V1 Features"
+  def phase_name(:implement_generic_prompt, 1), do: "Implementation"
 
   def phase_name(_type, _phase), do: nil
 
@@ -125,11 +93,11 @@ defmodule Destila.Workflows do
   including a final {:done, "Done"} column.
   """
   def phase_columns(workflow_type) do
-    # chore_task starts at phase 0 (Setup — git/worktree init) while
-    # static workflows (feature_request, project) have no phase 0.
+    # prompt_chore_task starts at phase 0 (Setup — git/worktree init) while
+    # static workflows have no phase 0.
     range =
       case workflow_type do
-        :chore_task -> 0..total_steps(workflow_type)
+        :prompt_chore_task -> 0..total_steps(workflow_type)
         _ -> 1..total_steps(workflow_type)
       end
 
@@ -141,15 +109,15 @@ defmodule Destila.Workflows do
     columns ++ [{:done, "Done"}]
   end
 
-  def completion_message(:feature_request) do
-    "Your feature request prompt is ready! I've gathered all the details needed to create a comprehensive, actionable prompt for your coding agent."
-  end
-
-  def completion_message(:project) do
+  def completion_message(:prompt_new_project) do
     "Your project prompt is complete! I've captured your project vision, tech stack, and scope. This prompt is ready to guide a coding agent through the initial implementation."
   end
 
-  def completion_message(:chore_task) do
+  def completion_message(:prompt_chore_task) do
     "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
+  end
+
+  def completion_message(:implement_generic_prompt) do
+    "Your implementation session is complete."
   end
 end

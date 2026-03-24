@@ -30,14 +30,14 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
   defp create_prompt(attrs) do
     defaults = %{
       title: "Test Prompt",
-      workflow_type: :chore_task,
+      workflow_type: :prompt_chore_task,
       column: :request,
       steps_completed: 1,
       steps_total: 4,
       position: System.unique_integer([:positive])
     }
 
-    {:ok, prompt} = Destila.Prompts.create_prompt(Map.merge(defaults, attrs))
+    {:ok, prompt} = Destila.WorkflowSessions.create_workflow_session(Map.merge(defaults, attrs))
     prompt
   end
 
@@ -81,7 +81,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         create_prompt(%{
           title: "Active Prompt",
           phase_status: nil,
-          workflow_type: :feature_request,
+          workflow_type: :prompt_new_project,
           project_id: project.id
         })
 
@@ -129,17 +129,17 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         title: "Fix login bug",
         project_id: project.id,
         steps_completed: 2,
-        workflow_type: :feature_request
+        workflow_type: :prompt_new_project
       })
 
       {:ok, _view, html} = live(conn, ~p"/crafting")
 
       assert html =~ "Fix login bug"
       assert html =~ "destila"
-      assert html =~ "Feature Type"
+      assert html =~ "Tech Stack"
     end
 
-    @tag feature: @feature, scenario: "Click prompt card to navigate to detail page"
+    @tag feature: @feature, scenario: "Click session card to navigate to detail page"
     test "card title links to prompt detail page", %{conn: conn, project_a: project} do
       prompt =
         create_prompt(%{
@@ -149,7 +149,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
-      assert has_element?(view, "a[href='/prompts/#{prompt.id}']", "Clickable Prompt")
+      assert has_element?(view, "a[href='/sessions/#{prompt.id}']", "Clickable Prompt")
     end
   end
 
@@ -231,7 +231,11 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       with_project = create_prompt(%{title: "With Project", project_id: project_a.id})
 
       without_project =
-        create_prompt(%{title: "No Project", project_id: nil, workflow_type: :project})
+        create_prompt(%{
+          title: "No Project",
+          project_id: nil,
+          workflow_type: :implement_generic_prompt
+        })
 
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
@@ -256,16 +260,16 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
     test "toggle shows workflow boards with phase columns", %{conn: conn, project_a: project} do
       create_prompt(%{
         title: "Chore Prompt",
-        workflow_type: :chore_task,
+        workflow_type: :prompt_chore_task,
         steps_completed: 2,
         project_id: project.id
       })
 
       create_prompt(%{
-        title: "Feature Prompt",
-        workflow_type: :feature_request,
+        title: "Project Prompt",
+        workflow_type: :prompt_new_project,
         steps_completed: 1,
-        steps_total: 4,
+        steps_total: 3,
         project_id: project.id
       })
 
@@ -275,39 +279,39 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       view |> element("#view-toggle button[phx-value-mode=workflow]") |> render_click()
 
       # Should see workflow boards
-      assert has_element?(view, "#workflow-board-chore_task")
-      assert has_element?(view, "#workflow-board-feature_request")
+      assert has_element?(view, "#workflow-board-prompt_chore_task")
+      assert has_element?(view, "#workflow-board-prompt_new_project")
 
       # Chore/Task board should have phase columns
       html = render(view)
       assert html =~ "Task Description"
       assert html =~ "Gherkin Review"
 
-      # Feature Request board should have its columns
-      assert html =~ "Problem"
-      assert html =~ "Feature Type"
+      # New Project board should have its columns
+      assert html =~ "Project Idea"
+      assert html =~ "Tech Stack"
     end
 
     @tag feature: @feature, scenario: "Empty workflow boards are hidden"
     test "hides workflow boards with no prompts", %{conn: conn, project_a: project} do
       create_prompt(%{
         title: "Chore Only",
-        workflow_type: :chore_task,
+        workflow_type: :prompt_chore_task,
         project_id: project.id
       })
 
       {:ok, view, _html} = live(conn, "/crafting?view=workflow")
 
-      assert has_element?(view, "#workflow-board-chore_task")
-      refute has_element?(view, "#workflow-board-feature_request")
-      refute has_element?(view, "#workflow-board-project")
+      assert has_element?(view, "#workflow-board-prompt_chore_task")
+      refute has_element?(view, "#workflow-board-prompt_new_project")
+      refute has_element?(view, "#workflow-board-implement_generic_prompt")
     end
 
     @tag feature: @feature, scenario: "Boards are read-only (no drag and drop)"
     test "no sortable hooks on workflow boards", %{conn: conn, project_a: project} do
       create_prompt(%{
         title: "Test Prompt",
-        workflow_type: :chore_task,
+        workflow_type: :prompt_chore_task,
         project_id: project.id
       })
 
@@ -340,14 +344,14 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       prompt_a =
         create_prompt(%{
           title: "Chore A",
-          workflow_type: :chore_task,
+          workflow_type: :prompt_chore_task,
           project_id: project_a.id
         })
 
       prompt_b =
         create_prompt(%{
           title: "Chore B",
-          workflow_type: :chore_task,
+          workflow_type: :prompt_chore_task,
           project_id: project_b.id
         })
 

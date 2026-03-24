@@ -46,7 +46,7 @@ defmodule DestilaWeb.BoardComponents do
       <div class={["card-body gap-2", if(@compact, do: "p-3", else: "p-4")]}>
         <div class={["flex gap-2", if(@compact, do: "items-start", else: "items-center")]}>
           <.link
-            navigate={"/prompts/#{@card.id}"}
+            navigate={"/sessions/#{@card.id}"}
             class={[
               "text-sm font-medium leading-tight hover:text-primary transition-colors flex-1 min-w-0",
               if(@compact, do: "line-clamp-3", else: "truncate")
@@ -133,11 +133,11 @@ defmodule DestilaWeb.BoardComponents do
 
   # Helpers
 
-  def workflow_label(:feature_request), do: "Feature Request"
-  def workflow_label(:project), do: "Project"
-  def workflow_label(:chore_task), do: "Chore/Task"
+  def workflow_label(:prompt_chore_task), do: "Chore/Task"
+  def workflow_label(:prompt_new_project), do: "New Project"
+  def workflow_label(:implement_generic_prompt), do: "Generic Prompt"
 
-  defp workflow_badge_class(:feature_request), do: "badge-info"
-  defp workflow_badge_class(:project), do: "badge-secondary"
-  defp workflow_badge_class(:chore_task), do: "badge-warning"
+  defp workflow_badge_class(:prompt_chore_task), do: "badge-warning"
+  defp workflow_badge_class(:prompt_new_project), do: "badge-secondary"
+  defp workflow_badge_class(:implement_generic_prompt), do: "badge-accent"
 end

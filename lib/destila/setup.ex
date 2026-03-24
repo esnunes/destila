@@ -10,29 +10,29 @@ defmodule Destila.Setup do
   import Ecto.Query
 
   alias Destila.{Messages, Repo}
-  alias Destila.Prompts.Prompt
+  alias Destila.WorkflowSessions.WorkflowSession
   alias Destila.Workflows.ChoreTaskPhases
 
   @doc """
   Checks if Phase 0 setup is fully complete (both title generation and setup steps)
-  and if so, atomically transitions the prompt to :generating and triggers Phase 1.
+  and if so, atomically transitions the workflow session to :generating and triggers Phase 1.
 
   Returns :ok if Phase 1 was triggered, :noop otherwise.
   """
-  def maybe_finish_phase0(prompt_id) do
-    prompt = Destila.Prompts.get_prompt!(prompt_id)
+  def maybe_finish_phase0(workflow_session_id) do
+    workflow_session = Destila.WorkflowSessions.get_workflow_session!(workflow_session_id)
 
-    if prompt.phase_status != :setup do
+    if workflow_session.phase_status != :setup do
       :noop
     else
       phase0_messages =
-        Messages.list_messages(prompt_id)
+        Messages.list_messages(workflow_session_id)
         |> Enum.filter(&(&1.phase == 0))
 
       title_done = step_completed?(phase0_messages, "title_generation")
 
       setup_done =
-        if prompt.project_id do
+        if workflow_session.project_id do
           step_completed?(phase0_messages, "ai_session")
         else
           true
@@ -41,11 +41,13 @@ defmodule Destila.Setup do
       if title_done && setup_done do
         # Atomic compare-and-swap: only one worker wins
         {count, _} =
-          from(p in Prompt, where: p.id == ^prompt_id and p.phase_status == :setup)
+          from(ws in WorkflowSession,
+            where: ws.id == ^workflow_session_id and ws.phase_status == :setup
+          )
           |> Repo.update_all(set: [phase_status: :generating])
 
         if count == 1 do
-          trigger_phase1(prompt)
+          trigger_phase1(workflow_session)
           :ok
         else
           :noop
@@ -64,23 +66,23 @@ defmodule Destila.Setup do
     end)
   end
 
-  defp trigger_phase1(prompt) do
+  defp trigger_phase1(workflow_session) do
     phase = 1
 
     # Filter out phase 0 messages — they're setup noise, not conversation context
     messages =
-      Messages.list_messages(prompt.id)
+      Messages.list_messages(workflow_session.id)
       |> Enum.filter(&(&1.phase > 0))
 
-    system_prompt = ChoreTaskPhases.system_prompt(phase, prompt)
+    system_prompt = ChoreTaskPhases.system_prompt(phase, workflow_session)
     context = ChoreTaskPhases.build_conversation_context(messages)
     query = system_prompt <> "\n\n" <> context
 
-    # Broadcast the prompt update so LiveView picks up the :generating status
-    prompt = Destila.Prompts.get_prompt!(prompt.id)
-    Destila.PubSubHelper.broadcast_event(:prompt_updated, prompt)
+    # Broadcast the update so LiveView picks up the :generating status
+    workflow_session = Destila.WorkflowSessions.get_workflow_session!(workflow_session.id)
+    Destila.PubSubHelper.broadcast_event(:workflow_session_updated, workflow_session)
 
-    %{"prompt_id" => prompt.id, "phase" => phase, "query" => query}
+    %{"workflow_session_id" => workflow_session.id, "phase" => phase, "query" => query}
     |> Destila.Workers.AiQueryWorker.new()
     |> Oban.insert()
   end
