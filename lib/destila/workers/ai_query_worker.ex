@@ -12,8 +12,7 @@ defmodule Destila.Workers.AiQueryWorker do
         }
       }) do
     ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
-    {_action, phase_opts} = Destila.Workflows.session_strategy(ws.workflow_type, phase)
-    session_opts = build_session_opts(ws, phase_opts)
+    session_opts = Destila.AI.Session.session_opts_for_workflow(ws, phase)
 
     case Destila.AI.Session.for_workflow_session(workflow_session_id, session_opts) do
       {:ok, session} ->
@@ -75,13 +74,6 @@ defmodule Destila.Workers.AiQueryWorker do
 
         :ok
     end
-  end
-
-  defp build_session_opts(ws, phase_opts) do
-    opts = []
-    opts = if ws.ai_session_id, do: Keyword.put(opts, :resume, ws.ai_session_id), else: opts
-    opts = if ws.worktree_path, do: Keyword.put(opts, :cwd, ws.worktree_path), else: opts
-    Destila.AI.Session.merge_phase_opts(opts, phase_opts)
   end
 
   defp handle_skip_phase(workflow_session_id, current_phase) do

@@ -101,13 +101,12 @@ defmodule Destila.Workers.SetupWorker do
 
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session.id)
 
-    {_action, phase_opts} =
-      Destila.Workflows.session_strategy(
-        workflow_session.workflow_type,
-        workflow_session.steps_completed
+    session_opts =
+      Destila.AI.Session.session_opts_for_workflow(
+        workflow_session,
+        workflow_session.steps_completed,
+        timeout_ms: :timer.minutes(15)
       )
-
-    session_opts = build_session_opts(workflow_session, phase_opts)
 
     case Destila.AI.Session.for_workflow_session(workflow_session.id, session_opts) do
       {:ok, _session} ->
@@ -120,26 +119,6 @@ defmodule Destila.Workers.SetupWorker do
         broadcast_step(workflow_session.id, "ai_session", "failed", inspect(reason))
         {:error, reason}
     end
-  end
-
-  defp build_session_opts(workflow_session, phase_opts) do
-    opts = [timeout_ms: :timer.minutes(15)]
-
-    opts =
-      if workflow_session.ai_session_id do
-        Keyword.put(opts, :resume, workflow_session.ai_session_id)
-      else
-        opts
-      end
-
-    opts =
-      if workflow_session.worktree_path do
-        Keyword.put(opts, :cwd, workflow_session.worktree_path)
-      else
-        opts
-      end
-
-    Destila.AI.Session.merge_phase_opts(opts, phase_opts)
   end
 
   defp broadcast_step(workflow_session_id, step, status, content) do

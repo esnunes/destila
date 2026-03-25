@@ -126,6 +126,37 @@ defmodule Destila.AI.Session do
   end
 
   @doc """
+  Builds ClaudeCode session options for a workflow session and phase.
+
+  Resolves the session strategy from the workflow module, adds `:resume`
+  and `:cwd` from the workflow session, and merges any phase-provided options.
+
+  Additional base options (e.g. `timeout_ms`) can be passed and will be included.
+  """
+  def session_opts_for_workflow(workflow_session, phase, base_opts \\ []) do
+    {_action, phase_opts} =
+      Destila.Workflows.session_strategy(workflow_session.workflow_type, phase)
+
+    opts = base_opts
+
+    opts =
+      if workflow_session.ai_session_id do
+        Keyword.put(opts, :resume, workflow_session.ai_session_id)
+      else
+        opts
+      end
+
+    opts =
+      if workflow_session.worktree_path do
+        Keyword.put(opts, :cwd, workflow_session.worktree_path)
+      else
+        opts
+      end
+
+    merge_phase_opts(opts, phase_opts)
+  end
+
+  @doc """
   Merges phase-provided ClaudeCode options with base session options.
   MCP servers are map-merged; all other options use standard keyword merge.
   """
