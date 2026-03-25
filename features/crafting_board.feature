@@ -1,8 +1,8 @@
 Feature: Crafting Board
   The Crafting Board displays all sessions in the crafting stage. By default,
-  sessions are shown as a sectioned list: Setup, Waiting for Reply, In Progress,
-  and Done. Users can toggle "Group by Workflow" to see a read-only board per
-  workflow type with phase-based columns. A project filter narrows the view.
+  sessions are shown as a sectioned list: Setup, Waiting for You, AI Processing,
+  In Progress, and Done. Users can toggle "Group by Workflow" to see a read-only
+  board per workflow type with phase-based columns. A project filter narrows the view.
 
   Background:
     Given I am logged in
@@ -12,9 +12,10 @@ Feature: Crafting Board
   Scenario: View sessions in sectioned list
     Given there are sessions in various phases and statuses
     When I navigate to the crafting board
-    Then I should see four sections: "Setup", "Waiting for Reply", "In Progress", and "Done"
+    Then I should see five sections: "Setup", "Waiting for You", "AI Processing", "In Progress", and "Done"
     And sessions with phase_status "setup" should appear under "Setup"
-    And sessions with phase_status "conversing" or "advance_suggested" should appear under "Waiting for Reply"
+    And sessions with phase_status "conversing" or "advance_suggested" should appear under "Waiting for You"
+    And sessions with phase_status "generating" should appear under "AI Processing"
     And sessions marked as done should appear under "Done"
     And remaining sessions should appear under "In Progress"
 

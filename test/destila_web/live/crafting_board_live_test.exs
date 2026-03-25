@@ -44,17 +44,18 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
   # --- Default List View ---
 
   describe "sectioned list view" do
-    @tag feature: @feature, scenario: "View prompts in sectioned list"
-    test "shows four sections", %{conn: conn} do
+    @tag feature: @feature, scenario: "View sessions in sectioned list"
+    test "shows five sections", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
       assert has_element?(view, "#section-setup")
-      assert has_element?(view, "#section-waiting")
+      assert has_element?(view, "#section-waiting_for_user")
+      assert has_element?(view, "#section-ai_processing")
       assert has_element?(view, "#section-in_progress")
       assert has_element?(view, "#section-done")
     end
 
-    @tag feature: @feature, scenario: "View prompts in sectioned list"
+    @tag feature: @feature, scenario: "View sessions in sectioned list"
     test "classifies prompts into correct sections", %{conn: conn, project_a: project} do
       setup_prompt =
         create_prompt(%{
@@ -97,9 +98,11 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       # Setup section
       assert has_element?(view, "#section-setup #crafting-card-#{setup_prompt.id}")
 
-      # Waiting section (both conversing and generating)
-      assert has_element?(view, "#section-waiting #crafting-card-#{waiting_prompt.id}")
-      assert has_element?(view, "#section-waiting #crafting-card-#{generating_prompt.id}")
+      # Waiting for You section (conversing and advance_suggested)
+      assert has_element?(view, "#section-waiting_for_user #crafting-card-#{waiting_prompt.id}")
+
+      # AI Processing section (generating)
+      assert has_element?(view, "#section-ai_processing #crafting-card-#{generating_prompt.id}")
 
       # In Progress section
       assert has_element?(view, "#section-in_progress #crafting-card-#{in_progress_prompt.id}")
@@ -108,8 +111,11 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       assert has_element?(view, "#section-done #crafting-card-#{done_prompt.id}")
     end
 
-    @tag feature: @feature, scenario: "View prompts in sectioned list"
-    test "advance_suggested appears in waiting section", %{conn: conn, project_a: project} do
+    @tag feature: @feature, scenario: "View sessions in sectioned list"
+    test "advance_suggested appears in waiting for user section", %{
+      conn: conn,
+      project_a: project
+    } do
       prompt =
         create_prompt(%{
           title: "Advance Prompt",
@@ -118,7 +124,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         })
 
       {:ok, view, _html} = live(conn, ~p"/crafting")
-      assert has_element?(view, "#section-waiting #crafting-card-#{prompt.id}")
+      assert has_element?(view, "#section-waiting_for_user #crafting-card-#{prompt.id}")
     end
   end
 
