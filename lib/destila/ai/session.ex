@@ -125,6 +125,25 @@ defmodule Destila.AI.Session do
     end
   end
 
+  @doc """
+  Merges phase-provided ClaudeCode options with base session options.
+  MCP servers are map-merged; all other options use standard keyword merge.
+  """
+  def merge_phase_opts(base_opts, phase_opts) do
+    {phase_mcp, phase_rest} = Keyword.pop(phase_opts, :mcp_servers, %{})
+    {base_mcp, base_rest} = Keyword.pop(base_opts, :mcp_servers, %{})
+
+    merged = Keyword.merge(base_rest, phase_rest)
+
+    merged_mcp = Map.merge(base_mcp, phase_mcp)
+
+    if merged_mcp == %{} do
+      merged
+    else
+      Keyword.put(merged, :mcp_servers, merged_mcp)
+    end
+  end
+
   # Server callbacks
 
   @impl true

@@ -100,6 +100,19 @@ defmodule Destila.Workers.SetupWorker do
     broadcast_step(workflow_session.id, "ai_session", "in_progress", "Starting AI session...")
 
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session.id)
+
+    {action, _} =
+      Destila.Workflows.normalize_strategy(
+        Destila.Workflows.session_strategy(
+          workflow_session.workflow_type,
+          workflow_session.steps_completed
+        )
+      )
+
+    if action == :new do
+      Destila.AI.Session.stop_for_workflow_session(workflow_session.id)
+    end
+
     session_opts = build_session_opts(workflow_session)
 
     case Destila.AI.Session.for_workflow_session(workflow_session.id, session_opts) do
@@ -116,20 +129,37 @@ defmodule Destila.Workers.SetupWorker do
   end
 
   defp build_session_opts(workflow_session) do
+    strategy =
+      Destila.Workflows.session_strategy(
+        workflow_session.workflow_type,
+        workflow_session.steps_completed
+      )
+
+    {action, phase_opts} = Destila.Workflows.normalize_strategy(strategy)
+
     opts = [timeout_ms: :timer.minutes(15)]
 
     opts =
-      if workflow_session.ai_session_id do
-        Keyword.put(opts, :resume, workflow_session.ai_session_id)
+      case action do
+        :resume ->
+          if workflow_session.ai_session_id do
+            Keyword.put(opts, :resume, workflow_session.ai_session_id)
+          else
+            opts
+          end
+
+        :new ->
+          opts
+      end
+
+    opts =
+      if workflow_session.worktree_path do
+        Keyword.put(opts, :cwd, workflow_session.worktree_path)
       else
         opts
       end
 
-    if workflow_session.worktree_path do
-      Keyword.put(opts, :cwd, workflow_session.worktree_path)
-    else
-      opts
-    end
+    Destila.AI.Session.merge_phase_opts(opts, phase_opts)
   end
 
   defp broadcast_step(workflow_session_id, step, status, content) do

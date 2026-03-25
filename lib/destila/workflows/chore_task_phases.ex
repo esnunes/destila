@@ -158,6 +158,17 @@ defmodule Destila.Workflows.ChoreTaskPhases do
   end
 
   @doc """
+  Returns the session strategy for a given phase.
+
+  Possible return values:
+    - `:resume` — continue the existing session (default behavior)
+    - `{:resume, claude_opts}` — continue with additional ClaudeCode options
+    - `:new` — start a fresh session with default options
+    - `{:new, claude_opts}` — start a fresh session with specific options
+  """
+  def session_strategy(_phase), do: :resume
+
+  @doc """
   Builds a conversation context string from existing messages for session resumption.
   Groups messages by phase and summarizes each.
   """

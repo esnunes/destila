@@ -109,6 +109,26 @@ defmodule Destila.Workflows do
     columns ++ [{:done, "Done"}]
   end
 
+  @doc """
+  Returns the phases module for a given workflow type.
+  """
+  def phases_module(:prompt_chore_task), do: Destila.Workflows.ChoreTaskPhases
+
+  @doc """
+  Returns the session strategy for a given workflow type and phase.
+  """
+  def session_strategy(:prompt_chore_task, phase),
+    do: Destila.Workflows.ChoreTaskPhases.session_strategy(phase)
+
+  def session_strategy(_type, _phase), do: :resume
+
+  @doc """
+  Normalizes a session strategy to `{action, opts}` tuple form.
+  """
+  def normalize_strategy(:resume), do: {:resume, []}
+  def normalize_strategy(:new), do: {:new, []}
+  def normalize_strategy({action, opts}) when action in [:resume, :new], do: {action, opts}
+
   def completion_message(:prompt_new_project) do
     "Your project prompt is complete! I've captured your project vision, tech stack, and scope. This prompt is ready to guide a coding agent through the initial implementation."
   end

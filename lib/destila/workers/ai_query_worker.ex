@@ -2,7 +2,6 @@ defmodule Destila.Workers.AiQueryWorker do
   use Oban.Worker, queue: :default, max_attempts: 1
 
   alias Destila.{Messages, WorkflowSessions}
-  alias Destila.Workflows.ChoreTaskPhases
 
   @impl Oban.Worker
   def perform(%Oban.Job{
@@ -13,7 +12,17 @@ defmodule Destila.Workers.AiQueryWorker do
         }
       }) do
     ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
-    session_opts = build_session_opts(ws)
+
+    {action, _} =
+      Destila.Workflows.normalize_strategy(
+        Destila.Workflows.session_strategy(ws.workflow_type, phase)
+      )
+
+    if action == :new do
+      Destila.AI.Session.stop_for_workflow_session(workflow_session_id)
+    end
+
+    session_opts = build_session_opts(ws, phase)
 
     case Destila.AI.Session.for_workflow_session(workflow_session_id, session_opts) do
       {:ok, session} ->
@@ -77,17 +86,29 @@ defmodule Destila.Workers.AiQueryWorker do
     end
   end
 
-  defp build_session_opts(ws) do
+  defp build_session_opts(ws, phase) do
+    strategy = Destila.Workflows.session_strategy(ws.workflow_type, phase)
+    {action, phase_opts} = Destila.Workflows.normalize_strategy(strategy)
+
     opts = []
 
     opts =
-      if ws.ai_session_id,
-        do: Keyword.put(opts, :resume, ws.ai_session_id),
+      case action do
+        :resume ->
+          if ws.ai_session_id,
+            do: Keyword.put(opts, :resume, ws.ai_session_id),
+            else: opts
+
+        :new ->
+          opts
+      end
+
+    opts =
+      if ws.worktree_path,
+        do: Keyword.put(opts, :cwd, ws.worktree_path),
         else: opts
 
-    if ws.worktree_path,
-      do: Keyword.put(opts, :cwd, ws.worktree_path),
-      else: opts
+    Destila.AI.Session.merge_phase_opts(opts, phase_opts)
   end
 
   defp handle_skip_phase(workflow_session_id, current_phase) do
@@ -99,7 +120,8 @@ defmodule Destila.Workers.AiQueryWorker do
     })
 
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
-    phase_prompt = ChoreTaskPhases.system_prompt(next_phase, workflow_session)
+    phases_module = Destila.Workflows.phases_module(workflow_session.workflow_type)
+    phase_prompt = phases_module.system_prompt(next_phase, workflow_session)
 
     %{
       "workflow_session_id" => workflow_session_id,
