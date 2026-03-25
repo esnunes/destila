@@ -12,15 +12,8 @@ defmodule Destila.Workers.AiQueryWorker do
         }
       }) do
     ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
-
-    {action, _phase_opts} =
-      strategy = Destila.Workflows.session_strategy(ws.workflow_type, phase)
-
-    if action == :new do
-      Destila.AI.Session.stop_for_workflow_session(workflow_session_id)
-    end
-
-    session_opts = build_session_opts(ws, strategy)
+    {_action, phase_opts} = Destila.Workflows.session_strategy(ws.workflow_type, phase)
+    session_opts = build_session_opts(ws, phase_opts)
 
     case Destila.AI.Session.for_workflow_session(workflow_session_id, session_opts) do
       {:ok, session} ->
@@ -84,36 +77,31 @@ defmodule Destila.Workers.AiQueryWorker do
     end
   end
 
-  defp build_session_opts(ws, {action, phase_opts}) do
+  defp build_session_opts(ws, phase_opts) do
     opts = []
-
-    opts =
-      case action do
-        :resume ->
-          if ws.ai_session_id,
-            do: Keyword.put(opts, :resume, ws.ai_session_id),
-            else: opts
-
-        :new ->
-          opts
-      end
-
-    opts =
-      if ws.worktree_path,
-        do: Keyword.put(opts, :cwd, ws.worktree_path),
-        else: opts
-
+    opts = if ws.ai_session_id, do: Keyword.put(opts, :resume, ws.ai_session_id), else: opts
+    opts = if ws.worktree_path, do: Keyword.put(opts, :cwd, ws.worktree_path), else: opts
     Destila.AI.Session.merge_phase_opts(opts, phase_opts)
   end
 
   defp handle_skip_phase(workflow_session_id, current_phase) do
     next_phase = current_phase + 1
+    workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
 
-    WorkflowSessions.update_workflow_session(workflow_session_id, %{
-      steps_completed: next_phase,
-      phase_status: :generating
-    })
+    {action, _} =
+      Destila.Workflows.session_strategy(workflow_session.workflow_type, next_phase)
 
+    update_attrs = %{steps_completed: next_phase, phase_status: :generating}
+
+    update_attrs =
+      if action == :new do
+        Destila.AI.Session.stop_for_workflow_session(workflow_session_id)
+        Map.put(update_attrs, :ai_session_id, nil)
+      else
+        update_attrs
+      end
+
+    WorkflowSessions.update_workflow_session(workflow_session_id, update_attrs)
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
     workflow_module = Destila.Workflows.workflow_module(workflow_session.workflow_type)
     phase_prompt = workflow_module.system_prompt(next_phase, workflow_session)
