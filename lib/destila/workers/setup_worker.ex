@@ -101,7 +101,8 @@ defmodule Destila.Workers.SetupWorker do
 
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session.id)
 
-    {action, _} =
+    {action, _phase_opts} =
+      strategy =
       Destila.Workflows.session_strategy(
         workflow_session.workflow_type,
         workflow_session.steps_completed
@@ -111,7 +112,7 @@ defmodule Destila.Workers.SetupWorker do
       Destila.AI.Session.stop_for_workflow_session(workflow_session.id)
     end
 
-    session_opts = build_session_opts(workflow_session)
+    session_opts = build_session_opts(workflow_session, strategy)
 
     case Destila.AI.Session.for_workflow_session(workflow_session.id, session_opts) do
       {:ok, _session} ->
@@ -126,13 +127,7 @@ defmodule Destila.Workers.SetupWorker do
     end
   end
 
-  defp build_session_opts(workflow_session) do
-    {action, phase_opts} =
-      Destila.Workflows.session_strategy(
-        workflow_session.workflow_type,
-        workflow_session.steps_completed
-      )
-
+  defp build_session_opts(workflow_session, {action, phase_opts}) do
     opts = [timeout_ms: :timer.minutes(15)]
 
     opts =
