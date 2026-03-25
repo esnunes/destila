@@ -120,8 +120,8 @@ defmodule Destila.Workers.AiQueryWorker do
     })
 
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
-    phases_module = Destila.Workflows.phases_module(workflow_session.workflow_type)
-    phase_prompt = phases_module.system_prompt(next_phase, workflow_session)
+    workflow_module = Destila.Workflows.workflow_module(workflow_session.workflow_type)
+    phase_prompt = workflow_module.system_prompt(next_phase, workflow_session)
 
     %{
       "workflow_session_id" => workflow_session_id,

@@ -4,7 +4,7 @@ defmodule DestilaWeb.SessionDetailLive do
   import DestilaWeb.ChatComponents
   import DestilaWeb.BoardComponents, only: [workflow_badge: 1, progress_indicator: 1]
 
-  alias Destila.Workflows.ChoreTaskPhases
+  alias Destila.Workflows
 
   def mount(%{"id" => id}, session, socket) do
     workflow_session = Destila.WorkflowSessions.get_workflow_session(id)
@@ -216,7 +216,8 @@ defmodule DestilaWeb.SessionDetailLive do
         })
 
       updated_ws = Destila.WorkflowSessions.get_workflow_session!(ws.id)
-      phase_prompt = ChoreTaskPhases.system_prompt(next_phase, updated_ws)
+      workflow_module = Workflows.workflow_module(updated_ws.workflow_type)
+      phase_prompt = workflow_module.system_prompt(next_phase, updated_ws)
 
       %{"workflow_session_id" => ws.id, "phase" => next_phase, "query" => phase_prompt}
       |> Destila.Workers.AiQueryWorker.new()
@@ -541,7 +542,8 @@ defmodule DestilaWeb.SessionDetailLive do
     """
   end
 
-  defp phase_name(phase), do: ChoreTaskPhases.phase_name(phase)
+  defp phase_name(phase),
+    do: Destila.Workflows.PromptChoreTaskWorkflow.phase_name(phase)
 
   defp phase_groups(messages, current_phase) do
     groups =

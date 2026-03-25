@@ -73,9 +73,9 @@ defmodule Destila.Setup do
       Messages.list_messages(workflow_session.id)
       |> Enum.filter(&(&1.phase > 0))
 
-    phases_module = Destila.Workflows.phases_module(workflow_session.workflow_type)
-    system_prompt = phases_module.system_prompt(phase, workflow_session)
-    context = phases_module.build_conversation_context(messages)
+    workflow_module = Destila.Workflows.workflow_module(workflow_session.workflow_type)
+    system_prompt = workflow_module.system_prompt(phase, workflow_session)
+    context = workflow_module.build_conversation_context(messages)
     query = system_prompt <> "\n\n" <> context
 
     # Broadcast the update so LiveView picks up the :generating status
