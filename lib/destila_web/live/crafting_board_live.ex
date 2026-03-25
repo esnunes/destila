@@ -5,10 +5,11 @@ defmodule DestilaWeb.CraftingBoardLive do
 
   alias Destila.Workflows
 
-  @sections [:setup, :waiting, :in_progress, :done]
+  @sections [:setup, :waiting_for_user, :ai_processing, :in_progress, :done]
   @section_labels %{
     setup: "Setup",
-    waiting: "Waiting for Reply",
+    waiting_for_user: "Waiting for You",
+    ai_processing: "AI Processing",
     in_progress: "In Progress",
     done: "Done"
   }
@@ -164,14 +165,16 @@ defmodule DestilaWeb.CraftingBoardLive do
 
   @section_icons %{
     setup: "hero-cog-6-tooth-micro",
-    waiting: "hero-clock-micro",
+    waiting_for_user: "hero-hand-raised-micro",
+    ai_processing: "hero-cpu-chip-micro",
     in_progress: "hero-bolt-micro",
     done: "hero-check-circle-micro"
   }
 
   @section_empty_messages %{
     setup: "No sessions being set up",
-    waiting: "No sessions awaiting a reply",
+    waiting_for_user: "No sessions waiting for you",
+    ai_processing: "No sessions being processed by AI",
     in_progress: "No sessions in progress",
     done: "No completed sessions yet"
   }

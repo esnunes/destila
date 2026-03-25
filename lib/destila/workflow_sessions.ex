@@ -54,7 +54,8 @@ defmodule Destila.WorkflowSessions do
     cond do
       workflow_session.column == :done -> :done
       workflow_session.phase_status == :setup -> :setup
-      workflow_session.phase_status in [:generating, :conversing, :advance_suggested] -> :waiting
+      workflow_session.phase_status in [:conversing, :advance_suggested] -> :waiting_for_user
+      workflow_session.phase_status == :generating -> :ai_processing
       true -> :in_progress
     end
   end
