@@ -213,11 +213,7 @@ defmodule DestilaWeb.NewSessionLive do
 
   defp enqueue_setup_jobs(workflow_session, workflow_type, idea) do
     # Always enqueue title generation
-    %{
-      "workflow_session_id" => workflow_session.id,
-      "workflow_type" => to_string(workflow_type),
-      "idea" => idea
-    }
+    %{"workflow_session_id" => workflow_session.id, "idea" => idea}
     |> Destila.Workers.TitleGenerationWorker.new()
     |> Oban.insert()
 

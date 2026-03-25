@@ -11,7 +11,6 @@ defmodule Destila.Setup do
 
   alias Destila.{Messages, Repo}
   alias Destila.WorkflowSessions.WorkflowSession
-  alias Destila.Workflows.ChoreTaskPhases
 
   @doc """
   Checks if Phase 0 setup is fully complete (both title generation and setup steps)
@@ -74,8 +73,9 @@ defmodule Destila.Setup do
       Messages.list_messages(workflow_session.id)
       |> Enum.filter(&(&1.phase > 0))
 
-    system_prompt = ChoreTaskPhases.system_prompt(phase, workflow_session)
-    context = ChoreTaskPhases.build_conversation_context(messages)
+    workflow_module = Destila.Workflows.workflow_module(workflow_session.workflow_type)
+    system_prompt = workflow_module.system_prompt(phase, workflow_session)
+    context = workflow_module.build_conversation_context(messages)
     query = system_prompt <> "\n\n" <> context
 
     # Broadcast the update so LiveView picks up the :generating status

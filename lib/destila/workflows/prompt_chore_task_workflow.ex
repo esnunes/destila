@@ -1,12 +1,27 @@
-defmodule Destila.Workflows.ChoreTaskPhases do
+defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   @moduledoc """
-  Defines AI system prompts and phase metadata for the Chore/Task workflow.
+  Defines the Chore/Task workflow — an AI-driven multi-phase conversation
+  that clarifies a coding task and produces an implementation prompt.
 
   Each phase is a multi-turn AI conversation. The AI uses markers to signal
   phase transitions:
   - `<<READY_TO_ADVANCE>>` — AI suggests advancing to the next phase
   - `<<SKIP_PHASE>>` — AI determines phase can be skipped (Phase 2 only)
   """
+
+  def steps do
+    [
+      %{
+        step: 1,
+        content:
+          "Let's work on your task. Describe what you need done — the more context you provide, the better I can help clarify and refine the approach.",
+        input_type: :text,
+        options: nil
+      }
+    ]
+  end
+
+  def total_steps, do: 4
 
   @phase_names %{
     0 => "Setup",
@@ -16,14 +31,41 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     4 => "Prompt Generation"
   }
 
-  @doc """
-  Returns the human-readable name for a phase number.
-  """
   def phase_name(phase) when is_map_key(@phase_names, phase) do
     @phase_names[phase]
   end
 
   def phase_name(_phase), do: nil
+
+  def phase_columns do
+    columns =
+      0..total_steps()
+      |> Enum.map(fn n -> {n, phase_name(n)} end)
+      |> Enum.reject(fn {_, name} -> is_nil(name) end)
+
+    columns ++ [{:done, "Done"}]
+  end
+
+  def default_title, do: "New Chore/Task"
+
+  def completion_message do
+    "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
+  end
+
+  # Session strategy
+
+  @doc """
+  Returns the session strategy for a given phase.
+
+  Possible return values:
+    - `:resume` — continue the existing session (default behavior)
+    - `{:resume, claude_opts}` — continue with additional ClaudeCode options
+    - `:new` — start a fresh session with default options
+    - `{:new, claude_opts}` — start a fresh session with specific options
+  """
+  def session_strategy(_phase), do: :resume
+
+  # AI system prompts
 
   @tool_instructions """
 
@@ -156,6 +198,8 @@ defmodule Destila.Workflows.ChoreTaskPhases do
     Do NOT end with <<READY_TO_ADVANCE>> — the user will mark this as done when satisfied.
     """
   end
+
+  # Conversation context
 
   @doc """
   Builds a conversation context string from existing messages for session resumption.

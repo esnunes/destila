@@ -100,7 +100,13 @@ defmodule Destila.Workers.SetupWorker do
     broadcast_step(workflow_session.id, "ai_session", "in_progress", "Starting AI session...")
 
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session.id)
-    session_opts = build_session_opts(workflow_session)
+
+    session_opts =
+      Destila.AI.Session.session_opts_for_workflow(
+        workflow_session,
+        workflow_session.steps_completed,
+        timeout_ms: :timer.minutes(15)
+      )
 
     case Destila.AI.Session.for_workflow_session(workflow_session.id, session_opts) do
       {:ok, _session} ->
@@ -112,23 +118,6 @@ defmodule Destila.Workers.SetupWorker do
       {:error, reason} ->
         broadcast_step(workflow_session.id, "ai_session", "failed", inspect(reason))
         {:error, reason}
-    end
-  end
-
-  defp build_session_opts(workflow_session) do
-    opts = [timeout_ms: :timer.minutes(15)]
-
-    opts =
-      if workflow_session.ai_session_id do
-        Keyword.put(opts, :resume, workflow_session.ai_session_id)
-      else
-        opts
-      end
-
-    if workflow_session.worktree_path do
-      Keyword.put(opts, :cwd, workflow_session.worktree_path)
-    else
-      opts
     end
   end
 

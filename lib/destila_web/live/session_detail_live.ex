@@ -4,7 +4,7 @@ defmodule DestilaWeb.SessionDetailLive do
   import DestilaWeb.ChatComponents
   import DestilaWeb.BoardComponents, only: [workflow_badge: 1, progress_indicator: 1]
 
-  alias Destila.Workflows.ChoreTaskPhases
+  alias Destila.Workflows
 
   def mount(%{"id" => id}, session, socket) do
     workflow_session = Destila.WorkflowSessions.get_workflow_session(id)
@@ -144,9 +144,7 @@ defmodule DestilaWeb.SessionDetailLive do
     end
 
     if ws.title_generating do
-      workflow_type = to_string(ws.workflow_type)
-
-      %{"workflow_session_id" => ws.id, "workflow_type" => workflow_type, "idea" => ""}
+      %{"workflow_session_id" => ws.id, "idea" => ""}
       |> Destila.Workers.TitleGenerationWorker.new()
       |> Oban.insert()
     end
@@ -209,14 +207,23 @@ defmodule DestilaWeb.SessionDetailLive do
     if next_phase > ws.steps_total do
       {:noreply, socket}
     else
-      {:ok, _} =
-        Destila.WorkflowSessions.update_workflow_session(ws, %{
-          steps_completed: next_phase,
-          phase_status: :generating
-        })
+      {action, _} = Workflows.session_strategy(ws.workflow_type, next_phase)
+
+      update_attrs = %{steps_completed: next_phase, phase_status: :generating}
+
+      update_attrs =
+        if action == :new do
+          Destila.AI.Session.stop_for_workflow_session(ws.id)
+          Map.put(update_attrs, :ai_session_id, nil)
+        else
+          update_attrs
+        end
+
+      {:ok, _} = Destila.WorkflowSessions.update_workflow_session(ws, update_attrs)
 
       updated_ws = Destila.WorkflowSessions.get_workflow_session!(ws.id)
-      phase_prompt = ChoreTaskPhases.system_prompt(next_phase, updated_ws)
+      workflow_module = Workflows.workflow_module(updated_ws.workflow_type)
+      phase_prompt = workflow_module.system_prompt(next_phase, updated_ws)
 
       %{"workflow_session_id" => ws.id, "phase" => next_phase, "query" => phase_prompt}
       |> Destila.Workers.AiQueryWorker.new()
@@ -541,7 +548,8 @@ defmodule DestilaWeb.SessionDetailLive do
     """
   end
 
-  defp phase_name(phase), do: ChoreTaskPhases.phase_name(phase)
+  defp phase_name(phase),
+    do: Destila.Workflows.PromptChoreTaskWorkflow.phase_name(phase)
 
   defp phase_groups(messages, current_phase) do
     groups =

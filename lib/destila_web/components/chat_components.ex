@@ -27,7 +27,11 @@ defmodule DestilaWeb.ChatComponents do
     assigns = assign(assigns, :next_phase, next_phase)
 
     assigns =
-      assign(assigns, :next_phase_name, Destila.Workflows.ChoreTaskPhases.phase_name(next_phase))
+      assign(
+        assigns,
+        :next_phase_name,
+        Destila.Workflows.PromptChoreTaskWorkflow.phase_name(next_phase)
+      )
 
     ~H"""
     <div class="flex gap-3 mb-4">

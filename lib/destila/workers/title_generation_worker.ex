@@ -7,11 +7,11 @@ defmodule Destila.Workers.TitleGenerationWorker do
   def perform(%Oban.Job{
         args: %{
           "workflow_session_id" => workflow_session_id,
-          "workflow_type" => workflow_type,
           "idea" => idea
         }
       }) do
-    workflow_type = String.to_existing_atom(workflow_type)
+    workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
+    workflow_type = workflow_session.workflow_type
 
     Messages.create_message(workflow_session_id, %{
       role: :system,
@@ -23,7 +23,7 @@ defmodule Destila.Workers.TitleGenerationWorker do
     title =
       case Destila.AI.generate_title(workflow_type, idea) do
         {:ok, title} -> title
-        {:error, _reason} -> default_title(workflow_type)
+        {:error, _reason} -> Destila.Workflows.default_title(workflow_type)
       end
 
     WorkflowSessions.update_workflow_session(workflow_session_id, %{
@@ -46,8 +46,4 @@ defmodule Destila.Workers.TitleGenerationWorker do
 
     :ok
   end
-
-  defp default_title(:prompt_new_project), do: "New Project"
-  defp default_title(:prompt_chore_task), do: "New Chore/Task"
-  defp default_title(:implement_generic_prompt), do: "New Session"
 end
