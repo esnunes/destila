@@ -24,23 +24,25 @@ defmodule Destila.Workflows do
   def completion_message(workflow_type), do: workflow_module(workflow_type).completion_message()
 
   @doc """
-  Returns the session strategy for a given workflow type and phase.
-  Defaults to `:resume` for workflow types that don't define `session_strategy/1`.
+  Returns the session strategy for a given workflow type and phase
+  as a normalized `{action, opts}` tuple.
+
+  Defaults to `{:resume, []}` for workflow types that don't define `session_strategy/1`.
   """
   def session_strategy(workflow_type, phase) do
     module = workflow_module(workflow_type)
 
-    if function_exported?(module, :session_strategy, 1) do
-      module.session_strategy(phase)
-    else
-      :resume
-    end
+    strategy =
+      if function_exported?(module, :session_strategy, 1) do
+        module.session_strategy(phase)
+      else
+        :resume
+      end
+
+    normalize_strategy(strategy)
   end
 
-  @doc """
-  Normalizes a session strategy to `{action, opts}` tuple form.
-  """
-  def normalize_strategy(:resume), do: {:resume, []}
-  def normalize_strategy(:new), do: {:new, []}
-  def normalize_strategy({action, opts}) when action in [:resume, :new], do: {action, opts}
+  defp normalize_strategy(:resume), do: {:resume, []}
+  defp normalize_strategy(:new), do: {:new, []}
+  defp normalize_strategy({action, opts}) when action in [:resume, :new], do: {action, opts}
 end
