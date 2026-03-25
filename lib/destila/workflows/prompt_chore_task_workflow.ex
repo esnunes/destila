@@ -46,6 +46,8 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     columns ++ [{:done, "Done"}]
   end
 
+  def default_title, do: "New Chore/Task"
+
   def completion_message do
     "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
   end

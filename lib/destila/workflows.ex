@@ -21,6 +21,7 @@ defmodule Destila.Workflows do
   def total_steps(workflow_type), do: workflow_module(workflow_type).total_steps()
   def phase_name(workflow_type, phase), do: workflow_module(workflow_type).phase_name(phase)
   def phase_columns(workflow_type), do: workflow_module(workflow_type).phase_columns()
+  def default_title(workflow_type), do: workflow_module(workflow_type).default_title()
   def completion_message(workflow_type), do: workflow_module(workflow_type).completion_message()
 
   @doc """

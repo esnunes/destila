@@ -37,6 +37,8 @@ defmodule Destila.Workflows.ImplementGenericPromptWorkflow do
     columns ++ [{:done, "Done"}]
   end
 
+  def default_title, do: "New Session"
+
   def completion_message do
     "Your implementation session is complete."
   end

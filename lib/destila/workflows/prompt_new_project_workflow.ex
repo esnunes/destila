@@ -69,6 +69,8 @@ defmodule Destila.Workflows.PromptNewProjectWorkflow do
     columns ++ [{:done, "Done"}]
   end
 
+  def default_title, do: "New Project"
+
   def completion_message do
     "Your project prompt is complete! I've captured your project vision, tech stack, and scope. This prompt is ready to guide a coding agent through the initial implementation."
   end
