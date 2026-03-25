@@ -110,7 +110,7 @@ defmodule DestilaWeb.BoardComponents do
   end
 
   defp status_dot_style(%{phase_status: s}) when s in [:conversing, :advance_suggested],
-    do: {"bg-warning", "Waiting for you"}
+    do: {"bg-warning", "Waiting for your reply"}
 
   defp status_dot_style(%{phase_status: :generating}),
     do: {"bg-info animate-pulse", "AI is responding"}
