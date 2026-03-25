@@ -144,9 +144,7 @@ defmodule DestilaWeb.SessionDetailLive do
     end
 
     if ws.title_generating do
-      workflow_type = to_string(ws.workflow_type)
-
-      %{"workflow_session_id" => ws.id, "workflow_type" => workflow_type, "idea" => ""}
+      %{"workflow_session_id" => ws.id, "idea" => ""}
       |> Destila.Workers.TitleGenerationWorker.new()
       |> Oban.insert()
     end

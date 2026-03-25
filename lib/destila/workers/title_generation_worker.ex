@@ -7,11 +7,11 @@ defmodule Destila.Workers.TitleGenerationWorker do
   def perform(%Oban.Job{
         args: %{
           "workflow_session_id" => workflow_session_id,
-          "workflow_type" => workflow_type,
           "idea" => idea
         }
       }) do
-    workflow_type = String.to_existing_atom(workflow_type)
+    workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
+    workflow_type = workflow_session.workflow_type
 
     Messages.create_message(workflow_session_id, %{
       role: :system,
