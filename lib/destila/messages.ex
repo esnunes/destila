@@ -100,6 +100,9 @@ defmodule Destila.Messages do
   # Returns {cleaned_content, message_type}.
   defp parse_markers(text, phase, workflow_session) do
     cond do
+      phase == workflow_session.steps_total ->
+        {String.trim(text), :generated_prompt}
+
       String.contains?(text, "<<SKIP_PHASE>>") ->
         content = String.replace(text, "<<SKIP_PHASE>>", "") |> String.trim()
         content = if content == "", do: "Skipping this phase.", else: content
@@ -109,9 +112,6 @@ defmodule Destila.Messages do
         content = String.replace(text, "<<READY_TO_ADVANCE>>", "") |> String.trim()
         content = if content == "", do: "Ready to move to the next phase.", else: content
         {content, :phase_advance}
-
-      phase == workflow_session.steps_total ->
-        {String.trim(text), :generated_prompt}
 
       true ->
         {String.trim(text), nil}
