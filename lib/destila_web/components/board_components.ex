@@ -1,6 +1,8 @@
 defmodule DestilaWeb.BoardComponents do
   use Phoenix.Component
 
+  alias Destila.WorkflowSessions.WorkflowSession
+
   attr :type, :atom, required: true
 
   def workflow_badge(assigns) do
@@ -90,8 +92,8 @@ defmodule DestilaWeb.BoardComponents do
 
         <.progress_indicator
           :if={!@compact}
-          completed={@card.steps_completed}
-          total={@card.steps_total}
+          completed={@card.current_phase}
+          total={@card.total_phases}
         />
       </div>
     </div>
@@ -118,26 +120,27 @@ defmodule DestilaWeb.BoardComponents do
   defp status_dot_style(%{phase_status: :setup}),
     do: {"bg-base-content/20", "Setting up"}
 
-  defp status_dot_style(%{column: :done}),
-    do: {"bg-success", "Done"}
+  defp status_dot_style(card) do
+    if WorkflowSession.done?(card) do
+      {"bg-success", "Done"}
+    else
+      {"bg-primary/40", "In progress"}
+    end
+  end
 
-  defp status_dot_style(_card),
-    do: {"bg-primary/40", "In progress"}
-
-  defp phase_label(%{column: :done}), do: "Done"
-
-  defp phase_label(card),
-    do:
-      Destila.Workflows.phase_name(card.workflow_type, card.steps_completed) ||
-        "Phase #{card.steps_completed}"
+  defp phase_label(card) do
+    if WorkflowSession.done?(card) do
+      "Done"
+    else
+      Destila.Workflows.phase_name(card.workflow_type, card.current_phase) ||
+        "Phase #{card.current_phase}"
+    end
+  end
 
   # Helpers
 
   def workflow_label(:prompt_chore_task), do: "Chore/Task"
-  def workflow_label(:prompt_new_project), do: "New Project"
-  def workflow_label(:implement_generic_prompt), do: "Generic Prompt"
 
   defp workflow_badge_class(:prompt_chore_task), do: "badge-warning"
-  defp workflow_badge_class(:prompt_new_project), do: "badge-secondary"
-  defp workflow_badge_class(:implement_generic_prompt), do: "badge-accent"
+  defp workflow_badge_class(_), do: "badge-neutral"
 end

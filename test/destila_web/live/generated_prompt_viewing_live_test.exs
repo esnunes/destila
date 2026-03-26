@@ -47,14 +47,16 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
         title: "Test Session",
         workflow_type: :prompt_chore_task,
         project_id: nil,
-        column: :done,
-        steps_completed: 4,
-        steps_total: 4,
+        done_at: DateTime.utc_now(),
+        current_phase: 6,
+        total_phases: 6,
         phase_status: nil
       })
 
+    {:ok, ai_session} = Destila.AI.get_or_create_ai_session(workflow_session.id)
+
     {:ok, _} =
-      Destila.Messages.create_message(workflow_session.id, %{
+      Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: @sample_markdown,
         raw_response: %{
@@ -63,7 +65,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
           "mcp_tool_uses" => [],
           "is_error" => false
         },
-        phase: 4
+        phase: 6
       })
 
     workflow_session

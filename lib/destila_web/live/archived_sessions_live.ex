@@ -70,12 +70,12 @@ defmodule DestilaWeb.ArchivedSessionsLive do
                     </span>
                   </div>
                   <span class="text-xs text-base-content/40 whitespace-nowrap">
-                    {ws.steps_completed}/{ws.steps_total}
+                    {ws.current_phase}/{ws.total_phases}
                   </span>
                 </div>
                 <.progress_indicator
-                  completed={ws.steps_completed}
-                  total={ws.steps_total}
+                  completed={ws.current_phase}
+                  total={ws.total_phases}
                 />
               </div>
             </.link>

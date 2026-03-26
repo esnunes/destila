@@ -1,4 +1,4 @@
-defmodule Destila.AI.SessionTest do
+defmodule Destila.AI.ClaudeSessionTest do
   use ExUnit.Case, async: true
 
   describe "start_link/1 and stop/1" do
@@ -7,12 +7,12 @@ defmodule Destila.AI.SessionTest do
         [ClaudeCode.Test.result("ok")]
       end)
 
-      {:ok, session} = Destila.AI.Session.start_link(timeout_ms: :timer.seconds(5))
+      {:ok, session} = Destila.AI.ClaudeSession.start_link(timeout_ms: :timer.seconds(5))
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
       assert Process.alive?(session)
 
-      Destila.AI.Session.stop(session)
+      Destila.AI.ClaudeSession.stop(session)
       refute Process.alive?(session)
     end
   end
@@ -26,13 +26,13 @@ defmodule Destila.AI.SessionTest do
         ]
       end)
 
-      {:ok, session} = Destila.AI.Session.start_link(timeout_ms: :timer.seconds(5))
+      {:ok, session} = Destila.AI.ClaudeSession.start_link(timeout_ms: :timer.seconds(5))
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
-      assert {:ok, result} = Destila.AI.Session.query(session, "say hello")
+      assert {:ok, result} = Destila.AI.ClaudeSession.query(session, "say hello")
       assert result.result == "Hello world"
 
-      Destila.AI.Session.stop(session)
+      Destila.AI.ClaudeSession.stop(session)
     end
 
     test "returns error on failure" do
@@ -40,12 +40,12 @@ defmodule Destila.AI.SessionTest do
         [ClaudeCode.Test.result("Something went wrong", is_error: true)]
       end)
 
-      {:ok, session} = Destila.AI.Session.start_link(timeout_ms: :timer.seconds(5))
+      {:ok, session} = Destila.AI.ClaudeSession.start_link(timeout_ms: :timer.seconds(5))
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
-      assert {:error, _result} = Destila.AI.Session.query(session, "fail please")
+      assert {:error, _result} = Destila.AI.ClaudeSession.query(session, "fail please")
 
-      Destila.AI.Session.stop(session)
+      Destila.AI.ClaudeSession.stop(session)
     end
   end
 
@@ -55,7 +55,7 @@ defmodule Destila.AI.SessionTest do
         [ClaudeCode.Test.result("ok")]
       end)
 
-      {:ok, session} = Destila.AI.Session.start_link(timeout_ms: 50)
+      {:ok, session} = Destila.AI.ClaudeSession.start_link(timeout_ms: 50)
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
       ref = Process.monitor(session)
@@ -70,12 +70,12 @@ defmodule Destila.AI.SessionTest do
         ]
       end)
 
-      {:ok, session} = Destila.AI.Session.start_link(timeout_ms: 100)
+      {:ok, session} = Destila.AI.ClaudeSession.start_link(timeout_ms: 100)
       ClaudeCode.Test.allow(ClaudeCode, self(), session)
 
       # Query at 50ms — should reset the 100ms timer
       Process.sleep(50)
-      assert {:ok, _} = Destila.AI.Session.query(session, "keep alive")
+      assert {:ok, _} = Destila.AI.ClaudeSession.query(session, "keep alive")
 
       # At 100ms from start (50ms after query), session should still be alive
       Process.sleep(50)

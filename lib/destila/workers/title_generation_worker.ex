@@ -1,7 +1,7 @@
 defmodule Destila.Workers.TitleGenerationWorker do
   use Oban.Worker, queue: :default, max_attempts: 3
 
-  alias Destila.{Messages, WorkflowSessions}
+  alias Destila.WorkflowSessions
 
   @impl Oban.Worker
   def perform(%Oban.Job{
@@ -13,12 +13,7 @@ defmodule Destila.Workers.TitleGenerationWorker do
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
     workflow_type = workflow_session.workflow_type
 
-    Messages.create_message(workflow_session_id, %{
-      role: :system,
-      content: "Generating title...",
-      raw_response: %{"setup_step" => "title_generation", "status" => "in_progress"},
-      phase: 0
-    })
+    update_setup_step(workflow_session_id, "title_gen", "in_progress")
 
     title =
       case Destila.AI.generate_title(workflow_type, idea) do
@@ -31,19 +26,16 @@ defmodule Destila.Workers.TitleGenerationWorker do
       title_generating: false
     })
 
-    Messages.create_message(workflow_session_id, %{
-      role: :system,
-      content: title,
-      raw_response: %{
-        "setup_step" => "title_generation",
-        "status" => "completed",
-        "result" => title
-      },
-      phase: 0
-    })
+    update_setup_step(workflow_session_id, "title_gen", "completed")
 
-    Destila.Setup.maybe_finish_phase0(workflow_session_id)
+    Destila.Workflows.SetupCoordinator.maybe_advance_setup(workflow_session_id)
 
     :ok
+  end
+
+  defp update_setup_step(workflow_session_id, step, status) do
+    ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
+    setup_steps = Map.put(ws.setup_steps || %{}, step, %{"status" => status})
+    WorkflowSessions.update_workflow_session(ws, %{setup_steps: setup_steps})
   end
 end

@@ -4,6 +4,7 @@ defmodule DestilaWeb.CraftingBoardLive do
   import DestilaWeb.BoardComponents
 
   alias Destila.Workflows
+  alias Destila.WorkflowSessions.WorkflowSession
 
   @sections [:setup, :waiting_for_user, :ai_processing, :in_progress, :done]
   @section_labels %{
@@ -121,10 +122,13 @@ defmodule DestilaWeb.CraftingBoardLive do
                 matching =
                   case phase do
                     :done ->
-                      Enum.filter(wf_prompts, &(&1.column == :done))
+                      Enum.filter(wf_prompts, &WorkflowSession.done?/1)
 
                     n when is_integer(n) ->
-                      Enum.filter(wf_prompts, &(&1.column != :done && &1.steps_completed == n))
+                      Enum.filter(
+                        wf_prompts,
+                        &(!WorkflowSession.done?(&1) && &1.current_phase == n)
+                      )
                   end
 
                 {phase, name, matching}
@@ -136,11 +140,7 @@ defmodule DestilaWeb.CraftingBoardLive do
             Enum.all?(column_data, fn {_, _, prompts_in_col} -> prompts_in_col == [] end)
           end)
           |> Enum.sort_by(fn {wf_type, _} ->
-            case wf_type do
-              :prompt_chore_task -> 0
-              :prompt_new_project -> 1
-              :implement_generic_prompt -> 2
-            end
+            Enum.find_index(Workflows.workflow_types(), &(&1 == wf_type)) || 99
           end)
 
         assign(socket, :workflow_boards, workflow_boards)
@@ -197,7 +197,7 @@ defmodule DestilaWeb.CraftingBoardLive do
             <.link navigate={~p"/sessions/archived"} class="btn btn-soft btn-sm">
               <.icon name="hero-archive-box-micro" class="size-4" /> Archived
             </.link>
-            <.link navigate={~p"/sessions/new?from=/crafting"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/workflows"} class="btn btn-primary btn-sm">
               <.icon name="hero-plus-micro" class="size-4" /> New Session
             </.link>
           </div>
