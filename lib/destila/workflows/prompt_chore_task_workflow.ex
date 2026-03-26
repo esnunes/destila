@@ -3,43 +3,44 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   Defines the Chore/Task workflow — an AI-driven multi-phase conversation
   that clarifies a coding task and produces an implementation prompt.
 
-  Each phase is a multi-turn AI conversation. The AI uses markers to signal
-  phase transitions:
-  - `<<READY_TO_ADVANCE>>` — AI suggests advancing to the next phase
-  - `<<SKIP_PHASE>>` — AI determines phase can be skipped (Phase 2 only)
+  Phases:
+  1. Project & Idea — Wizard collecting project selection and initial task description
+  2. Setup — Prepares the project environment (repo sync, worktree, title gen)
+  3. Task Description — AI asks clarifying questions about the task
+  4. Gherkin Review — AI reviews or proposes BDD feature scenarios (skippable)
+  5. Technical Concerns — AI explores technical approach and trade-offs
+  6. Prompt Generation — AI generates the final implementation prompt
   """
 
-  def steps do
+  def phases do
     [
-      %{
-        step: 1,
-        content:
-          "Let's work on your task. Describe what you need done — the more context you provide, the better I can help clarify and refine the approach.",
-        input_type: :text,
-        options: nil
-      }
+      {DestilaWeb.Phases.WizardPhase, name: "Project & Idea", fields: [:project, :idea]},
+      {DestilaWeb.Phases.SetupPhase, name: "Setup"},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Task Description", system_prompt: &task_description_prompt/1},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Gherkin Review", system_prompt: &gherkin_review_prompt/1, skippable: true},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Technical Concerns", system_prompt: &technical_concerns_prompt/1},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Prompt Generation", system_prompt: &prompt_generation_prompt/1, final: true}
     ]
   end
 
-  def total_steps, do: 4
+  def total_phases, do: length(phases())
 
-  @phase_names %{
-    0 => "Setup",
-    1 => "Task Description",
-    2 => "Gherkin Review",
-    3 => "Technical Concerns",
-    4 => "Prompt Generation"
-  }
-
-  def phase_name(phase) when is_map_key(@phase_names, phase) do
-    @phase_names[phase]
+  def phase_name(phase) when is_integer(phase) do
+    case Enum.at(phases(), phase - 1) do
+      {_mod, opts} -> Keyword.get(opts, :name)
+      nil -> nil
+    end
   end
 
   def phase_name(_phase), do: nil
 
   def phase_columns do
     columns =
-      0..total_steps()
+      1..total_phases()
       |> Enum.map(fn n -> {n, phase_name(n)} end)
       |> Enum.reject(fn {_, name} -> is_nil(name) end)
 
@@ -48,21 +49,15 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
 
   def default_title, do: "New Chore/Task"
 
+  def label, do: "Prompt for a Chore / Task"
+  def description, do: "Straightforward coding tasks, bug fixes, or refactors"
+  def icon, do: "hero-wrench-screwdriver"
+  def icon_class, do: "text-warning"
+
   def completion_message do
     "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
   end
 
-  # Session strategy
-
-  @doc """
-  Returns the session strategy for a given phase.
-
-  Possible return values:
-    - `:resume` — continue the existing session (default behavior)
-    - `{:resume, claude_opts}` — continue with additional ClaudeCode options
-    - `:new` — start a fresh session with default options
-    - `{:new, claude_opts}` — start a fresh session with specific options
-  """
   def session_strategy(_phase), do: :resume
 
   # AI system prompts
@@ -80,10 +75,16 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   For open-ended questions without clear options, just ask in plain text.
   """
 
-  @doc """
-  Returns the AI system prompt for a given phase and workflow session context.
-  """
-  def system_prompt(1, _workflow_session) do
+  defp task_description_prompt(workflow_session) do
+    idea = get_in(workflow_session.setup_steps || %{}, ["idea"])
+
+    idea_context =
+      if idea && idea != "" do
+        "\n\nThe user's initial idea:\n#{idea}"
+      else
+        ""
+      end
+
     """
     You are helping clarify a coding task. The user has described their initial idea. \
     Your job is to ask focused questions to understand exactly what they want and how it should work.
@@ -106,10 +107,10 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     IMPORTANT: Never use <<READY_TO_ADVANCE>> in a message that contains unanswered questions. \
     If you still need information from the user, ask your questions and wait for their answers \
     before using the marker.
-    """ <> @tool_instructions
+    """ <> @tool_instructions <> idea_context
   end
 
-  def system_prompt(2, workflow_session) do
+  defp gherkin_review_prompt(workflow_session) do
     project =
       if workflow_session.project_id,
         do: Destila.Projects.get_project(workflow_session.project_id)
@@ -153,7 +154,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     """ <> @tool_instructions
   end
 
-  def system_prompt(3, _workflow_session) do
+  defp technical_concerns_prompt(_workflow_session) do
     """
     You are exploring technical concerns for a coding task. Based on the prior conversation, \
     ask about the technical approach to implementing this task.
@@ -177,7 +178,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     """ <> @tool_instructions
   end
 
-  def system_prompt(4, _workflow_session) do
+  defp prompt_generation_prompt(_workflow_session) do
     """
     Generate a high-level implementation prompt based on the entire conversation so far. \
     This prompt should be ready to hand to a developer or coding agent.
@@ -199,12 +200,6 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     """
   end
 
-  # Conversation context
-
-  @doc """
-  Builds a conversation context string from existing messages for session resumption.
-  Groups messages by phase and summarizes each.
-  """
   def build_conversation_context(messages) do
     messages
     |> Enum.group_by(& &1.phase)

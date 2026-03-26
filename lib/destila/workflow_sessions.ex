@@ -52,7 +52,7 @@ defmodule Destila.WorkflowSessions do
 
   def classify(%WorkflowSession{} = workflow_session) do
     cond do
-      workflow_session.column == :done -> :done
+      WorkflowSession.done?(workflow_session) -> :done
       workflow_session.phase_status == :setup -> :setup
       workflow_session.phase_status in [:conversing, :advance_suggested] -> :waiting_for_user
       workflow_session.phase_status == :generating -> :ai_processing
@@ -79,7 +79,7 @@ defmodule Destila.WorkflowSessions do
   end
 
   def archive_workflow_session(%WorkflowSession{} = ws) do
-    Destila.AI.Session.stop_for_workflow_session(ws.id)
+    Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
     ws
     |> WorkflowSession.changeset(%{archived_at: DateTime.utc_now()})

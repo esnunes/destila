@@ -1,7 +1,7 @@
 defmodule Destila.Workers.AiQueryWorker do
   use Oban.Worker, queue: :default, max_attempts: 1
 
-  alias Destila.{Messages, WorkflowSessions}
+  alias Destila.{AI, WorkflowSessions}
 
   @impl Oban.Worker
   def perform(%Oban.Job{
@@ -12,14 +12,20 @@ defmodule Destila.Workers.AiQueryWorker do
         }
       }) do
     ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
-    session_opts = Destila.AI.Session.session_opts_for_workflow(ws, phase)
+    ai_session_record = AI.get_ai_session_for_workflow(workflow_session_id)
 
-    case Destila.AI.Session.for_workflow_session(workflow_session_id, session_opts) do
+    unless ai_session_record do
+      raise "No AI session record found for workflow session #{workflow_session_id}"
+    end
+
+    session_opts = Destila.AI.ClaudeSession.session_opts_for_workflow(ws, phase)
+
+    case Destila.AI.ClaudeSession.for_workflow_session(workflow_session_id, session_opts) do
       {:ok, session} ->
-        handle_query(workflow_session_id, phase, session, query)
+        handle_query(ws, ai_session_record, phase, session, query)
 
       {:error, reason} ->
-        Messages.create_message(workflow_session_id, %{
+        AI.create_message(ai_session_record.id, %{
           role: :system,
           content: "Something went wrong. Please try sending your message again.",
           phase: phase
@@ -33,42 +39,44 @@ defmodule Destila.Workers.AiQueryWorker do
     end
   end
 
-  defp handle_query(workflow_session_id, phase, session, query) do
-    case Destila.AI.Session.query(session, query) do
+  defp handle_query(ws, ai_session_record, phase, session, query) do
+    case Destila.AI.ClaudeSession.query(session, query) do
       {:ok, result} ->
-        response_text = Messages.response_text(result)
-        new_phase_status = Messages.derive_phase_status(response_text)
+        response_text = AI.response_text(result)
+        new_phase_status = AI.derive_phase_status(response_text)
 
-        Messages.create_message(workflow_session_id, %{
+        AI.create_message(ai_session_record.id, %{
           role: :system,
           content: response_text,
           raw_response: result,
           phase: phase
         })
 
+        # Save claude_session_id on the AI session record
+        if result[:session_id] do
+          AI.update_ai_session(ai_session_record, %{
+            claude_session_id: result[:session_id]
+          })
+        end
+
         if String.contains?(response_text, "<<SKIP_PHASE>>") do
-          handle_skip_phase(workflow_session_id, phase)
+          handle_skip_phase(ws.id, phase)
         else
-          update_attrs = %{phase_status: new_phase_status}
-
-          update_attrs =
-            if result[:session_id],
-              do: Map.put(update_attrs, :ai_session_id, result[:session_id]),
-              else: update_attrs
-
-          WorkflowSessions.update_workflow_session(workflow_session_id, update_attrs)
+          WorkflowSessions.update_workflow_session(ws.id, %{
+            phase_status: new_phase_status
+          })
         end
 
         :ok
 
       {:error, _} ->
-        Messages.create_message(workflow_session_id, %{
+        AI.create_message(ai_session_record.id, %{
           role: :system,
           content: "Something went wrong. Please try sending your message again.",
           phase: phase
         })
 
-        WorkflowSessions.update_workflow_session(workflow_session_id, %{
+        WorkflowSessions.update_workflow_session(ws.id, %{
           phase_status: :conversing
         })
 
@@ -78,32 +86,30 @@ defmodule Destila.Workers.AiQueryWorker do
 
   defp handle_skip_phase(workflow_session_id, current_phase) do
     next_phase = current_phase + 1
-    workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
-    total = Destila.Workflows.total_steps(workflow_session.workflow_type)
+    ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
+    total = ws.total_phases
 
     if next_phase > total do
-      # Can't skip past the last phase — ignore the marker
       WorkflowSessions.update_workflow_session(workflow_session_id, %{
         phase_status: :conversing
       })
     else
       {action, _} =
-        Destila.Workflows.session_strategy(workflow_session.workflow_type, next_phase)
+        Destila.Workflows.session_strategy(ws.workflow_type, next_phase)
 
-      update_attrs = %{steps_completed: next_phase, phase_status: :generating}
+      update_attrs = %{current_phase: next_phase, phase_status: :generating}
 
-      update_attrs =
-        if action == :new do
-          Destila.AI.Session.stop_for_workflow_session(workflow_session_id)
-          Map.put(update_attrs, :ai_session_id, nil)
-        else
-          update_attrs
-        end
+      if action == :new do
+        Destila.AI.ClaudeSession.stop_for_workflow_session(workflow_session_id)
+      end
 
       WorkflowSessions.update_workflow_session(workflow_session_id, update_attrs)
-      workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
-      workflow_module = Destila.Workflows.workflow_module(workflow_session.workflow_type)
-      phase_prompt = workflow_module.system_prompt(next_phase, workflow_session)
+      ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
+
+      phases = Destila.Workflows.phases(ws.workflow_type)
+      {_module, opts} = Enum.at(phases, next_phase - 1)
+      system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
+      phase_prompt = system_prompt_fn.(ws)
 
       %{
         "workflow_session_id" => workflow_session_id,
