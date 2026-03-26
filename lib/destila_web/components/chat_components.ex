@@ -14,15 +14,17 @@ defmodule DestilaWeb.ChatComponents do
 
   attr :message, :map, required: true
   attr :workflow_session, :map, default: %{}
+  attr :target, :any, default: nil
 
   def chat_message(assigns) do
-    processed = Destila.Messages.process(assigns.message, assigns.workflow_session)
+    processed = Destila.AI.process_message(assigns.message, assigns.workflow_session)
     assigns = assign(assigns, :message, processed)
     render_chat_message(assigns)
   end
 
   defp render_chat_message(%{message: %{message_type: :phase_advance}} = assigns) do
-    next_phase = (assigns.workflow_session.steps_completed || 1) + 1
+    ws = assigns.workflow_session
+    next_phase = (ws.current_phase || 1) + 1
 
     assigns = assign(assigns, :next_phase, next_phase)
 
@@ -30,7 +32,7 @@ defmodule DestilaWeb.ChatComponents do
       assign(
         assigns,
         :next_phase_name,
-        Destila.Workflows.PromptChoreTaskWorkflow.phase_name(next_phase)
+        Destila.Workflows.phase_name(ws.workflow_type, next_phase)
       )
 
     ~H"""
@@ -47,6 +49,7 @@ defmodule DestilaWeb.ChatComponents do
           <div class="flex gap-2 mt-2">
             <button
               phx-click="confirm_advance"
+              phx-target={@target}
               class="btn btn-primary btn-sm"
             >
               Continue to Phase {@next_phase}
@@ -57,6 +60,7 @@ defmodule DestilaWeb.ChatComponents do
             </button>
             <button
               phx-click="decline_advance"
+              phx-target={@target}
               class="btn btn-ghost btn-sm"
             >
               I have more to add
@@ -276,6 +280,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :options, :list, default: nil
   attr :disabled, :boolean, default: false
   attr :inline, :boolean, default: false
+  attr :target, :any, default: nil
 
   def chat_input(assigns) do
     ~H"""
@@ -283,19 +288,28 @@ defmodule DestilaWeb.ChatComponents do
       "p-4",
       if(@inline, do: "bg-transparent", else: "border-t border-base-300 bg-base-100")
     ]}>
-      <.text_input :if={@input_type == :text} disabled={@disabled} />
-      <.single_select_input :if={@input_type == :single_select} options={@options || []} />
-      <.multi_select_input :if={@input_type == :multi_select} options={@options || []} />
+      <.text_input :if={@input_type == :text} disabled={@disabled} target={@target} />
+      <.single_select_input
+        :if={@input_type == :single_select}
+        options={@options || []}
+        target={@target}
+      />
+      <.multi_select_input
+        :if={@input_type == :multi_select}
+        options={@options || []}
+        target={@target}
+      />
       <.file_upload_input :if={@input_type == :file_upload} />
     </div>
     """
   end
 
   attr :disabled, :boolean, default: false
+  attr :target, :any, default: nil
 
   def text_input(assigns) do
     ~H"""
-    <form phx-submit="send_text" class="flex gap-2">
+    <form phx-submit="send_text" phx-target={@target} class="flex gap-2">
       <input
         type="text"
         name="content"
@@ -317,6 +331,7 @@ defmodule DestilaWeb.ChatComponents do
   end
 
   attr :options, :list, required: true
+  attr :target, :any, default: nil
 
   def single_select_input(assigns) do
     ~H"""
@@ -326,6 +341,7 @@ defmodule DestilaWeb.ChatComponents do
         <button
           :for={opt <- @options}
           phx-click="select_single"
+          phx-target={@target}
           phx-value-label={opt.label}
           class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-sm transition-all cursor-pointer text-left"
         >
@@ -339,7 +355,7 @@ defmodule DestilaWeb.ChatComponents do
         </button>
       </div>
       <div class="divider text-xs text-base-content/30">or</div>
-      <form phx-submit="send_text" class="flex gap-2">
+      <form phx-submit="send_text" phx-target={@target} class="flex gap-2">
         <input
           type="text"
           name="content"
@@ -354,6 +370,7 @@ defmodule DestilaWeb.ChatComponents do
   end
 
   attr :options, :list, required: true
+  attr :target, :any, default: nil
 
   def multi_select_input(assigns) do
     ~H"""
@@ -361,7 +378,7 @@ defmodule DestilaWeb.ChatComponents do
       <p class="text-xs text-base-content/50 font-medium uppercase tracking-wide">
         Select all that apply
       </p>
-      <form phx-submit="select_multi" class="space-y-2">
+      <form phx-submit="select_multi" phx-target={@target} class="space-y-2">
         <label
           :for={opt <- @options}
           class="card bg-base-100 border border-base-300 hover:border-primary transition-all cursor-pointer"
@@ -442,6 +459,7 @@ defmodule DestilaWeb.ChatComponents do
 
   attr :questions, :list, required: true
   attr :answers, :map, required: true
+  attr :target, :any, default: nil
 
   def multi_question_input(assigns) do
     total = length(assigns.questions)
@@ -483,6 +501,7 @@ defmodule DestilaWeb.ChatComponents do
                   <button
                     :for={opt <- q.options}
                     phx-click="answer_question"
+                    phx-target={@target}
                     phx-value-index={idx}
                     phx-value-answer={opt.label}
                     class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-sm transition-all cursor-pointer text-left"
@@ -498,7 +517,7 @@ defmodule DestilaWeb.ChatComponents do
                     </div>
                   </button>
                 </div>
-                <form phx-submit="answer_question" class="flex gap-2">
+                <form phx-submit="answer_question" phx-target={@target} class="flex gap-2">
                   <input type="hidden" name="index" value={idx} />
                   <input
                     type="text"
@@ -510,7 +529,7 @@ defmodule DestilaWeb.ChatComponents do
                   <button type="submit" class="btn btn-sm btn-ghost">Send</button>
                 </form>
               <% else %>
-                <form phx-submit="confirm_multi_answer" class="space-y-2">
+                <form phx-submit="confirm_multi_answer" phx-target={@target} class="space-y-2">
                   <input type="hidden" name="index" value={idx} />
                   <div class="grid gap-2">
                     <label
@@ -561,7 +580,7 @@ defmodule DestilaWeb.ChatComponents do
 
       <%!-- Submit all when done --%>
       <%= if @all_answered do %>
-        <button phx-click="submit_all_answers" class="btn btn-primary w-full">
+        <button phx-click="submit_all_answers" phx-target={@target} class="btn btn-primary w-full">
           Submit All Answers
         </button>
       <% end %>
