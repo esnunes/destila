@@ -26,9 +26,8 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
     defaults = %{
       title: "Test Session",
       workflow_type: :prompt_chore_task,
-      column: :request,
-      steps_completed: 1,
-      steps_total: 4,
+      current_phase: 1,
+      total_phases: 6,
       phase_status: :conversing,
       position: System.unique_integer([:positive])
     }
@@ -45,7 +44,9 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
       ws = create_session(%{title: "Fix login bug", project_id: project.id})
 
       # Add a message so mount doesn't try to start workflow
-      Destila.Messages.create_message(ws.id, %{
+      {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
+
+      Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: "Welcome",
         phase: 1
@@ -74,7 +75,9 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
     test "shows Unarchive button and restores on click", %{conn: conn, project: project} do
       ws = create_session(%{title: "Fix login bug", project_id: project.id})
 
-      Destila.Messages.create_message(ws.id, %{
+      {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
+
+      Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: "Welcome",
         phase: 1

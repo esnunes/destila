@@ -27,7 +27,6 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
   # Last message is always from system to avoid auto-triggering AI on mount.
   defp create_prompt_in_phase(phase, opts \\ []) do
     phase_status = Keyword.get(opts, :phase_status, :conversing)
-    column = Keyword.get(opts, :column, :request)
 
     # For advance_suggested tests, the last message needs to contain the marker
     last_content =
@@ -40,29 +39,30 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
         title: "Test Chore Task",
         workflow_type: :prompt_chore_task,
         project_id: nil,
-        column: column,
-        steps_completed: phase,
-        steps_total: 4,
+        current_phase: phase,
+        total_phases: 6,
         phase_status: phase_status
       })
 
+    {:ok, ai_session} = Destila.AI.get_or_create_ai_session(prompt.id)
+
     # Initial conversation: system question + user answer
     {:ok, _} =
-      Destila.Messages.create_message(prompt.id, %{
+      Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: "Let's work on your task.",
         phase: 1
       })
 
     {:ok, _} =
-      Destila.Messages.create_message(prompt.id, %{
+      Destila.AI.create_message(ai_session.id, %{
         role: :user,
         content: "Fix the login timeout bug",
         phase: 1
       })
 
     # Last message from system (prevents ensure_ai_session from auto-triggering)
-    # For AI messages, store raw_response so Messages.process derives message_type
+    # For AI messages, store raw_response so AI.process derives message_type
     raw_response =
       if Keyword.get(opts, :last_message_type) != nil,
         do: %{
@@ -74,7 +74,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
         else: nil
 
     {:ok, _} =
-      Destila.Messages.create_message(prompt.id, %{
+      Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: last_content,
         raw_response: raw_response,
@@ -84,14 +84,14 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     prompt
   end
 
-  describe "Phase 1 - Task Description" do
+  describe "Phase 3 - Task Description" do
     @tag feature: @feature, scenario: "Phase 1 - AI asks clarifying questions"
     test "shows phase info, AI message, and accepts user input", %{conn: conn} do
-      prompt = create_prompt_in_phase(1)
+      prompt = create_prompt_in_phase(3)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
-      # Header shows Phase 1
-      assert render(view) =~ "Phase 1/4"
+      # Header shows Phase 3
+      assert render(view) =~ "Phase 3/6"
       assert render(view) =~ "Task Description"
 
       # AI's question is visible
@@ -113,7 +113,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     @tag feature: @feature, scenario: "Advance to the next phase"
     test "shows advance button and advances on confirm", %{conn: conn} do
       prompt =
-        create_prompt_in_phase(1,
+        create_prompt_in_phase(3,
           phase_status: :advance_suggested,
           last_message_type: :phase_advance
         )
@@ -122,13 +122,13 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
       # Advance button is shown
       assert has_element?(view, "button[phx-click='confirm_advance']")
-      assert render(view) =~ "Continue to Phase 2"
+      assert render(view) =~ "Continue to Phase 4"
 
       # Click advance
       view |> element("button[phx-click='confirm_advance']") |> render_click()
 
-      # Header updates to Phase 2
-      assert render(view) =~ "Phase 2/4"
+      # Header updates to Phase 4
+      assert render(view) =~ "Phase 4/6"
 
       # Phase divider appears with phase name
       assert render(view) =~ "Gherkin Review"
@@ -137,7 +137,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     @tag feature: @feature, scenario: "Decline phase advance to add more context"
     test "re-enables input when declining advance", %{conn: conn} do
       prompt =
-        create_prompt_in_phase(1,
+        create_prompt_in_phase(3,
           phase_status: :advance_suggested,
           last_message_type: :phase_advance
         )
@@ -160,7 +160,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Skip Gherkin Review when not applicable"
     test "auto-skips phase when AI returns SKIP_PHASE", %{conn: conn} do
-      # First AI call returns SKIP_PHASE (phase 2), second returns normal (phase 3)
+      # First AI call returns SKIP_PHASE (phase 4), second returns normal (phase 5)
       {:ok, call_count} = Agent.start_link(fn -> 0 end)
 
       ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
@@ -175,58 +175,62 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       end)
 
       prompt =
-        create_prompt_in_phase(1,
+        create_prompt_in_phase(3,
           phase_status: :advance_suggested,
           last_message_type: :phase_advance
         )
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
-      # Advance to Phase 2 (Gherkin Review) — AI will return SKIP_PHASE,
-      # which triggers handle_skip_phase to auto-advance to Phase 3
+      # Advance to Phase 4 (Gherkin Review) — AI will return SKIP_PHASE,
+      # which triggers handle_skip_phase to auto-advance to Phase 5
       view |> element("button[phx-click='confirm_advance']") |> render_click()
 
-      # Wait for async skip to complete
-      assert_async(view, &(&1 =~ "Phase 3/4"))
+      # Process the {:phase_advanced, 4} message in the parent, which re-renders
+      # the component with initialized: false, triggering maybe_initialize_ai
+      # which enqueues AiQueryWorker (runs inline, detects SKIP_PHASE, advances to 5)
+      render(view)
 
-      html = render(view)
+      # Navigate to force a fresh mount which reads from DB
+      {:ok, _view, html} = live(conn, ~p"/sessions/#{prompt.id}")
+      assert html =~ "Phase 5/6"
       assert html =~ "Technical Concerns"
 
       Agent.stop(call_count)
     end
   end
 
-  describe "Phase 2 - Gherkin Review" do
+  describe "Phase 4 - Gherkin Review" do
     @tag feature: @feature, scenario: "Phase 2 - Gherkin Review"
     test "shows Gherkin Review phase with conversation input", %{conn: conn} do
-      prompt = create_prompt_in_phase(2)
+      prompt = create_prompt_in_phase(4)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
-      assert render(view) =~ "Phase 2/4"
+      assert render(view) =~ "Phase 4/6"
       assert render(view) =~ "Gherkin Review"
       assert has_element?(view, "input[name='content']")
     end
   end
 
-  describe "Phase 3 - Technical Concerns" do
+  describe "Phase 5 - Technical Concerns" do
     @tag feature: @feature, scenario: "Phase 3 - Technical Concerns"
     test "shows Technical Concerns phase with conversation input", %{conn: conn} do
-      prompt = create_prompt_in_phase(3)
+      prompt = create_prompt_in_phase(5)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
-      assert render(view) =~ "Phase 3/4"
+      assert render(view) =~ "Phase 5/6"
       assert render(view) =~ "Technical Concerns"
       assert has_element?(view, "input[name='content']")
     end
   end
 
-  describe "Phase 4 - Prompt Generation" do
+  describe "Phase 6 - Prompt Generation" do
     @tag feature: @feature, scenario: "Phase 4 - Prompt Generation and mark as done"
     test "shows Mark as Done button and completes workflow on click", %{conn: conn} do
-      prompt = create_prompt_in_phase(4)
+      prompt = create_prompt_in_phase(6)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{prompt.id}")
 
-      assert render(view) =~ "Phase 4/4"
+      assert render(view) =~ "Phase 6/6"
       assert render(view) =~ "Prompt Generation"
 
       # Mark as Done button is available

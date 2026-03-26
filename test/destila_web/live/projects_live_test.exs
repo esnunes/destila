@@ -198,7 +198,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
           title: "Test Prompt",
           project_id: project.id,
           workflow_type: :prompt_chore_task,
-          column: :request
+          total_phases: 6
         })
 
       {:ok, view, _html} = live(conn, ~p"/projects")

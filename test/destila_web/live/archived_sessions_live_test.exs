@@ -25,9 +25,8 @@ defmodule DestilaWeb.ArchivedSessionsLiveTest do
     defaults = %{
       title: "Test Session",
       workflow_type: :prompt_chore_task,
-      column: :request,
-      steps_completed: 1,
-      steps_total: 4,
+      current_phase: 1,
+      total_phases: 6,
       position: System.unique_integer([:positive])
     }
 
