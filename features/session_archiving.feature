@@ -11,8 +11,8 @@ Feature: Session Archiving
   Scenario: Archive a session from the session detail page
     Given I am viewing a session titled "Fix login bug"
     When I click the "Archive" button
-    Then I should see a flash message confirming the session was archived
-    And the button label should change to "Unarchive"
+    Then I should be redirected to the crafting board
+    And I should see a flash message confirming the session was archived
 
   Scenario: Archived session is hidden from the crafting board
     Given I have archived a session titled "Fix login bug"
