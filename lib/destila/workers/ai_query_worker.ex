@@ -43,11 +43,18 @@ defmodule Destila.Workers.AiQueryWorker do
     case Destila.AI.ClaudeSession.query(session, query) do
       {:ok, result} ->
         response_text = AI.response_text(result)
-        new_phase_status = AI.derive_phase_status(response_text)
+        session_action = AI.extract_session_action(result)
+
+        # Use session tool message as content when present, fallback to response text
+        content =
+          case session_action do
+            %{message: msg} when is_binary(msg) and msg != "" -> msg
+            _ -> response_text
+          end
 
         AI.create_message(ai_session_record.id, %{
           role: :system,
-          content: response_text,
+          content: content,
           raw_response: result,
           phase: phase
         })
@@ -59,12 +66,15 @@ defmodule Destila.Workers.AiQueryWorker do
           })
         end
 
-        if String.contains?(response_text, "<<SKIP_PHASE>>") do
-          handle_skip_phase(ws.id, phase)
-        else
-          Workflows.update_workflow_session(ws.id, %{
-            phase_status: new_phase_status
-          })
+        case session_action do
+          %{action: "phase_complete"} ->
+            handle_skip_phase(ws.id, phase)
+
+          %{action: "suggest_phase_complete"} ->
+            Workflows.update_workflow_session(ws.id, %{phase_status: :advance_suggested})
+
+          _ ->
+            Workflows.update_workflow_session(ws.id, %{phase_status: :conversing})
         end
 
         :ok
