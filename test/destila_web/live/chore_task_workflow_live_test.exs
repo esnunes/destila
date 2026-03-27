@@ -45,7 +45,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
         else: "I have some questions about this task."
 
     {:ok, ws} =
-      Destila.WorkflowSessions.create_workflow_session(%{
+      Destila.Workflows.create_workflow_session(%{
         title: "Test Chore Task",
         workflow_type: :prompt_chore_task,
         project_id: nil,
@@ -153,7 +153,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     @tag feature: @feature, scenario: "Phase 2 - Setup displays progress"
     test "shows setup progress steps", %{conn: conn} do
       {:ok, ws} =
-        Destila.WorkflowSessions.create_workflow_session(%{
+        Destila.Workflows.create_workflow_session(%{
           title: "Test Session",
           workflow_type: :prompt_chore_task,
           current_phase: 2,
@@ -162,11 +162,11 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
           project_id: create_project().id
         })
 
-      Destila.WorkflowSessions.upsert_metadata(ws.id, "setup", "title_gen", %{
+      Destila.Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
         "status" => "completed"
       })
 
-      Destila.WorkflowSessions.upsert_metadata(ws.id, "setup", "repo_sync", %{
+      Destila.Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
         "status" => "in_progress"
       })
 
@@ -363,7 +363,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       project = create_project()
 
       {:ok, ws} =
-        Destila.WorkflowSessions.create_workflow_session(%{
+        Destila.Workflows.create_workflow_session(%{
           title: "Test Session",
           workflow_type: :prompt_chore_task,
           current_phase: 2,
@@ -372,11 +372,11 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
           project_id: project.id
         })
 
-      Destila.WorkflowSessions.upsert_metadata(ws.id, "setup", "title_gen", %{
+      Destila.Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
         "status" => "completed"
       })
 
-      Destila.WorkflowSessions.upsert_metadata(ws.id, "setup", "repo_sync", %{
+      Destila.Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
         "status" => "failed",
         "error" => "Connection refused"
       })
@@ -469,7 +469,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
   defp create_session_with_options(input_type) do
     {:ok, ws} =
-      Destila.WorkflowSessions.create_workflow_session(%{
+      Destila.Workflows.create_workflow_session(%{
         title: "Test Options",
         workflow_type: :prompt_chore_task,
         current_phase: 3,
@@ -521,7 +521,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
   defp create_session_with_questions do
     {:ok, ws} =
-      Destila.WorkflowSessions.create_workflow_session(%{
+      Destila.Workflows.create_workflow_session(%{
         title: "Test Questions",
         workflow_type: :prompt_chore_task,
         current_phase: 3,

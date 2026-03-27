@@ -76,7 +76,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   """
 
   defp task_description_prompt(workflow_session) do
-    metadata = Destila.WorkflowSessions.get_metadata(workflow_session.id)
+    metadata = Destila.Workflows.get_metadata(workflow_session.id)
     idea = get_in(metadata, ["idea", "text"])
 
     idea_context =

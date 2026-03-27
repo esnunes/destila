@@ -9,7 +9,7 @@ defmodule Destila.Projects.Project do
     field(:git_repo_url, :string)
     field(:local_folder, :string)
 
-    has_many(:workflow_sessions, Destila.WorkflowSessions.WorkflowSession)
+    has_many(:workflow_sessions, Destila.Workflows.Session)
 
     timestamps(type: :utc_datetime)
   end

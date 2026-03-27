@@ -31,7 +31,7 @@ defmodule Destila.Projects do
   end
 
   def delete_project(%Project{} = project) do
-    if Destila.WorkflowSessions.count_by_project(project.id) > 0 do
+    if Destila.Workflows.count_by_project(project.id) > 0 do
       {:error, :has_linked_sessions}
     else
       case Repo.delete(project) do

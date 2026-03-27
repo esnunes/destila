@@ -1,11 +1,11 @@
-defmodule Destila.WorkflowSessionsMetadataTest do
+defmodule Destila.WorkflowsMetadataTest do
   use DestilaWeb.ConnCase, async: false
 
-  alias Destila.WorkflowSessions
+  alias Destila.Workflows
 
   defp create_session do
     {:ok, ws} =
-      WorkflowSessions.create_workflow_session(%{
+      Workflows.create_workflow_session(%{
         title: "Test Session",
         workflow_type: :prompt_chore_task,
         current_phase: 2,
@@ -20,7 +20,7 @@ defmodule Destila.WorkflowSessionsMetadataTest do
       ws = create_session()
 
       assert {:ok, metadata} =
-               WorkflowSessions.upsert_metadata(ws.id, "setup", "title_gen", %{
+               Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
                  "status" => "completed"
                })
 
@@ -34,19 +34,19 @@ defmodule Destila.WorkflowSessionsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        WorkflowSessions.upsert_metadata(ws.id, "setup", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
           "status" => "in_progress"
         })
 
       {:ok, updated} =
-        WorkflowSessions.upsert_metadata(ws.id, "setup", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
           "status" => "completed"
         })
 
       assert updated.value == %{"status" => "completed"}
 
       # Only one row exists
-      metadata = WorkflowSessions.get_metadata(ws.id)
+      metadata = Workflows.get_metadata(ws.id)
       assert metadata == %{"repo_sync" => %{"status" => "completed"}}
     end
 
@@ -54,16 +54,16 @@ defmodule Destila.WorkflowSessionsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        WorkflowSessions.upsert_metadata(ws.id, "setup", "title_gen", %{
+        Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
           "status" => "completed"
         })
 
       {:ok, _} =
-        WorkflowSessions.upsert_metadata(ws.id, "setup", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
           "status" => "in_progress"
         })
 
-      metadata = WorkflowSessions.get_metadata(ws.id)
+      metadata = Workflows.get_metadata(ws.id)
 
       assert metadata == %{
                "title_gen" => %{"status" => "completed"},
@@ -75,13 +75,13 @@ defmodule Destila.WorkflowSessionsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        WorkflowSessions.upsert_metadata(ws.id, "wizard", "idea", %{"text" => "first"})
+        Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => "first"})
 
       {:ok, _} =
-        WorkflowSessions.upsert_metadata(ws.id, "setup", "idea", %{"text" => "second"})
+        Workflows.upsert_metadata(ws.id, "setup", "idea", %{"text" => "second"})
 
       # Flat merge — last phase wins alphabetically (setup < wizard)
-      metadata = WorkflowSessions.get_metadata(ws.id)
+      metadata = Workflows.get_metadata(ws.id)
       assert metadata["idea"] == %{"text" => "first"}
     end
   end
@@ -89,29 +89,29 @@ defmodule Destila.WorkflowSessionsMetadataTest do
   describe "get_metadata/1" do
     test "returns empty map when no metadata exists" do
       ws = create_session()
-      assert WorkflowSessions.get_metadata(ws.id) == %{}
+      assert Workflows.get_metadata(ws.id) == %{}
     end
 
     test "returns flat map merged across phases" do
       ws = create_session()
 
       {:ok, _} =
-        WorkflowSessions.upsert_metadata(ws.id, "wizard", "idea", %{
+        Workflows.upsert_metadata(ws.id, "wizard", "idea", %{
           "text" => "Fix the login bug"
         })
 
       {:ok, _} =
-        WorkflowSessions.upsert_metadata(ws.id, "setup", "title_gen", %{
+        Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
           "status" => "completed"
         })
 
       {:ok, _} =
-        WorkflowSessions.upsert_metadata(ws.id, "setup", "worktree", %{
+        Workflows.upsert_metadata(ws.id, "setup", "worktree", %{
           "status" => "completed",
           "worktree_path" => "/tmp/wt"
         })
 
-      metadata = WorkflowSessions.get_metadata(ws.id)
+      metadata = Workflows.get_metadata(ws.id)
 
       assert metadata == %{
                "idea" => %{"text" => "Fix the login bug"},

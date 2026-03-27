@@ -1,4 +1,4 @@
-defmodule Destila.WorkflowSessions.WorkflowSession do
+defmodule Destila.Workflows.Session do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -21,8 +21,8 @@ defmodule Destila.WorkflowSessions.WorkflowSession do
     field(:archived_at, :utc_datetime)
 
     belongs_to(:project, Destila.Projects.Project)
-    has_many(:ai_sessions, Destila.AI.Session)
-    has_many(:metadata, Destila.WorkflowSessions.WorkflowSessionMetadata)
+    has_many(:ai_sessions, Destila.AI.Session, foreign_key: :workflow_session_id)
+    has_many(:metadata, Destila.Workflows.SessionMetadata, foreign_key: :workflow_session_id)
 
     timestamps(type: :utc_datetime)
   end

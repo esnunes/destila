@@ -23,7 +23,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   alias Destila.AI
   alias Destila.Workflows
-  alias Destila.WorkflowSessions
+  alias Destila.Workflows
 
   def mount(socket) do
     if connected?(socket) do
@@ -97,7 +97,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
           phase: ws.current_phase
         })
 
-        {:ok, ws} = WorkflowSessions.update_workflow_session(ws, %{phase_status: :generating})
+        {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :generating})
 
         %{"workflow_session_id" => ws.id, "phase" => ws.current_phase, "query" => content}
         |> Destila.Workers.AiQueryWorker.new()
@@ -210,7 +210,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       end
 
       {:ok, updated_ws} =
-        WorkflowSessions.update_workflow_session(ws, %{
+        Workflows.update_workflow_session(ws, %{
           current_phase: next_phase,
           phase_status: nil
         })
@@ -228,7 +228,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   def handle_event("decline_advance", _params, socket) do
     ws = socket.assigns.workflow_session
-    {:ok, ws} = WorkflowSessions.update_workflow_session(ws, %{phase_status: :conversing})
+    {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
     {:noreply, assign(socket, :workflow_session, ws)}
   end
 
@@ -245,7 +245,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     end
 
     {:ok, ws} =
-      WorkflowSessions.update_workflow_session(ws, %{
+      Workflows.update_workflow_session(ws, %{
         done_at: DateTime.utc_now(),
         phase_status: nil
       })
@@ -342,7 +342,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   # --- Private helpers ---
 
   defp refresh_from_db(socket) do
-    ws = WorkflowSessions.get_workflow_session!(socket.assigns.workflow_session.id)
+    ws = Workflows.get_workflow_session!(socket.assigns.workflow_session.id)
     ai_session = AI.get_ai_session_for_workflow(ws.id)
     messages = if ai_session, do: AI.list_messages(ai_session.id), else: []
     current_step = compute_current_step(ws, messages)
@@ -364,7 +364,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
         if ai_session do
           ai_session
         else
-          metadata = Destila.WorkflowSessions.get_metadata(ws.id)
+          metadata = Destila.Workflows.get_metadata(ws.id)
           worktree_path = get_in(metadata, ["worktree", "worktree_path"])
 
           {:ok, session} =
@@ -376,7 +376,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
       query = system_prompt_fn.(ws)
 
-      WorkflowSessions.update_workflow_session(ws, %{phase_status: :generating})
+      Workflows.update_workflow_session(ws, %{phase_status: :generating})
 
       %{"workflow_session_id" => ws.id, "phase" => phase_number, "query" => query}
       |> Destila.Workers.AiQueryWorker.new()
@@ -390,7 +390,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   defp compute_current_step(ws, messages) do
     cond do
-      Destila.WorkflowSessions.WorkflowSession.done?(ws) ->
+      Destila.Workflows.Session.done?(ws) ->
         %{input_type: nil, options: nil, questions: [], completed: true}
 
       ws.phase_status == :advance_suggested ->

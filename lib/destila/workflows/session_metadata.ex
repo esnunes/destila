@@ -1,4 +1,4 @@
-defmodule Destila.WorkflowSessions.WorkflowSessionMetadata do
+defmodule Destila.Workflows.SessionMetadata do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -9,7 +9,7 @@ defmodule Destila.WorkflowSessions.WorkflowSessionMetadata do
     field(:key, :string)
     field(:value, :map)
 
-    belongs_to(:workflow_session, Destila.WorkflowSessions.WorkflowSession)
+    belongs_to(:workflow_session, Destila.Workflows.Session)
 
     timestamps(type: :utc_datetime)
   end

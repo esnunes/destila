@@ -8,7 +8,7 @@ defmodule Destila.AI.Session do
     field(:claude_session_id, :string)
     field(:worktree_path, :string)
 
-    belongs_to(:workflow_session, Destila.WorkflowSessions.WorkflowSession)
+    belongs_to(:workflow_session, Destila.Workflows.Session)
     has_many(:messages, Destila.AI.Message, foreign_key: :ai_session_id)
 
     timestamps(type: :utc_datetime)

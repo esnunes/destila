@@ -1,7 +1,7 @@
 defmodule DestilaWeb.BoardComponents do
   use Phoenix.Component
 
-  alias Destila.WorkflowSessions.WorkflowSession
+  alias Destila.Workflows.Session
 
   attr :type, :atom, required: true
 
@@ -121,7 +121,7 @@ defmodule DestilaWeb.BoardComponents do
     do: {"bg-base-content/20", "Setting up"}
 
   defp status_dot_style(card) do
-    if WorkflowSession.done?(card) do
+    if Session.done?(card) do
       {"bg-success", "Done"}
     else
       {"bg-primary/40", "In progress"}
@@ -129,7 +129,7 @@ defmodule DestilaWeb.BoardComponents do
   end
 
   defp phase_label(card) do
-    if WorkflowSession.done?(card) do
+    if Session.done?(card) do
       "Done"
     else
       Destila.Workflows.phase_name(card.workflow_type, card.current_phase) ||

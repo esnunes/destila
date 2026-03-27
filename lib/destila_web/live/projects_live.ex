@@ -14,7 +14,7 @@ defmodule DestilaWeb.ProjectsLive do
      |> assign(:page_title, "Projects")
      |> stream(:projects, projects)
      |> assign(:projects_empty?, projects == [])
-     |> assign(:session_counts, Destila.WorkflowSessions.count_by_projects())
+     |> assign(:session_counts, Destila.Workflows.count_by_projects())
      |> assign(:creating, false)
      |> assign(:editing_project_id, nil)
      |> assign(:form, new_form())
@@ -154,7 +154,7 @@ defmodule DestilaWeb.ProjectsLive do
      socket
      |> stream(:projects, projects, reset: true)
      |> assign(:projects_empty?, projects == [])
-     |> assign(:session_counts, Destila.WorkflowSessions.count_by_projects())}
+     |> assign(:session_counts, Destila.Workflows.count_by_projects())}
   end
 
   def handle_info({:project_updated, _project}, socket) do
@@ -164,7 +164,7 @@ defmodule DestilaWeb.ProjectsLive do
      socket
      |> stream(:projects, projects, reset: true)
      |> assign(:projects_empty?, projects == [])
-     |> assign(:session_counts, Destila.WorkflowSessions.count_by_projects())}
+     |> assign(:session_counts, Destila.Workflows.count_by_projects())}
   end
 
   def handle_info({:project_deleted, _project}, socket) do
@@ -174,7 +174,7 @@ defmodule DestilaWeb.ProjectsLive do
      socket
      |> stream(:projects, projects, reset: true)
      |> assign(:projects_empty?, projects == [])
-     |> assign(:session_counts, Destila.WorkflowSessions.count_by_projects())}
+     |> assign(:session_counts, Destila.Workflows.count_by_projects())}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}

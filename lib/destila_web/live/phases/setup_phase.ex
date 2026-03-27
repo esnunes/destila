@@ -95,7 +95,7 @@ defmodule DestilaWeb.Phases.SetupPhase do
   defp maybe_start_setup(%{phase_status: :setup}, _metadata), do: :ok
 
   defp maybe_start_setup(ws, metadata) do
-    Destila.WorkflowSessions.update_workflow_session(ws, %{phase_status: :setup})
+    Destila.Workflows.update_workflow_session(ws, %{phase_status: :setup})
 
     idea = get_in(metadata, ["idea", "text"]) || ""
 

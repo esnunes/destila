@@ -1,7 +1,7 @@
 defmodule Destila.Workers.TitleGenerationWorker do
   use Oban.Worker, queue: :default, max_attempts: 3
 
-  alias Destila.WorkflowSessions
+  alias Destila.Workflows
 
   @impl Oban.Worker
   def perform(%Oban.Job{
@@ -10,10 +10,10 @@ defmodule Destila.Workers.TitleGenerationWorker do
           "idea" => idea
         }
       }) do
-    workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
+    workflow_session = Workflows.get_workflow_session!(workflow_session_id)
     workflow_type = workflow_session.workflow_type
 
-    WorkflowSessions.upsert_metadata(workflow_session_id, "setup", "title_gen", %{
+    Workflows.upsert_metadata(workflow_session_id, "setup", "title_gen", %{
       "status" => "in_progress"
     })
 
@@ -23,12 +23,12 @@ defmodule Destila.Workers.TitleGenerationWorker do
         {:error, _reason} -> Destila.Workflows.default_title(workflow_type)
       end
 
-    WorkflowSessions.update_workflow_session(workflow_session_id, %{
+    Workflows.update_workflow_session(workflow_session_id, %{
       title: title,
       title_generating: false
     })
 
-    WorkflowSessions.upsert_metadata(workflow_session_id, "setup", "title_gen", %{
+    Workflows.upsert_metadata(workflow_session_id, "setup", "title_gen", %{
       "status" => "completed"
     })
 

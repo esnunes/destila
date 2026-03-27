@@ -30,12 +30,12 @@ defmodule DestilaWeb.ArchivedSessionsLiveTest do
       position: System.unique_integer([:positive])
     }
 
-    {:ok, session} = Destila.WorkflowSessions.create_workflow_session(Map.merge(defaults, attrs))
+    {:ok, session} = Destila.Workflows.create_workflow_session(Map.merge(defaults, attrs))
     session
   end
 
   defp archive_session(session) do
-    {:ok, archived} = Destila.WorkflowSessions.archive_workflow_session(session)
+    {:ok, archived} = Destila.Workflows.archive_workflow_session(session)
     archived
   end
 
@@ -95,7 +95,7 @@ defmodule DestilaWeb.ArchivedSessionsLiveTest do
       assert has_element?(view, "#archived-session-#{archived.id}")
 
       # Unarchive it
-      Destila.WorkflowSessions.unarchive_workflow_session(archived)
+      Destila.Workflows.unarchive_workflow_session(archived)
 
       # Should disappear from the archived list
       refute has_element?(view, "#archived-session-#{archived.id}")

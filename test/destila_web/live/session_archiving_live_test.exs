@@ -32,7 +32,7 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
       position: System.unique_integer([:positive])
     }
 
-    {:ok, session} = Destila.WorkflowSessions.create_workflow_session(Map.merge(defaults, attrs))
+    {:ok, session} = Destila.Workflows.create_workflow_session(Map.merge(defaults, attrs))
     session
   end
 
@@ -82,7 +82,7 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
         phase: 1
       })
 
-      {:ok, archived} = Destila.WorkflowSessions.archive_workflow_session(ws)
+      {:ok, archived} = Destila.Workflows.archive_workflow_session(ws)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{archived.id}")
 
@@ -106,7 +106,7 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
     @tag feature: @feature, scenario: "Archived session is hidden from the crafting board"
     test "archived session is not shown on crafting board", %{conn: conn, project: project} do
       ws = create_session(%{title: "Fix login bug", project_id: project.id})
-      Destila.WorkflowSessions.archive_workflow_session(ws)
+      Destila.Workflows.archive_workflow_session(ws)
 
       {:ok, _view, html} = live(conn, ~p"/crafting")
 
@@ -116,8 +116,8 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
     @tag feature: @feature, scenario: "Restored session reappears on the crafting board"
     test "restored session reappears on crafting board", %{conn: conn, project: project} do
       ws = create_session(%{title: "Fix login bug", project_id: project.id})
-      {:ok, archived} = Destila.WorkflowSessions.archive_workflow_session(ws)
-      Destila.WorkflowSessions.unarchive_workflow_session(archived)
+      {:ok, archived} = Destila.Workflows.archive_workflow_session(ws)
+      Destila.Workflows.unarchive_workflow_session(archived)
 
       {:ok, _view, html} = live(conn, ~p"/crafting")
 
@@ -131,7 +131,7 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
     @tag feature: @feature, scenario: "Archived session is hidden from the dashboard"
     test "archived session is not shown on dashboard", %{conn: conn, project: project} do
       ws = create_session(%{title: "Fix login bug", project_id: project.id})
-      Destila.WorkflowSessions.archive_workflow_session(ws)
+      Destila.Workflows.archive_workflow_session(ws)
 
       {:ok, _view, html} = live(conn, ~p"/")
 

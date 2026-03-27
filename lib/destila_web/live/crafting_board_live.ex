@@ -4,7 +4,7 @@ defmodule DestilaWeb.CraftingBoardLive do
   import DestilaWeb.BoardComponents
 
   alias Destila.Workflows
-  alias Destila.WorkflowSessions.WorkflowSession
+  alias Destila.Workflows.Session
 
   @sections [:setup, :waiting_for_user, :ai_processing, :in_progress, :done]
   @section_labels %{
@@ -27,7 +27,7 @@ defmodule DestilaWeb.CraftingBoardLive do
   end
 
   def handle_params(params, _uri, socket) do
-    prompts = socket.assigns[:all_prompts] || Destila.WorkflowSessions.list_workflow_sessions()
+    prompts = socket.assigns[:all_prompts] || Destila.Workflows.list_workflow_sessions()
     view_mode = if params["view"] == "workflow", do: :workflow, else: :list
     project_filter = params["project"]
 
@@ -58,7 +58,7 @@ defmodule DestilaWeb.CraftingBoardLive do
              :workflow_session_updated,
              :workflow_session_deleted
            ] do
-    prompts = Destila.WorkflowSessions.list_workflow_sessions()
+    prompts = Destila.Workflows.list_workflow_sessions()
 
     {:noreply,
      socket
@@ -70,7 +70,7 @@ defmodule DestilaWeb.CraftingBoardLive do
 
   # --- Classification ---
 
-  defp classify_prompt(prompt), do: Destila.WorkflowSessions.classify(prompt)
+  defp classify_prompt(prompt), do: Destila.Workflows.classify(prompt)
 
   # --- Derived State ---
 
@@ -122,12 +122,12 @@ defmodule DestilaWeb.CraftingBoardLive do
                 matching =
                   case phase do
                     :done ->
-                      Enum.filter(wf_prompts, &WorkflowSession.done?/1)
+                      Enum.filter(wf_prompts, &Session.done?/1)
 
                     n when is_integer(n) ->
                       Enum.filter(
                         wf_prompts,
-                        &(!WorkflowSession.done?(&1) && &1.current_phase == n)
+                        &(!Session.done?(&1) && &1.current_phase == n)
                       )
                   end
 

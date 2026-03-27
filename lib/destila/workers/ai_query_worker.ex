@@ -1,7 +1,7 @@
 defmodule Destila.Workers.AiQueryWorker do
   use Oban.Worker, queue: :default, max_attempts: 1
 
-  alias Destila.{AI, WorkflowSessions}
+  alias Destila.{AI, Workflows}
 
   @impl Oban.Worker
   def perform(%Oban.Job{
@@ -11,7 +11,7 @@ defmodule Destila.Workers.AiQueryWorker do
           "query" => query
         }
       }) do
-    ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
+    ws = Workflows.get_workflow_session!(workflow_session_id)
     ai_session_record = AI.get_ai_session_for_workflow(workflow_session_id)
 
     unless ai_session_record do
@@ -31,7 +31,7 @@ defmodule Destila.Workers.AiQueryWorker do
           phase: phase
         })
 
-        WorkflowSessions.update_workflow_session(workflow_session_id, %{
+        Workflows.update_workflow_session(workflow_session_id, %{
           phase_status: :conversing
         })
 
@@ -62,7 +62,7 @@ defmodule Destila.Workers.AiQueryWorker do
         if String.contains?(response_text, "<<SKIP_PHASE>>") do
           handle_skip_phase(ws.id, phase)
         else
-          WorkflowSessions.update_workflow_session(ws.id, %{
+          Workflows.update_workflow_session(ws.id, %{
             phase_status: new_phase_status
           })
         end
@@ -76,7 +76,7 @@ defmodule Destila.Workers.AiQueryWorker do
           phase: phase
         })
 
-        WorkflowSessions.update_workflow_session(ws.id, %{
+        Workflows.update_workflow_session(ws.id, %{
           phase_status: :conversing
         })
 
@@ -86,11 +86,11 @@ defmodule Destila.Workers.AiQueryWorker do
 
   defp handle_skip_phase(workflow_session_id, current_phase) do
     next_phase = current_phase + 1
-    ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
+    ws = Workflows.get_workflow_session!(workflow_session_id)
     total = ws.total_phases
 
     if next_phase > total do
-      WorkflowSessions.update_workflow_session(workflow_session_id, %{
+      Workflows.update_workflow_session(workflow_session_id, %{
         phase_status: :conversing
       })
     else
@@ -103,8 +103,8 @@ defmodule Destila.Workers.AiQueryWorker do
         Destila.AI.ClaudeSession.stop_for_workflow_session(workflow_session_id)
       end
 
-      WorkflowSessions.update_workflow_session(workflow_session_id, update_attrs)
-      ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
+      Workflows.update_workflow_session(workflow_session_id, update_attrs)
+      ws = Workflows.get_workflow_session!(workflow_session_id)
 
       phases = Destila.Workflows.phases(ws.workflow_type)
       {_module, opts} = Enum.at(phases, next_phase - 1)

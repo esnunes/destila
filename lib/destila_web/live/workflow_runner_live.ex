@@ -13,10 +13,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   import DestilaWeb.BoardComponents, only: [workflow_badge: 1, progress_indicator: 1]
 
-  alias Destila.WorkflowSessions.WorkflowSession
+  alias Destila.Workflows.Session
 
   alias Destila.Workflows
-  alias Destila.WorkflowSessions
 
   def mount(params, session, socket) do
     socket = assign(socket, :current_user, session["current_user"])
@@ -60,7 +59,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   defp mount_session(id, socket) do
-    workflow_session = WorkflowSessions.get_workflow_session(id)
+    workflow_session = Workflows.get_workflow_session(id)
 
     if workflow_session do
       if connected?(socket) do
@@ -84,7 +83,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:current_phase, workflow_session.current_phase)
        |> assign(:total_phases, workflow_session.total_phases)
        |> assign(:editing_title, false)
-       |> assign(:metadata, WorkflowSessions.get_metadata(workflow_session.id))
+       |> assign(:metadata, Workflows.get_metadata(workflow_session.id))
        |> assign(:page_title, workflow_session.title)}
     else
       {:ok,
@@ -104,7 +103,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     ws = socket.assigns.workflow_session
     title = String.trim(title)
     title = if title == "", do: ws.title, else: title
-    {:ok, ws} = WorkflowSessions.update_workflow_session(ws, %{title: title})
+    {:ok, ws} = Workflows.update_workflow_session(ws, %{title: title})
 
     {:noreply,
      socket
@@ -114,7 +113,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("archive_session", _params, socket) do
-    {:ok, _ws} = WorkflowSessions.archive_workflow_session(socket.assigns.workflow_session)
+    {:ok, _ws} = Workflows.archive_workflow_session(socket.assigns.workflow_session)
 
     {:noreply,
      socket
@@ -123,7 +122,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("unarchive_session", _params, socket) do
-    {:ok, ws} = WorkflowSessions.unarchive_workflow_session(socket.assigns.workflow_session)
+    {:ok, ws} = Workflows.unarchive_workflow_session(socket.assigns.workflow_session)
 
     {:noreply,
      socket
@@ -144,7 +143,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
 
     {:ok, ws} =
-      WorkflowSessions.update_workflow_session(ws, %{
+      Workflows.update_workflow_session(ws, %{
         done_at: DateTime.utc_now(),
         phase_status: nil
       })
@@ -168,10 +167,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       |> maybe_put(:project_id, data[:project_id])
       |> maybe_put(:title_generating, data[:title_generating])
 
-    {:ok, ws} = WorkflowSessions.create_workflow_session(session_attrs)
+    {:ok, ws} = Workflows.create_workflow_session(session_attrs)
 
     if data[:idea] do
-      WorkflowSessions.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
+      Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
     end
 
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
@@ -182,7 +181,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     ws = socket.assigns.workflow_session
 
     {:ok, ws} =
-      WorkflowSessions.update_workflow_session(ws, %{
+      Workflows.update_workflow_session(ws, %{
         current_phase: phase + 1,
         phase_status: nil
       })
@@ -191,13 +190,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      socket
      |> assign(:workflow_session, ws)
      |> assign(:current_phase, ws.current_phase)
-     |> assign(:metadata, WorkflowSessions.get_metadata(ws.id))
+     |> assign(:metadata, Workflows.get_metadata(ws.id))
      |> assign(:page_title, ws.title)}
   end
 
   # Phase advanced (AI conversation moved to next phase)
   def handle_info({:phase_advanced, new_phase}, socket) do
-    ws = WorkflowSessions.get_workflow_session!(socket.assigns.workflow_session.id)
+    ws = Workflows.get_workflow_session!(socket.assigns.workflow_session.id)
 
     {:noreply,
      socket
@@ -208,7 +207,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # Workflow marked as done
   def handle_info(:workflow_done, socket) do
-    ws = WorkflowSessions.get_workflow_session!(socket.assigns.workflow_session.id)
+    ws = Workflows.get_workflow_session!(socket.assigns.workflow_session.id)
 
     {:noreply,
      socket
@@ -224,7 +223,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   def handle_info({:workflow_session_updated, updated_ws}, socket) do
     if socket.assigns[:workflow_session] &&
          updated_ws.id == socket.assigns.workflow_session.id do
-      ws = WorkflowSessions.get_workflow_session!(updated_ws.id)
+      ws = Workflows.get_workflow_session!(updated_ws.id)
 
       {:noreply,
        socket
@@ -239,7 +238,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   # PubSub: metadata changed — refresh metadata assign for active phase component
   def handle_info({:metadata_updated, ws_id}, socket) do
     if socket.assigns[:workflow_session] && ws_id == socket.assigns.workflow_session.id do
-      {:noreply, assign(socket, :metadata, WorkflowSessions.get_metadata(ws_id))}
+      {:noreply, assign(socket, :metadata, Workflows.get_metadata(ws_id))}
     else
       {:noreply, socket}
     end
@@ -383,7 +382,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 :if={
                   @workflow_session &&
                     @workflow_session.current_phase == @workflow_session.total_phases &&
-                    !WorkflowSession.done?(@workflow_session)
+                    !Session.done?(@workflow_session)
                 }
                 phx-click="mark_done"
                 id="mark-done-btn"
@@ -423,7 +422,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
         <%!-- Workflow complete banner --%>
         <div
-          :if={@workflow_session && WorkflowSession.done?(@workflow_session)}
+          :if={@workflow_session && Session.done?(@workflow_session)}
           class="border-t border-base-300 bg-base-200/50 px-4 py-3"
         >
           <p class="text-sm text-base-content/50 flex items-center justify-center gap-2">

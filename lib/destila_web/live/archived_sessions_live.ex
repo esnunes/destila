@@ -8,7 +8,7 @@ defmodule DestilaWeb.ArchivedSessionsLive do
       Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
     end
 
-    sessions = Destila.WorkflowSessions.list_archived_workflow_sessions()
+    sessions = Destila.Workflows.list_archived_workflow_sessions()
 
     {:ok,
      socket
@@ -22,7 +22,7 @@ defmodule DestilaWeb.ArchivedSessionsLive do
              :workflow_session_created,
              :workflow_session_updated
            ] do
-    sessions = Destila.WorkflowSessions.list_archived_workflow_sessions()
+    sessions = Destila.Workflows.list_archived_workflow_sessions()
     {:noreply, assign(socket, :sessions, sessions)}
   end
 

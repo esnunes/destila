@@ -9,7 +9,7 @@ defmodule DestilaWeb.DashboardLive do
     end
 
     current_user = session["current_user"]
-    crafting = Destila.WorkflowSessions.list_workflow_sessions()
+    crafting = Destila.Workflows.list_workflow_sessions()
 
     {:ok,
      socket
@@ -24,7 +24,7 @@ defmodule DestilaWeb.DashboardLive do
              :workflow_session_updated,
              :workflow_session_deleted
            ] do
-    crafting = Destila.WorkflowSessions.list_workflow_sessions()
+    crafting = Destila.Workflows.list_workflow_sessions()
 
     {:noreply,
      socket
@@ -41,7 +41,7 @@ defmodule DestilaWeb.DashboardLive do
     end)
   end
 
-  defp classify_crafting_prompt(prompt), do: Destila.WorkflowSessions.classify(prompt)
+  defp classify_crafting_prompt(prompt), do: Destila.Workflows.classify(prompt)
 
   defp section_label(:setup), do: "Setup"
   defp section_label(:waiting_for_user), do: "Waiting for You"

@@ -1,11 +1,11 @@
 defmodule Destila.Workers.SetupWorker do
   use Oban.Worker, queue: :setup, max_attempts: 3
 
-  alias Destila.{Git, WorkflowSessions}
+  alias Destila.{Git, Workflows}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"workflow_session_id" => workflow_session_id}}) do
-    workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
+    workflow_session = Workflows.get_workflow_session!(workflow_session_id)
 
     project =
       if workflow_session.project_id,
@@ -98,7 +98,7 @@ defmodule Destila.Workers.SetupWorker do
       |> then(fn v -> if error, do: Map.put(v, "error", sanitize_error(error)), else: v end)
       |> Map.merge(extra)
 
-    WorkflowSessions.upsert_metadata(workflow_session_id, "setup", step, value)
+    Workflows.upsert_metadata(workflow_session_id, "setup", step, value)
   end
 
   defp sanitize_error(message) when is_binary(message) do
