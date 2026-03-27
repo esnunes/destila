@@ -16,13 +16,13 @@ defmodule Destila.WorkflowSessions.WorkflowSession do
     )
 
     field(:title_generating, :boolean, default: false)
-    field(:setup_steps, :map, default: %{})
     field(:position, :integer)
     field(:done_at, :utc_datetime)
     field(:archived_at, :utc_datetime)
 
     belongs_to(:project, Destila.Projects.Project)
     has_many(:ai_sessions, Destila.AI.Session)
+    has_many(:metadata, Destila.WorkflowSessions.WorkflowSessionMetadata)
 
     timestamps(type: :utc_datetime)
   end
@@ -38,7 +38,6 @@ defmodule Destila.WorkflowSessions.WorkflowSession do
       :total_phases,
       :phase_status,
       :title_generating,
-      :setup_steps,
       :position,
       :archived_at
     ])

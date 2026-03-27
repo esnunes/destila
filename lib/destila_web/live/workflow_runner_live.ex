@@ -55,6 +55,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:current_phase, 1)
      |> assign(:total_phases, length(phases))
      |> assign(:editing_title, false)
+     |> assign(:metadata, %{})
      |> assign(:page_title, Workflows.default_title(workflow_type))}
   end
 
@@ -83,6 +84,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:current_phase, workflow_session.current_phase)
        |> assign(:total_phases, workflow_session.total_phases)
        |> assign(:editing_title, false)
+       |> assign(:metadata, WorkflowSessions.get_metadata(workflow_session.id))
        |> assign(:page_title, workflow_session.title)}
     else
       {:ok,
@@ -161,25 +163,35 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         title: Workflows.default_title(workflow_type),
         workflow_type: workflow_type,
         current_phase: phase + 1,
-        total_phases: Workflows.total_phases(workflow_type),
-        setup_steps: %{"idea" => data[:idea]}
+        total_phases: Workflows.total_phases(workflow_type)
       }
       |> maybe_put(:project_id, data[:project_id])
       |> maybe_put(:title_generating, data[:title_generating])
 
     {:ok, ws} = WorkflowSessions.create_workflow_session(session_attrs)
 
+    if data[:idea] do
+      WorkflowSessions.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
+    end
+
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
   end
 
   # Phase complete — advance to next phase
-  def handle_info({:phase_complete, _phase, _data}, socket) do
-    ws = WorkflowSessions.get_workflow_session!(socket.assigns.workflow_session.id)
+  def handle_info({:phase_complete, phase, _data}, socket) do
+    ws = socket.assigns.workflow_session
+
+    {:ok, ws} =
+      WorkflowSessions.update_workflow_session(ws, %{
+        current_phase: phase + 1,
+        phase_status: nil
+      })
 
     {:noreply,
      socket
      |> assign(:workflow_session, ws)
      |> assign(:current_phase, ws.current_phase)
+     |> assign(:metadata, WorkflowSessions.get_metadata(ws.id))
      |> assign(:page_title, ws.title)}
   end
 
@@ -219,6 +231,15 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:workflow_session, ws)
        |> assign(:current_phase, ws.current_phase)
        |> assign(:page_title, ws.title)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # PubSub: metadata changed — refresh metadata assign for active phase component
+  def handle_info({:metadata_updated, ws_id}, socket) do
+    if socket.assigns[:workflow_session] && ws_id == socket.assigns.workflow_session.id do
+      {:noreply, assign(socket, :metadata, WorkflowSessions.get_metadata(ws_id))}
     else
       {:noreply, socket}
     end
@@ -429,6 +450,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           id={"phase-#{@current_phase}"}
           workflow_session={@workflow_session}
           workflow_type={@workflow_type}
+          metadata={@metadata}
           opts={@phase_opts}
           phase_number={@current_phase}
         />

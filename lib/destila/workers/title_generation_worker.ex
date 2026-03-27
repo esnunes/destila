@@ -13,7 +13,9 @@ defmodule Destila.Workers.TitleGenerationWorker do
     workflow_session = WorkflowSessions.get_workflow_session!(workflow_session_id)
     workflow_type = workflow_session.workflow_type
 
-    update_setup_step(workflow_session_id, "title_gen", "in_progress")
+    WorkflowSessions.upsert_metadata(workflow_session_id, "setup", "title_gen", %{
+      "status" => "in_progress"
+    })
 
     title =
       case Destila.AI.generate_title(workflow_type, idea) do
@@ -26,16 +28,10 @@ defmodule Destila.Workers.TitleGenerationWorker do
       title_generating: false
     })
 
-    update_setup_step(workflow_session_id, "title_gen", "completed")
-
-    Destila.Workflows.SetupCoordinator.maybe_advance_setup(workflow_session_id)
+    WorkflowSessions.upsert_metadata(workflow_session_id, "setup", "title_gen", %{
+      "status" => "completed"
+    })
 
     :ok
-  end
-
-  defp update_setup_step(workflow_session_id, step, status) do
-    ws = WorkflowSessions.get_workflow_session!(workflow_session_id)
-    setup_steps = Map.put(ws.setup_steps || %{}, step, %{"status" => status})
-    WorkflowSessions.update_workflow_session(ws, %{setup_steps: setup_steps})
   end
 end

@@ -3,68 +3,32 @@ defmodule DestilaWeb.Phases.SetupPhase do
   LiveComponent for Phase 2 — displays setup progress (title generation,
   repo sync, worktree creation) and auto-advances when all steps complete.
 
-  Subscribes to PubSub directly to receive real-time setup_steps updates.
+  Receives metadata from the parent LiveView via the `metadata` assign.
   """
 
   use DestilaWeb, :live_component
 
-  def mount(socket) do
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
-    end
-
-    {:ok, assign(socket, :initialized, false)}
-  end
-
   def update(assigns, socket) do
     ws = assigns.workflow_session
-    steps = build_steps(ws)
+    metadata = assigns[:metadata] || %{}
+    steps = build_steps(ws, metadata)
 
-    socket =
-      socket
-      |> assign(:workflow_session, ws)
-      |> assign(:phase_number, assigns.phase_number)
-      |> assign(:steps, steps)
-      |> assign(:all_done, all_completed?(steps))
-      |> assign(:has_failure, has_failure?(steps))
-
-    # On first mount, set phase_status and enqueue workers if not already running
-    socket =
-      if !socket.assigns.initialized && connected?(socket) && ws do
-        maybe_start_setup(ws)
-        assign(socket, :initialized, true)
-      else
-        socket
-      end
-
-    {:ok, socket}
-  end
-
-  # PubSub: workflow session updated — refresh setup_steps
-  def handle_info({:workflow_session_updated, updated_ws}, socket) do
-    if updated_ws.id == socket.assigns.workflow_session.id do
-      ws = Destila.WorkflowSessions.get_workflow_session!(updated_ws.id)
-      steps = build_steps(ws)
-
-      socket =
-        socket
-        |> assign(:workflow_session, ws)
-        |> assign(:steps, steps)
-        |> assign(:all_done, all_completed?(steps))
-        |> assign(:has_failure, has_failure?(steps))
-
-      # Signal parent when setup advances to next phase
-      if ws.current_phase > socket.assigns.phase_number do
-        send(self(), {:phase_complete, socket.assigns.phase_number, %{}})
-      end
-
-      {:noreply, socket}
-    else
-      {:noreply, socket}
+    if connected?(socket) && ws do
+      maybe_start_setup(ws, metadata)
     end
-  end
 
-  def handle_info(_msg, socket), do: {:noreply, socket}
+    if all_completed?(steps) do
+      send(self(), {:phase_complete, assigns.phase_number, %{}})
+    end
+
+    {:ok,
+     socket
+     |> assign(:workflow_session, ws)
+     |> assign(:phase_number, assigns.phase_number)
+     |> assign(:steps, steps)
+     |> assign(:all_done, all_completed?(steps))
+     |> assign(:has_failure, has_failure?(steps))}
+  end
 
   def handle_event("retry_setup", _params, socket) do
     ws = socket.assigns.workflow_session
@@ -89,14 +53,6 @@ defmodule DestilaWeb.Phases.SetupPhase do
     <div class="overflow-y-auto h-full px-6 py-6">
       <div class="max-w-2xl mx-auto space-y-2">
         <.step_item :for={step <- @steps} step={step} myself={@myself} />
-
-        <div
-          :if={!@all_done && !@has_failure}
-          class="flex items-center gap-3 text-sm text-base-content/50 pl-2"
-        >
-          <span class="loading loading-spinner loading-xs" />
-          <span>Setting up...</span>
-        </div>
       </div>
     </div>
     """
@@ -136,37 +92,30 @@ defmodule DestilaWeb.Phases.SetupPhase do
     """
   end
 
-  defp maybe_start_setup(ws) do
-    # Only start if no steps are in progress or completed yet
-    setup_steps = ws.setup_steps || %{}
-    has_progress = Enum.any?(setup_steps, fn {k, _v} -> k != "idea" end)
+  defp maybe_start_setup(%{phase_status: :setup}, _metadata), do: :ok
 
-    unless has_progress do
-      Destila.WorkflowSessions.update_workflow_session(ws, %{phase_status: :setup})
+  defp maybe_start_setup(ws, metadata) do
+    Destila.WorkflowSessions.update_workflow_session(ws, %{phase_status: :setup})
 
-      idea = setup_steps["idea"] || ""
+    idea = get_in(metadata, ["idea", "text"]) || ""
 
-      %{"workflow_session_id" => ws.id, "idea" => idea}
-      |> Destila.Workers.TitleGenerationWorker.new()
+    %{"workflow_session_id" => ws.id, "idea" => idea}
+    |> Destila.Workers.TitleGenerationWorker.new()
+    |> Oban.insert()
+
+    if ws.project_id do
+      %{"workflow_session_id" => ws.id}
+      |> Destila.Workers.SetupWorker.new()
       |> Oban.insert()
-
-      if ws.project_id do
-        %{"workflow_session_id" => ws.id}
-        |> Destila.Workers.SetupWorker.new()
-        |> Oban.insert()
-      end
     end
   end
 
-  # Build the step list based on workflow session state
-  defp build_steps(ws) do
-    setup_steps = ws.setup_steps || %{}
-
+  defp build_steps(ws, metadata) do
     title_step = %{
       key: "title_gen",
-      label: step_label("title_gen", setup_steps),
-      status: get_step_status(setup_steps, "title_gen"),
-      error: get_step_error(setup_steps, "title_gen")
+      label: step_label("title_gen", metadata),
+      status: get_step_status(metadata, "title_gen"),
+      error: get_step_error(metadata, "title_gen")
     }
 
     if ws.project_id do
@@ -182,14 +131,14 @@ defmodule DestilaWeb.Phases.SetupPhase do
         %{
           key: "repo_sync",
           label: repo_label,
-          status: get_step_status(setup_steps, "repo_sync"),
-          error: get_step_error(setup_steps, "repo_sync")
+          status: get_step_status(metadata, "repo_sync"),
+          error: get_step_error(metadata, "repo_sync")
         },
         %{
           key: "worktree",
           label: "Creating worktree...",
-          status: get_step_status(setup_steps, "worktree"),
-          error: get_step_error(setup_steps, "worktree")
+          status: get_step_status(metadata, "worktree"),
+          error: get_step_error(metadata, "worktree")
         }
       ]
     else
@@ -200,15 +149,15 @@ defmodule DestilaWeb.Phases.SetupPhase do
   defp step_label("title_gen", _), do: "Generating title..."
   defp step_label(_, _), do: ""
 
-  defp get_step_status(setup_steps, key) do
-    case setup_steps[key] do
+  defp get_step_status(metadata, key) do
+    case metadata[key] do
       %{"status" => status} -> status
       _ -> "pending"
     end
   end
 
-  defp get_step_error(setup_steps, key) do
-    case setup_steps[key] do
+  defp get_step_error(metadata, key) do
+    case metadata[key] do
       %{"error" => error} -> error
       _ -> nil
     end
