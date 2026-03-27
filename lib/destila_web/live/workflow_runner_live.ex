@@ -114,12 +114,12 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("archive_session", _params, socket) do
-    {:ok, ws} = WorkflowSessions.archive_workflow_session(socket.assigns.workflow_session)
+    {:ok, _ws} = WorkflowSessions.archive_workflow_session(socket.assigns.workflow_session)
 
     {:noreply,
      socket
-     |> assign(:workflow_session, ws)
-     |> put_flash(:info, "Session archived")}
+     |> put_flash(:info, "Session archived")
+     |> push_navigate(to: ~p"/crafting")}
   end
 
   def handle_event("unarchive_session", _params, socket) do

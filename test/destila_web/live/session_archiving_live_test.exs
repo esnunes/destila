@@ -40,7 +40,7 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
 
   describe "archive from session detail" do
     @tag feature: @feature, scenario: "Archive a session from the session detail page"
-    test "shows Archive button and archives on click", %{conn: conn, project: project} do
+    test "redirects to crafting board with flash on archive", %{conn: conn, project: project} do
       ws = create_session(%{title: "Fix login bug", project_id: project.id})
 
       # Add a message so mount doesn't try to start workflow
@@ -56,15 +56,14 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
 
       # Archive button should be visible
       assert has_element?(view, "#archive-btn")
-      refute has_element?(view, "#unarchive-btn")
 
       # Click archive
       view |> element("#archive-btn") |> render_click()
 
-      # Flash and button swap
-      assert has_element?(view, "#unarchive-btn")
-      refute has_element?(view, "#archive-btn")
-      assert render(view) =~ "Session archived"
+      # Should redirect to crafting board with flash
+      {path, flash} = assert_redirect(view)
+      assert path == "/crafting"
+      assert flash["info"] == "Session archived"
     end
   end
 
