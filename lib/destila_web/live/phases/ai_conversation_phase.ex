@@ -364,8 +364,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
         if ai_session do
           ai_session
         else
-          setup_steps = ws.setup_steps || %{}
-          worktree_path = get_in(setup_steps, ["worktree", "worktree_path"])
+          metadata = Destila.WorkflowSessions.get_metadata(ws.id)
+          worktree_path = get_in(metadata, ["worktree", "worktree_path"])
 
           {:ok, session} =
             AI.get_or_create_ai_session(ws.id, %{worktree_path: worktree_path})

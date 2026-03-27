@@ -2,7 +2,7 @@ defmodule Destila.WorkflowSessions do
   import Ecto.Query
 
   alias Destila.Repo
-  alias Destila.WorkflowSessions.WorkflowSession
+  alias Destila.WorkflowSessions.{WorkflowSession, WorkflowSessionMetadata}
 
   def list_workflow_sessions do
     from(ws in WorkflowSession,
@@ -99,6 +99,42 @@ defmodule Destila.WorkflowSessions do
     |> WorkflowSession.changeset(attrs)
     |> Repo.update()
     |> broadcast(:workflow_session_updated)
+  end
+
+  # --- Metadata ---
+
+  def upsert_metadata(workflow_session_id, phase_name, key, value) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    %WorkflowSessionMetadata{}
+    |> WorkflowSessionMetadata.changeset(%{
+      workflow_session_id: workflow_session_id,
+      phase_name: phase_name,
+      key: key,
+      value: value
+    })
+    |> Repo.insert(
+      on_conflict: {:replace, [:value, :updated_at]},
+      conflict_target: [:workflow_session_id, :phase_name, :key],
+      set: [updated_at: now]
+    )
+    |> case do
+      {:ok, metadata} ->
+        Destila.PubSubHelper.broadcast_event(:metadata_updated, workflow_session_id)
+        {:ok, metadata}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  def get_metadata(workflow_session_id) do
+    from(m in WorkflowSessionMetadata,
+      where: m.workflow_session_id == ^workflow_session_id,
+      order_by: m.phase_name
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{}, fn m, acc -> Map.put(acc, m.key, m.value) end)
   end
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper

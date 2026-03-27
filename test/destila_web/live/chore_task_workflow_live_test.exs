@@ -159,12 +159,16 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
           current_phase: 2,
           total_phases: 6,
           phase_status: :setup,
-          setup_steps: %{
-            "title_gen" => %{"status" => "completed"},
-            "repo_sync" => %{"status" => "in_progress"}
-          },
           project_id: create_project().id
         })
+
+      Destila.WorkflowSessions.upsert_metadata(ws.id, "setup", "title_gen", %{
+        "status" => "completed"
+      })
+
+      Destila.WorkflowSessions.upsert_metadata(ws.id, "setup", "repo_sync", %{
+        "status" => "in_progress"
+      })
 
       {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -365,12 +369,17 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
           current_phase: 2,
           total_phases: 6,
           phase_status: :setup,
-          project_id: project.id,
-          setup_steps: %{
-            "title_gen" => %{"status" => "completed"},
-            "repo_sync" => %{"status" => "failed", "error" => "Connection refused"}
-          }
+          project_id: project.id
         })
+
+      Destila.WorkflowSessions.upsert_metadata(ws.id, "setup", "title_gen", %{
+        "status" => "completed"
+      })
+
+      Destila.WorkflowSessions.upsert_metadata(ws.id, "setup", "repo_sync", %{
+        "status" => "failed",
+        "error" => "Connection refused"
+      })
 
       {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
 
