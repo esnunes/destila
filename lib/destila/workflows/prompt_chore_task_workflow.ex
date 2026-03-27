@@ -205,7 +205,11 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     - File-by-file change lists
     - Time estimates
 
-    Present the prompt clearly. The user may ask you to refine it. \
+    IMPORTANT: Output ONLY the prompt itself — no introductory text, headers, footers, \
+    or commentary around it. Do not wrap it in a code block. Do not say "Here is the prompt:" \
+    or "Let me know if you'd like changes." Just the prompt content, nothing else.
+
+    The user may ask you to refine it. \
     Do NOT call the `mcp__destila__session` tool — the user will mark this phase as done manually.
     """
   end
