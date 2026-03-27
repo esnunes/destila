@@ -14,7 +14,8 @@ defmodule Destila.AI.ClaudeSession do
     "Glob",
     "Bash(git log:*)",
     "Bash(git show:*)",
-    "mcp__destila__ask_user_question"
+    "mcp__destila__ask_user_question",
+    "mcp__destila__session"
   ]
 
   # Client API

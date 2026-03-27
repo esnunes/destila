@@ -38,4 +38,25 @@ defmodule Destila.AI.Tools do
       {:ok, "Questions presented to the user. Stop here and wait for their response."}
     end
   end
+
+  tool :session,
+       "Signal a phase transition in the workflow session. " <>
+         "Call this tool when you believe the current phase is complete." do
+    field(:action, :string,
+      required: true,
+      description:
+        "One of: suggest_phase_complete (phase work is done, ask user to confirm), " <>
+          "phase_complete (phase is definitively done or not applicable, auto-advance)"
+    )
+
+    field(:message, :string,
+      required: true,
+      description:
+        "Context or reason for the action, e.g. 'No Gherkin scenarios needed for this task'"
+    )
+
+    def execute(_params) do
+      {:ok, "Phase action recorded. Stop here and wait."}
+    end
+  end
 end

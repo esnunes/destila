@@ -38,11 +38,37 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
   # Creates a chore_task session in the given phase with appropriate state.
   defp create_session_in_phase(phase, opts \\ []) do
     phase_status = Keyword.get(opts, :phase_status, :conversing)
+    last_message_type = Keyword.get(opts, :last_message_type)
 
-    last_content =
-      if Keyword.get(opts, :last_message_type) == :phase_advance,
-        do: "I have some questions about this task. <<READY_TO_ADVANCE>>",
-        else: "I have some questions about this task."
+    {last_content, session_tool_uses} =
+      case last_message_type do
+        :phase_advance ->
+          {"Task description is clear.",
+           [
+             %{
+               "name" => "mcp__destila__session",
+               "input" => %{
+                 "action" => "suggest_phase_complete",
+                 "message" => "Task description is clear."
+               }
+             }
+           ]}
+
+        :skip_phase ->
+          {"Skipping this phase.",
+           [
+             %{
+               "name" => "mcp__destila__session",
+               "input" => %{
+                 "action" => "phase_complete",
+                 "message" => "Skipping this phase."
+               }
+             }
+           ]}
+
+        _ ->
+          {"I have some questions about this task.", []}
+      end
 
     {:ok, ws} =
       Destila.Workflows.create_workflow_session(%{
@@ -71,11 +97,11 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       })
 
     raw_response =
-      if Keyword.get(opts, :last_message_type) != nil,
+      if last_message_type != nil,
         do: %{
           "text" => last_content,
           "result" => last_content,
-          "mcp_tool_uses" => [],
+          "mcp_tool_uses" => session_tool_uses,
           "is_error" => false
         },
         else: nil
@@ -243,18 +269,25 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     end
 
     @tag feature: @feature, scenario: "Skip Gherkin Review when not applicable"
-    test "auto-skips phase when AI returns SKIP_PHASE", %{conn: conn} do
+    test "auto-skips phase when AI calls session tool with phase_complete", %{conn: conn} do
       {:ok, call_count} = Agent.start_link(fn -> 0 end)
 
       ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
         n = Agent.get_and_update(call_count, fn n -> {n, n + 1} end)
 
-        text =
-          if n == 0,
-            do: "No Gherkin scenarios needed for this task. <<SKIP_PHASE>>",
-            else: "Let's discuss the technical approach."
-
-        [ClaudeCode.Test.text(text), ClaudeCode.Test.result(text)]
+        if n == 0 do
+          [
+            ClaudeCode.Test.text("No Gherkin scenarios needed."),
+            ClaudeCode.Test.tool_use("mcp__destila__session", %{
+              "action" => "phase_complete",
+              "message" => "No Gherkin scenarios needed for this task."
+            }),
+            ClaudeCode.Test.result("No Gherkin scenarios needed.")
+          ]
+        else
+          text = "Let's discuss the technical approach."
+          [ClaudeCode.Test.text(text), ClaudeCode.Test.result(text)]
+        end
       end)
 
       ws =

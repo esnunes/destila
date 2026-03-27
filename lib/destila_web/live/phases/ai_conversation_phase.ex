@@ -13,7 +13,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   Opts:
   - `name` — phase display name (required)
   - `system_prompt` — fn/1 returning the system prompt (required)
-  - `skippable` — supports <<SKIP_PHASE>> marker (default false)
+  - `skippable` — supports phase_complete session tool action (default false)
   - `final` — shows "Mark as Done" instead of advance (default false)
   """
 

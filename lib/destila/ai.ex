@@ -100,14 +100,32 @@ defmodule Destila.AI do
 
   def process_message(%Message{role: :system, raw_response: raw} = msg, workflow_session)
       when is_map(raw) do
-    {content, message_type} = parse_markers(msg.content, msg.phase, workflow_session)
+    {override_content, message_type} = derive_message_type(raw, msg.phase, workflow_session)
     {input_type, options, questions} = extract_tool_input(raw)
 
+    # Use session tool message if present, otherwise use stored content.
+    # For generated_prompt, always use the stored content (AI's text output).
+    content =
+      if message_type == :generated_prompt do
+        String.trim(msg.content)
+      else
+        override_content || String.trim(msg.content)
+      end
+
+    # If questions were extracted and content is empty/placeholder, derive from questions
     content =
       if questions != [] and (content == "" or content == "Waiting for your answer.") do
         questions |> Enum.map(& &1.question) |> Enum.join("\n\n")
       else
         content
+      end
+
+    # When session tool is active, suppress question UI
+    {input_type, options, questions} =
+      if message_type in [:phase_advance, :skip_phase] do
+        {:text, nil, []}
+      else
+        {input_type, options, questions}
       end
 
     %{
@@ -139,11 +157,43 @@ defmodule Destila.AI do
     }
   end
 
-  def derive_phase_status(text) do
-    cond do
-      String.contains?(text, "<<SKIP_PHASE>>") -> :conversing
-      String.contains?(text, "<<READY_TO_ADVANCE>>") -> :advance_suggested
-      true -> :conversing
+  @session_tool_names ["session", "mcp__destila__session"]
+
+  @doc """
+  Extracts the first session tool call from an AI result or raw_response map.
+
+  Handles both atom-keyed maps (from `collect_with_mcp` in the worker) and
+  string-keyed maps (from DB JSON in `process_message`). Returns a map with
+  `:action` and `:message` keys, or `nil` if no session tool was called.
+  """
+  def extract_session_action(%{mcp_tool_uses: tool_uses}) when is_list(tool_uses) do
+    do_extract_session_action(tool_uses)
+  end
+
+  def extract_session_action(%{"mcp_tool_uses" => tool_uses}) when is_list(tool_uses) do
+    do_extract_session_action(tool_uses)
+  end
+
+  def extract_session_action(_), do: nil
+
+  defp do_extract_session_action(tool_uses) do
+    Enum.find_value(tool_uses, fn tool ->
+      name = access(tool, :name)
+
+      if name in @session_tool_names do
+        input = access(tool, :input) || %{}
+        %{action: access(input, :action), message: access(input, :message)}
+      end
+    end)
+  end
+
+  # Access a key from a struct (atom key) or map (string key).
+  defp access(map, key) when is_struct(map), do: Map.get(map, key)
+
+  defp access(map, key) when is_map(map) do
+    case Map.get(map, key) do
+      nil -> Map.get(map, to_string(key))
+      val -> val
     end
   end
 
@@ -194,23 +244,25 @@ defmodule Destila.AI do
 
   # --- Private helpers ---
 
-  defp parse_markers(text, phase, workflow_session) do
+  defp derive_message_type(raw, phase, workflow_session) do
     cond do
       phase == workflow_session.total_phases ->
-        {String.trim(text), :generated_prompt}
+        {nil, :generated_prompt}
 
-      String.contains?(text, "<<SKIP_PHASE>>") ->
-        content = String.replace(text, "<<SKIP_PHASE>>", "") |> String.trim()
-        content = if content == "", do: "Skipping this phase.", else: content
-        {content, :skip_phase}
+      session = extract_session_action(raw) ->
+        case session.action do
+          "suggest_phase_complete" ->
+            {session.message || "Ready to move to the next phase.", :phase_advance}
 
-      String.contains?(text, "<<READY_TO_ADVANCE>>") ->
-        content = String.replace(text, "<<READY_TO_ADVANCE>>", "") |> String.trim()
-        content = if content == "", do: "Ready to move to the next phase.", else: content
-        {content, :phase_advance}
+          "phase_complete" ->
+            {session.message || "Skipping this phase.", :skip_phase}
+
+          _ ->
+            {nil, nil}
+        end
 
       true ->
-        {String.trim(text), nil}
+        {nil, nil}
     end
   end
 
