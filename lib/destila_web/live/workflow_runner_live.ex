@@ -145,18 +145,22 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   def handle_info({:phase_complete, _phase, %{action: :session_create} = data}, socket) do
     workflow = socket.assigns.workflow
 
-    {:ok, ws} =
-      Workflows.create_workflow_session(%{
-        title: workflow.default_title(),
-        workflow_type: socket.assigns.workflow_type,
-        current_phase: 2,
-        total_phases: workflow.total_phases(),
-        project_id: data[:project_id],
-        title_generating: true
-      })
+    session_attrs =
+      Map.merge(
+        %{
+          title: workflow.default_title(),
+          workflow_type: socket.assigns.workflow_type,
+          current_phase: 2,
+          total_phases: workflow.total_phases(),
+          title_generating: true
+        },
+        data[:session_attrs] || %{}
+      )
 
-    if data[:idea] do
-      Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
+    {:ok, ws} = Workflows.create_workflow_session(session_attrs)
+
+    for {key, value} <- data[:metadata] || %{} do
+      Workflows.upsert_metadata(ws.id, "wizard", to_string(key), stringify_metadata(value))
     end
 
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
@@ -444,4 +448,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         """
     end
   end
+
+  defp stringify_metadata(value) when is_map(value) do
+    Map.new(value, fn {k, v} -> {to_string(k), v} end)
+  end
+
+  defp stringify_metadata(value), do: value
 end

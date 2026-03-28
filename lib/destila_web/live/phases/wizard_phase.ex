@@ -101,8 +101,8 @@ defmodule DestilaWeb.Phases.WizardPhase do
           {:phase_complete, socket.assigns.phase_number,
            %{
              action: :session_create,
-             project_id: socket.assigns.project_id,
-             idea: idea
+             session_attrs: %{project_id: socket.assigns.project_id},
+             metadata: %{idea: %{text: idea}}
            }}
         )
 
