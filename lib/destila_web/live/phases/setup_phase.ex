@@ -8,6 +8,8 @@ defmodule DestilaWeb.Phases.SetupPhase do
 
   use DestilaWeb, :live_component
 
+  def metadata_phase_name, do: "setup"
+
   def update(assigns, socket) do
     ws = assigns.workflow_session
     workflow = assigns.workflow

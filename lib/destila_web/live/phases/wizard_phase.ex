@@ -6,6 +6,8 @@ defmodule DestilaWeb.Phases.WizardPhase do
 
   use DestilaWeb, :live_component
 
+  def metadata_phase_name, do: "wizard"
+
   def mount(socket) do
     {:ok,
      socket
@@ -58,19 +60,25 @@ defmodule DestilaWeb.Phases.WizardPhase do
         else: errors
 
     if errors == %{} do
-      {:ok, project} =
-        Destila.Projects.create_project(%{
-          name: name,
-          git_repo_url: git_repo_url,
-          local_folder: local_folder
-        })
+      case Destila.Projects.create_project(%{
+             name: name,
+             git_repo_url: git_repo_url,
+             local_folder: local_folder
+           }) do
+        {:ok, project} ->
+          {:noreply,
+           socket
+           |> assign(:project_id, project.id)
+           |> assign(:projects, Destila.Projects.list_projects())
+           |> assign(:project_step, :select)
+           |> assign(:errors, %{})}
 
-      {:noreply,
-       socket
-       |> assign(:project_id, project.id)
-       |> assign(:projects, Destila.Projects.list_projects())
-       |> assign(:project_step, :select)
-       |> assign(:errors, %{})}
+        {:error, _changeset} ->
+          {:noreply,
+           socket
+           |> assign(:project_form, to_form(params))
+           |> put_flash(:error, "Failed to create project")}
+      end
     else
       {:noreply,
        socket

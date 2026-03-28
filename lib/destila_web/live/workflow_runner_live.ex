@@ -144,6 +144,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   # Phase complete with session creation request
   def handle_info({:phase_complete, _phase, %{action: :session_create} = data}, socket) do
     workflow = socket.assigns.workflow
+    {phase_module, _opts} = Enum.at(socket.assigns.phases, socket.assigns.current_phase - 1)
 
     session_attrs =
       Map.merge(
@@ -160,7 +161,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     {:ok, ws} = Workflows.create_workflow_session(session_attrs)
 
     for {key, value} <- data[:metadata] || %{} do
-      Workflows.upsert_metadata(ws.id, "wizard", to_string(key), value)
+      Workflows.upsert_metadata(ws.id, phase_module.metadata_phase_name(), to_string(key), value)
     end
 
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
@@ -324,7 +325,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                   </form>
                 <% else %>
                   <h1 class="text-lg font-bold truncate">
-                    {Workflows.default_title(@workflow_type)}
+                    {@workflow.default_title()}
                   </h1>
                 <% end %>
 
@@ -353,10 +354,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 <span class="text-xs text-base-content/40">
                   Phase {@current_phase}/{@total_phases}
                   <span
-                    :if={Workflows.phase_name(@workflow_type, @current_phase)}
+                    :if={@workflow.phase_name(@current_phase)}
                     class="hidden sm:inline"
                   >
-                    — {Workflows.phase_name(@workflow_type, @current_phase)}
+                    — {@workflow.phase_name(@current_phase)}
                   </span>
                 </span>
               </div>
