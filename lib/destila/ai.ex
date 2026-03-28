@@ -285,7 +285,7 @@ defmodule Destila.AI do
     end)
     |> Enum.flat_map(fn tool ->
       input = tool["input"] || %{}
-      questions = input["questions"] || [input]
+      questions = decode_if_string(input["questions"]) || [input]
 
       Enum.map(questions, fn q ->
         multi_select = q["multi_select"] == true
@@ -303,6 +303,15 @@ defmodule Destila.AI do
       end)
     end)
   end
+
+  defp decode_if_string(value) when is_binary(value) do
+    case Jason.decode(value) do
+      {:ok, decoded} when is_list(decoded) -> decoded
+      _ -> nil
+    end
+  end
+
+  defp decode_if_string(value), do: value
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper
 
