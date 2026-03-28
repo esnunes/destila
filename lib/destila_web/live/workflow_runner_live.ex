@@ -143,7 +143,17 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # Phase complete with session creation request
   def handle_info({:phase_complete, _phase, %{action: :session_create} = data}, socket) do
-    {:ok, ws} = Workflows.create_workflow_session(data[:session_attrs])
+    workflow = socket.assigns.workflow
+
+    {:ok, ws} =
+      Workflows.create_workflow_session(%{
+        title: workflow.default_title(),
+        workflow_type: socket.assigns.workflow_type,
+        current_phase: 2,
+        total_phases: workflow.total_phases(),
+        project_id: data[:project_id],
+        title_generating: true
+      })
 
     if data[:idea] do
       Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})

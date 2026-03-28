@@ -96,21 +96,12 @@ defmodule DestilaWeb.Phases.WizardPhase do
            idea: idea
          }) do
       :ok ->
-        session_attrs = %{
-          title: workflow.default_title(),
-          workflow_type: socket.assigns.workflow_type,
-          current_phase: 2,
-          total_phases: workflow.total_phases(),
-          project_id: socket.assigns.project_id,
-          title_generating: true
-        }
-
         send(
           self(),
           {:phase_complete, socket.assigns.phase_number,
            %{
              action: :session_create,
-             session_attrs: session_attrs,
+             project_id: socket.assigns.project_id,
              idea: idea
            }}
         )
