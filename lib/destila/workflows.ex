@@ -55,6 +55,82 @@ defmodule Destila.Workflows do
   defp normalize_strategy(:new), do: {:new, []}
   defp normalize_strategy({action, opts}) when action in [:resume, :new], do: {action, opts}
 
+  # --- High-level workflow operations ---
+
+  @doc """
+  Creates a new workflow session from wizard phase data.
+
+  Builds the session record with the next phase set to `phase + 1`,
+  and optionally upserts the initial idea as metadata.
+
+  Returns `{:ok, session}`.
+  """
+  def create_session_from_wizard(workflow_type, phase, data) do
+    session_attrs =
+      %{
+        title: default_title(workflow_type),
+        workflow_type: workflow_type,
+        current_phase: phase + 1,
+        total_phases: total_phases(workflow_type)
+      }
+      |> maybe_put(:project_id, data[:project_id])
+      |> maybe_put(:title_generating, data[:title_generating])
+
+    {:ok, ws} = create_workflow_session(session_attrs)
+
+    if data[:idea] do
+      upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
+    end
+
+    {:ok, ws}
+  end
+
+  @doc """
+  Advances the workflow session to the next phase.
+
+  Checks the session strategy for the next phase and stops the ClaudeSession
+  if the strategy is `:new`. Accepts an optional `phase_status` (defaults to `nil`).
+
+  Returns `{:ok, updated_session}` or `{:error, :at_boundary}` if already at the last phase.
+  """
+  def advance_phase(%Session{} = ws, opts \\ []) do
+    next_phase = ws.current_phase + 1
+
+    if next_phase > ws.total_phases do
+      {:error, :at_boundary}
+    else
+      {action, _} = session_strategy(ws.workflow_type, next_phase)
+
+      if action == :new do
+        Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
+      end
+
+      phase_status = Keyword.get(opts, :phase_status)
+      update_workflow_session(ws, %{current_phase: next_phase, phase_status: phase_status})
+    end
+  end
+
+  @doc """
+  Marks a workflow session as done.
+
+  Creates a completion message in the AI session (if one exists) and sets `done_at`.
+
+  Returns `{:ok, updated_session}`.
+  """
+  def mark_done(%Session{} = ws) do
+    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
+
+    if ai_session do
+      Destila.AI.create_message(ai_session.id, %{
+        role: :system,
+        content: completion_message(ws.workflow_type),
+        phase: ws.current_phase
+      })
+    end
+
+    update_workflow_session(ws, %{done_at: DateTime.utc_now(), phase_status: nil})
+  end
+
   # --- Session CRUD ---
 
   def list_workflow_sessions do
@@ -189,4 +265,7 @@ defmodule Destila.Workflows do
   end
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

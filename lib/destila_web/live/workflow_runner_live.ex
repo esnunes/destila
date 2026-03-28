@@ -131,23 +131,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("mark_done", _params, socket) do
-    ws = socket.assigns.workflow_session
-    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
-
-    if ai_session do
-      Destila.AI.create_message(ai_session.id, %{
-        role: :system,
-        content: Workflows.completion_message(ws.workflow_type),
-        phase: ws.current_phase
-      })
-    end
-
-    {:ok, ws} =
-      Workflows.update_workflow_session(ws, %{
-        done_at: DateTime.utc_now(),
-        phase_status: nil
-      })
-
+    {:ok, ws} = Workflows.mark_done(socket.assigns.workflow_session)
     {:noreply, assign(socket, :workflow_session, ws)}
   end
 
@@ -155,36 +139,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # Phase complete with session creation request
   def handle_info({:phase_complete, phase, %{action: :session_create} = data}, socket) do
-    workflow_type = socket.assigns.workflow_type
-
-    session_attrs =
-      %{
-        title: Workflows.default_title(workflow_type),
-        workflow_type: workflow_type,
-        current_phase: phase + 1,
-        total_phases: Workflows.total_phases(workflow_type)
-      }
-      |> maybe_put(:project_id, data[:project_id])
-      |> maybe_put(:title_generating, data[:title_generating])
-
-    {:ok, ws} = Workflows.create_workflow_session(session_attrs)
-
-    if data[:idea] do
-      Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
-    end
-
+    {:ok, ws} = Workflows.create_session_from_wizard(socket.assigns.workflow_type, phase, data)
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
   end
 
   # Phase complete — advance to next phase
-  def handle_info({:phase_complete, phase, _data}, socket) do
-    ws = socket.assigns.workflow_session
-
-    {:ok, ws} =
-      Workflows.update_workflow_session(ws, %{
-        current_phase: phase + 1,
-        phase_status: nil
-      })
+  def handle_info({:phase_complete, _phase, _data}, socket) do
+    {:ok, ws} = Workflows.advance_phase(socket.assigns.workflow_session)
 
     {:noreply,
      socket
@@ -463,7 +424,4 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         """
     end
   end
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end
