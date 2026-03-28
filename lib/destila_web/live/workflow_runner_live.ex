@@ -150,7 +150,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         %{
           title: workflow.default_title(),
           workflow_type: socket.assigns.workflow_type,
-          current_phase: 2,
+          current_phase: socket.assigns.current_phase + 1,
           total_phases: workflow.total_phases(),
           title_generating: true
         },
