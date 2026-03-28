@@ -1,7 +1,20 @@
 defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
   use DestilaWeb.ConnCase, async: false
 
+  alias Destila.Workflows
   alias Destila.Workflows.PromptChoreTaskWorkflow
+
+  defp create_session(attrs) do
+    defaults = %{
+      title: "Test Session",
+      workflow_type: :prompt_chore_task,
+      current_phase: 2,
+      total_phases: 6
+    }
+
+    {:ok, ws} = Workflows.create_workflow_session(Map.merge(defaults, attrs))
+    ws
+  end
 
   describe "validate_wizard_fields/1" do
     test "returns :ok when both fields are valid" do
@@ -112,6 +125,54 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
                })
 
       assert project.name == "Trimmed"
+    end
+  end
+
+  describe "initiate_setup/2" do
+    setup do
+      ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+        [ClaudeCode.Test.text("Generated Title")]
+      end)
+
+      :ok
+    end
+
+    test "is idempotent when phase_status is already :setup" do
+      ws = create_session(%{phase_status: :setup})
+      assert :ok = PromptChoreTaskWorkflow.initiate_setup(ws, %{})
+    end
+
+    test "sets phase_status to :setup" do
+      ws = create_session(%{phase_status: nil})
+      assert :ok = PromptChoreTaskWorkflow.initiate_setup(ws, %{})
+
+      updated = Workflows.get_workflow_session!(ws.id)
+      assert updated.phase_status == :setup
+    end
+
+    test "does not enqueue setup worker when no project" do
+      ws = create_session(%{phase_status: nil, project_id: nil})
+      PromptChoreTaskWorkflow.initiate_setup(ws, %{})
+
+      refute_enqueued(worker: Destila.Workers.SetupWorker)
+    end
+  end
+
+  describe "retry_setup/1" do
+    setup do
+      ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+        [ClaudeCode.Test.text("Generated Title")]
+      end)
+
+      :ok
+    end
+
+    test "does not enqueue workers when not needed" do
+      ws = create_session(%{project_id: nil, title_generating: false})
+      PromptChoreTaskWorkflow.retry_setup(ws)
+
+      refute_enqueued(worker: Destila.Workers.SetupWorker)
+      refute_enqueued(worker: Destila.Workers.TitleGenerationWorker)
     end
   end
 end

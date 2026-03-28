@@ -65,6 +65,14 @@ defmodule Destila.Workflows do
     workflow_module(workflow_type).validate_and_create_project(params)
   end
 
+  def initiate_setup(workflow_type, workflow_session, metadata) do
+    workflow_module(workflow_type).initiate_setup(workflow_session, metadata)
+  end
+
+  def retry_setup(workflow_type, workflow_session) do
+    workflow_module(workflow_type).retry_setup(workflow_session)
+  end
+
   # --- High-level workflow operations ---
 
   @doc """

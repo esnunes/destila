@@ -116,6 +116,55 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   defp non_blank(""), do: nil
   defp non_blank(str), do: str
 
+  # --- Setup phase business logic ---
+
+  @doc """
+  Initiates the setup phase: sets phase_status to :setup and enqueues
+  TitleGenerationWorker and (if project has a repo) SetupWorker.
+
+  Idempotent — returns `:ok` immediately if phase_status is already `:setup`.
+
+  Must only be called from a connected LiveView (not static render).
+  """
+  def initiate_setup(%{phase_status: :setup}, _metadata), do: :ok
+
+  def initiate_setup(ws, metadata) do
+    Destila.Workflows.update_workflow_session(ws, %{phase_status: :setup})
+
+    idea = get_in(metadata, ["idea", "text"]) || ""
+
+    %{"workflow_session_id" => ws.id, "idea" => idea}
+    |> Destila.Workers.TitleGenerationWorker.new()
+    |> Oban.insert()
+
+    if ws.project_id do
+      %{"workflow_session_id" => ws.id}
+      |> Destila.Workers.SetupWorker.new()
+      |> Oban.insert()
+    end
+
+    :ok
+  end
+
+  @doc """
+  Re-enqueues failed setup workers for retry.
+  """
+  def retry_setup(ws) do
+    if ws.project_id do
+      %{"workflow_session_id" => ws.id}
+      |> Destila.Workers.SetupWorker.new()
+      |> Oban.insert()
+    end
+
+    if ws.title_generating do
+      %{"workflow_session_id" => ws.id, "idea" => ""}
+      |> Destila.Workers.TitleGenerationWorker.new()
+      |> Oban.insert()
+    end
+
+    :ok
+  end
+
   # AI system prompts
 
   @tool_instructions """

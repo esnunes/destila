@@ -14,7 +14,7 @@ defmodule DestilaWeb.Phases.SetupPhase do
     steps = build_steps(ws, metadata)
 
     if connected?(socket) && ws do
-      maybe_start_setup(ws, metadata)
+      Destila.Workflows.initiate_setup(ws.workflow_type, ws, metadata)
     end
 
     if all_completed?(steps) do
@@ -32,19 +32,7 @@ defmodule DestilaWeb.Phases.SetupPhase do
 
   def handle_event("retry_setup", _params, socket) do
     ws = socket.assigns.workflow_session
-
-    if ws.project_id do
-      %{"workflow_session_id" => ws.id}
-      |> Destila.Workers.SetupWorker.new()
-      |> Oban.insert()
-    end
-
-    if ws.title_generating do
-      %{"workflow_session_id" => ws.id, "idea" => ""}
-      |> Destila.Workers.TitleGenerationWorker.new()
-      |> Oban.insert()
-    end
-
+    Destila.Workflows.retry_setup(ws.workflow_type, ws)
     {:noreply, socket}
   end
 
@@ -90,24 +78,6 @@ defmodule DestilaWeb.Phases.SetupPhase do
       </button>
     </div>
     """
-  end
-
-  defp maybe_start_setup(%{phase_status: :setup}, _metadata), do: :ok
-
-  defp maybe_start_setup(ws, metadata) do
-    Destila.Workflows.update_workflow_session(ws, %{phase_status: :setup})
-
-    idea = get_in(metadata, ["idea", "text"]) || ""
-
-    %{"workflow_session_id" => ws.id, "idea" => idea}
-    |> Destila.Workers.TitleGenerationWorker.new()
-    |> Oban.insert()
-
-    if ws.project_id do
-      %{"workflow_session_id" => ws.id}
-      |> Destila.Workers.SetupWorker.new()
-      |> Oban.insert()
-    end
   end
 
   defp build_steps(ws, metadata) do
