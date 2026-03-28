@@ -94,40 +94,26 @@ defmodule Destila.Workers.AiQueryWorker do
     end
   end
 
-  defp handle_skip_phase(workflow_session_id, current_phase) do
-    next_phase = current_phase + 1
+  defp handle_skip_phase(workflow_session_id, _current_phase) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
-    total = ws.total_phases
 
-    if next_phase > total do
-      Workflows.update_workflow_session(workflow_session_id, %{
-        phase_status: :conversing
-      })
-    else
-      {action, _} =
-        Destila.Workflows.session_strategy(ws.workflow_type, next_phase)
+    case Workflows.advance_phase(ws, phase_status: :generating) do
+      {:ok, updated_ws} ->
+        phases = Workflows.phases(updated_ws.workflow_type)
+        {_module, opts} = Enum.at(phases, updated_ws.current_phase - 1)
+        system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
+        phase_prompt = system_prompt_fn.(updated_ws)
 
-      update_attrs = %{current_phase: next_phase, phase_status: :generating}
+        %{
+          "workflow_session_id" => workflow_session_id,
+          "phase" => updated_ws.current_phase,
+          "query" => phase_prompt
+        }
+        |> __MODULE__.new()
+        |> Oban.insert()
 
-      if action == :new do
-        Destila.AI.ClaudeSession.stop_for_workflow_session(workflow_session_id)
-      end
-
-      Workflows.update_workflow_session(workflow_session_id, update_attrs)
-      ws = Workflows.get_workflow_session!(workflow_session_id)
-
-      phases = Destila.Workflows.phases(ws.workflow_type)
-      {_module, opts} = Enum.at(phases, next_phase - 1)
-      system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
-      phase_prompt = system_prompt_fn.(ws)
-
-      %{
-        "workflow_session_id" => workflow_session_id,
-        "phase" => next_phase,
-        "query" => phase_prompt
-      }
-      |> __MODULE__.new()
-      |> Oban.insert()
+      {:error, :at_boundary} ->
+        Workflows.update_workflow_session(workflow_session_id, %{phase_status: :conversing})
     end
   end
 end

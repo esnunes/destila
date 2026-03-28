@@ -73,6 +73,14 @@ defmodule Destila.Workflows do
     workflow_module(workflow_type).retry_setup(workflow_session)
   end
 
+  def initialize_ai_conversation(workflow_type, ws, phase_number, opts) do
+    workflow_module(workflow_type).initialize_ai_conversation(ws, phase_number, opts)
+  end
+
+  def send_user_message(workflow_type, ws, ai_session, content) do
+    workflow_module(workflow_type).send_user_message(ws, ai_session, content)
+  end
+
   # --- High-level workflow operations ---
 
   @doc """

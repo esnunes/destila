@@ -165,6 +165,77 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     :ok
   end
 
+  # --- AI conversation phase business logic ---
+
+  @doc """
+  Initializes the AI conversation for a phase: creates the AI session if needed,
+  then enqueues the initial AiQueryWorker with the system prompt.
+
+  Returns `{:ok, ai_session}` if initialization occurred, or `:already_initialized`
+  if the phase already has messages or is already generating.
+
+  Must only be called from a connected LiveView (not static render).
+  """
+  def initialize_ai_conversation(ws, phase_number, opts) do
+    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
+    messages = if ai_session, do: Destila.AI.list_messages(ai_session.id), else: []
+    phase_messages = Enum.filter(messages, &(&1.phase == phase_number))
+
+    if phase_messages == [] && ws.phase_status != :generating do
+      ai_session =
+        if ai_session do
+          ai_session
+        else
+          metadata = Destila.Workflows.get_metadata(ws.id)
+          worktree_path = get_in(metadata, ["worktree", "worktree_path"])
+
+          {:ok, session} =
+            Destila.AI.get_or_create_ai_session(ws.id, %{worktree_path: worktree_path})
+
+          session
+        end
+
+      system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
+      query = system_prompt_fn.(ws)
+
+      Destila.Workflows.update_workflow_session(ws, %{phase_status: :generating})
+
+      %{"workflow_session_id" => ws.id, "phase" => phase_number, "query" => query}
+      |> Destila.Workers.AiQueryWorker.new()
+      |> Oban.insert()
+
+      {:ok, ai_session}
+    else
+      :already_initialized
+    end
+  end
+
+  @doc """
+  Sends a user message: creates the message record, updates phase_status to
+  :generating, and enqueues an AiQueryWorker.
+
+  Returns `{:ok, updated_ws}` or `{:error, :generating}` if already generating.
+  """
+  def send_user_message(ws, ai_session, content) do
+    if ws.phase_status in [:generating] do
+      {:error, :generating}
+    else
+      Destila.AI.create_message(ai_session.id, %{
+        role: :user,
+        content: content,
+        phase: ws.current_phase
+      })
+
+      {:ok, ws} = Destila.Workflows.update_workflow_session(ws, %{phase_status: :generating})
+
+      %{"workflow_session_id" => ws.id, "phase" => ws.current_phase, "query" => content}
+      |> Destila.Workers.AiQueryWorker.new()
+      |> Oban.insert()
+
+      {:ok, ws}
+    end
+  end
+
   # AI system prompts
 
   @tool_instructions """

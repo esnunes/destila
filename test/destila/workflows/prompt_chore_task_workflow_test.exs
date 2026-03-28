@@ -175,4 +175,36 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
       refute_enqueued(worker: Destila.Workers.TitleGenerationWorker)
     end
   end
+
+  describe "send_user_message/3" do
+    setup do
+      ClaudeCode.Test.set_mode_to_shared()
+
+      ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+        [ClaudeCode.Test.text("AI response")]
+      end)
+
+      :ok
+    end
+
+    test "creates user message and updates status" do
+      ws = create_session(%{phase_status: :conversing})
+      {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
+
+      {:ok, updated_ws} = PromptChoreTaskWorkflow.send_user_message(ws, ai_session, "Hello AI")
+
+      assert updated_ws.phase_status == :generating
+      messages = Destila.AI.list_messages(ai_session.id)
+      user_messages = Enum.filter(messages, &(&1.role == :user))
+      assert length(user_messages) >= 1
+    end
+
+    test "returns error when already generating" do
+      ws = create_session(%{phase_status: :generating})
+      {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
+
+      assert {:error, :generating} =
+               PromptChoreTaskWorkflow.send_user_message(ws, ai_session, "Hello")
+    end
+  end
 end
