@@ -289,6 +289,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       <div
         :if={
           !@current_step.completed &&
+            @current_step.input_type not in [:single_select, :multi_select, :questions] &&
             @workflow_session.phase_status not in [:advance_suggested]
         }
         class="max-w-2xl mx-auto w-full px-6 pb-4"
