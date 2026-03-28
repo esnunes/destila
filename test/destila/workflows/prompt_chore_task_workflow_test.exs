@@ -16,10 +16,10 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
     ws
   end
 
-  describe "validate_wizard_fields/1" do
+  describe "wizard_validate_fields/1" do
     test "returns :ok when both fields are valid" do
       assert :ok =
-               PromptChoreTaskWorkflow.validate_wizard_fields(%{
+               PromptChoreTaskWorkflow.wizard_validate_fields(%{
                  project_id: "some-id",
                  idea: "Fix the bug"
                })
@@ -27,7 +27,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
 
     test "returns error when project_id is nil" do
       assert {:error, errors} =
-               PromptChoreTaskWorkflow.validate_wizard_fields(%{
+               PromptChoreTaskWorkflow.wizard_validate_fields(%{
                  project_id: nil,
                  idea: "Fix the bug"
                })
@@ -38,7 +38,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
 
     test "returns error when idea is empty" do
       assert {:error, errors} =
-               PromptChoreTaskWorkflow.validate_wizard_fields(%{
+               PromptChoreTaskWorkflow.wizard_validate_fields(%{
                  project_id: "some-id",
                  idea: ""
                })
@@ -49,7 +49,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
 
     test "returns error when idea is nil" do
       assert {:error, errors} =
-               PromptChoreTaskWorkflow.validate_wizard_fields(%{
+               PromptChoreTaskWorkflow.wizard_validate_fields(%{
                  project_id: "some-id",
                  idea: nil
                })
@@ -59,7 +59,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
 
     test "returns both errors when both fields are invalid" do
       assert {:error, errors} =
-               PromptChoreTaskWorkflow.validate_wizard_fields(%{
+               PromptChoreTaskWorkflow.wizard_validate_fields(%{
                  project_id: nil,
                  idea: ""
                })
@@ -69,7 +69,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
     end
   end
 
-  describe "initiate_setup/2" do
+  describe "setup_initiate/2" do
     setup do
       ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
         [ClaudeCode.Test.text("Generated Title")]
@@ -80,12 +80,12 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
 
     test "is idempotent when phase_status is already :setup" do
       ws = create_session(%{phase_status: :setup})
-      assert :ok = PromptChoreTaskWorkflow.initiate_setup(ws, %{})
+      assert :ok = PromptChoreTaskWorkflow.setup_initiate(ws, %{})
     end
 
     test "sets phase_status to :setup" do
       ws = create_session(%{phase_status: nil})
-      assert :ok = PromptChoreTaskWorkflow.initiate_setup(ws, %{})
+      assert :ok = PromptChoreTaskWorkflow.setup_initiate(ws, %{})
 
       updated = Workflows.get_workflow_session!(ws.id)
       assert updated.phase_status == :setup
@@ -93,13 +93,13 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
 
     test "does not enqueue setup worker when no project" do
       ws = create_session(%{phase_status: nil, project_id: nil})
-      PromptChoreTaskWorkflow.initiate_setup(ws, %{})
+      PromptChoreTaskWorkflow.setup_initiate(ws, %{})
 
       refute_enqueued(worker: Destila.Workers.SetupWorker)
     end
   end
 
-  describe "retry_setup/1" do
+  describe "setup_retry/1" do
     setup do
       ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
         [ClaudeCode.Test.text("Generated Title")]
@@ -110,14 +110,14 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
 
     test "does not enqueue workers when not needed" do
       ws = create_session(%{project_id: nil, title_generating: false})
-      PromptChoreTaskWorkflow.retry_setup(ws)
+      PromptChoreTaskWorkflow.setup_retry(ws)
 
       refute_enqueued(worker: Destila.Workers.SetupWorker)
       refute_enqueued(worker: Destila.Workers.TitleGenerationWorker)
     end
   end
 
-  describe "send_user_message/3" do
+  describe "ai_conversation_send_user_message/3" do
     setup do
       ClaudeCode.Test.set_mode_to_shared()
 
@@ -132,7 +132,8 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
       ws = create_session(%{phase_status: :conversing})
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
-      {:ok, updated_ws} = PromptChoreTaskWorkflow.send_user_message(ws, ai_session, "Hello AI")
+      {:ok, updated_ws} =
+        PromptChoreTaskWorkflow.ai_conversation_send_user_message(ws, ai_session, "Hello AI")
 
       assert updated_ws.phase_status == :generating
       messages = Destila.AI.list_messages(ai_session.id)
@@ -145,7 +146,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
       assert {:error, :generating} =
-               PromptChoreTaskWorkflow.send_user_message(ws, ai_session, "Hello")
+               PromptChoreTaskWorkflow.ai_conversation_send_user_message(ws, ai_session, "Hello")
     end
   end
 end

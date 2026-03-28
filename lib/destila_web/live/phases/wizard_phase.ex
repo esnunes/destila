@@ -91,7 +91,7 @@ defmodule DestilaWeb.Phases.WizardPhase do
   def handle_event("start_workflow", %{"initial_idea" => idea}, socket) when idea != "" do
     workflow = socket.assigns.workflow
 
-    case workflow.validate_wizard_fields(%{
+    case workflow.wizard_validate_fields(%{
            project_id: socket.assigns.project_id,
            idea: idea
          }) do

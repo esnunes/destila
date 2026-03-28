@@ -91,7 +91,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     workflow = socket.assigns.workflow
 
     if ai_session do
-      case workflow.send_user_message(ws, ai_session, content) do
+      case workflow.ai_conversation_send_user_message(ws, ai_session, content) do
         {:ok, ws} ->
           messages = AI.list_messages(ai_session.id)
 
@@ -321,7 +321,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   defp maybe_initialize_ai(socket, ws, _ai_session, phase_number, opts) do
     workflow = socket.assigns.workflow
 
-    case workflow.initialize_ai_conversation(ws, phase_number, opts) do
+    case workflow.ai_conversation_initialize(ws, phase_number, opts) do
       {:ok, ai_session} -> assign(socket, :ai_session, ai_session)
       :already_initialized -> socket
     end

@@ -67,7 +67,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
 
   Returns `:ok` or `{:error, errors_map}`.
   """
-  def validate_wizard_fields(%{project_id: project_id, idea: idea}) do
+  def wizard_validate_fields(%{project_id: project_id, idea: idea}) do
     errors = %{}
 
     errors =
@@ -93,9 +93,9 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
 
   Must only be called from a connected LiveView (not static render).
   """
-  def initiate_setup(%{phase_status: :setup}, _metadata), do: :ok
+  def setup_initiate(%{phase_status: :setup}, _metadata), do: :ok
 
-  def initiate_setup(ws, metadata) do
+  def setup_initiate(ws, metadata) do
     Destila.Workflows.update_workflow_session(ws, %{phase_status: :setup})
 
     idea = get_in(metadata, ["idea", "text"]) || ""
@@ -116,7 +116,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   @doc """
   Re-enqueues failed setup workers for retry.
   """
-  def retry_setup(ws) do
+  def setup_retry(ws) do
     if ws.project_id do
       %{"workflow_session_id" => ws.id}
       |> Destila.Workers.SetupWorker.new()
@@ -143,7 +143,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
 
   Must only be called from a connected LiveView (not static render).
   """
-  def initialize_ai_conversation(ws, phase_number, opts) do
+  def ai_conversation_initialize(ws, phase_number, opts) do
     ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
     messages = if ai_session, do: Destila.AI.list_messages(ai_session.id), else: []
     phase_messages = Enum.filter(messages, &(&1.phase == phase_number))
@@ -183,7 +183,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
 
   Returns `{:ok, updated_ws}` or `{:error, :generating}` if already generating.
   """
-  def send_user_message(ws, ai_session, content) do
+  def ai_conversation_send_user_message(ws, ai_session, content) do
     if ws.phase_status in [:generating] do
       {:error, :generating}
     else

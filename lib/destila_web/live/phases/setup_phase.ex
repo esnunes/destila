@@ -15,7 +15,7 @@ defmodule DestilaWeb.Phases.SetupPhase do
     steps = build_steps(ws, metadata)
 
     if connected?(socket) && ws do
-      workflow.initiate_setup(ws, metadata)
+      workflow.setup_initiate(ws, metadata)
     end
 
     if all_completed?(steps) do
@@ -32,8 +32,8 @@ defmodule DestilaWeb.Phases.SetupPhase do
      |> assign(:has_failure, has_failure?(steps))}
   end
 
-  def handle_event("retry_setup", _params, socket) do
-    socket.assigns.workflow.retry_setup(socket.assigns.workflow_session)
+  def handle_event("setup_retry", _params, socket) do
+    socket.assigns.workflow.setup_retry(socket.assigns.workflow_session)
     {:noreply, socket}
   end
 
@@ -71,7 +71,7 @@ defmodule DestilaWeb.Phases.SetupPhase do
       </span>
       <button
         :if={@step.status == "failed"}
-        phx-click="retry_setup"
+        phx-click="setup_retry"
         phx-target={@myself}
         class="btn btn-xs btn-outline btn-error"
       >
