@@ -13,8 +13,17 @@ defmodule Destila.Workflows do
     prompt_chore_task: Destila.Workflows.PromptChoreTaskWorkflow
   }
 
-  def workflow_module(workflow_type) do
+  def workflow_module(workflow_type) when is_atom(workflow_type) do
     Map.fetch!(@workflow_modules, workflow_type)
+  end
+
+  def workflow_module(workflow_type) when is_binary(workflow_type) do
+    {_type, mod} =
+      Enum.find(@workflow_modules, fn {type, _mod} ->
+        Atom.to_string(type) == workflow_type
+      end) || raise ArgumentError, "unknown workflow type: #{workflow_type}"
+
+    mod
   end
 
   def workflow_types, do: Map.keys(@workflow_modules)

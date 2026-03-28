@@ -41,8 +41,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   defp mount_workflow(workflow_type_str, socket) do
+    workflow = Workflows.workflow_module(workflow_type_str)
     workflow_type = String.to_existing_atom(workflow_type_str)
-    workflow = Workflows.workflow_module(workflow_type)
     phases = workflow.phases()
 
     {:ok,
