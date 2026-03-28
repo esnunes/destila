@@ -160,7 +160,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     {:ok, ws} = Workflows.create_workflow_session(session_attrs)
 
     for {key, value} <- data[:metadata] || %{} do
-      Workflows.upsert_metadata(ws.id, "wizard", to_string(key), stringify_metadata(value))
+      Workflows.upsert_metadata(ws.id, "wizard", to_string(key), value)
     end
 
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
@@ -448,10 +448,4 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         """
     end
   end
-
-  defp stringify_metadata(value) when is_map(value) do
-    Map.new(value, fn {k, v} -> {to_string(k), v} end)
-  end
-
-  defp stringify_metadata(value), do: value
 end
