@@ -285,7 +285,7 @@ defmodule Destila.AI do
     end)
     |> Enum.flat_map(fn tool ->
       input = tool["input"] || %{}
-      questions = decode_if_string(input["questions"]) || [input]
+      questions = decode_if_string(input["questions"]) || []
 
       Enum.map(questions, fn q ->
         multi_select = q["multi_select"] == true
