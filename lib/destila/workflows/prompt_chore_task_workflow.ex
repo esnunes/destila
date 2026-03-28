@@ -83,39 +83,6 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     if errors == %{}, do: :ok, else: {:error, errors}
   end
 
-  @doc """
-  Validates and creates a project inline from wizard params.
-
-  Returns `{:ok, project}` or `{:error, errors_map}`.
-  """
-  def validate_and_create_project(params) do
-    name = String.trim(params["name"] || "")
-    git_repo_url = non_blank(params["git_repo_url"])
-    local_folder = non_blank(params["local_folder"])
-
-    errors = %{}
-    errors = if name == "", do: Map.put(errors, :name, "Name is required"), else: errors
-
-    errors =
-      if git_repo_url == nil && local_folder == nil,
-        do: Map.put(errors, :location, "Provide at least one"),
-        else: errors
-
-    if errors == %{} do
-      Destila.Projects.create_project(%{
-        name: name,
-        git_repo_url: git_repo_url,
-        local_folder: local_folder
-      })
-    else
-      {:error, errors}
-    end
-  end
-
-  defp non_blank(nil), do: nil
-  defp non_blank(""), do: nil
-  defp non_blank(str), do: str
-
   # --- Setup phase business logic ---
 
   @doc """

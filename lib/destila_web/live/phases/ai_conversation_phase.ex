@@ -23,7 +23,6 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   alias Destila.AI
   alias Destila.Workflows
-  alias Destila.Workflows
 
   def mount(socket) do
     if connected?(socket) do
@@ -38,6 +37,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   def update(assigns, socket) do
     ws = assigns.workflow_session
+    workflow = assigns.workflow
     phase_number = assigns.phase_number
     opts = assigns.opts
 
@@ -48,6 +48,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     socket =
       socket
       |> assign(:workflow_session, ws)
+      |> assign(:workflow, workflow)
       |> assign(:phase_number, phase_number)
       |> assign(:opts, opts)
       |> assign(:ai_session, ai_session)
@@ -87,9 +88,10 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   def handle_event("send_text", %{"content" => content}, socket) when content != "" do
     ws = socket.assigns.workflow_session
     ai_session = socket.assigns.ai_session
+    workflow = socket.assigns.workflow
 
     if ai_session do
-      case Workflows.send_user_message(ws.workflow_type, ws, ai_session, content) do
+      case workflow.send_user_message(ws, ai_session, content) do
         {:ok, ws} ->
           messages = AI.list_messages(ai_session.id)
 
@@ -317,7 +319,9 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   end
 
   defp maybe_initialize_ai(socket, ws, _ai_session, phase_number, opts) do
-    case Workflows.initialize_ai_conversation(ws.workflow_type, ws, phase_number, opts) do
+    workflow = socket.assigns.workflow
+
+    case workflow.initialize_ai_conversation(ws, phase_number, opts) do
       {:ok, ai_session} -> assign(socket, :ai_session, ai_session)
       :already_initialized -> socket
     end

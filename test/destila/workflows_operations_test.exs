@@ -15,56 +15,6 @@ defmodule Destila.WorkflowsOperationsTest do
     ws
   end
 
-  describe "create_session_from_wizard/3" do
-    test "creates a session with next phase and default title" do
-      {:ok, ws} =
-        Workflows.create_session_from_wizard(:prompt_chore_task, 1, %{
-          project_id: nil,
-          idea: "Fix the login bug",
-          title_generating: true
-        })
-
-      assert ws.workflow_type == :prompt_chore_task
-      assert ws.current_phase == 2
-      assert ws.total_phases == 6
-      assert ws.title == "New Chore/Task"
-      assert ws.title_generating == true
-    end
-
-    test "stores the idea as wizard metadata" do
-      {:ok, ws} =
-        Workflows.create_session_from_wizard(:prompt_chore_task, 1, %{
-          idea: "Add dark mode"
-        })
-
-      metadata = Workflows.get_metadata(ws.id)
-      assert metadata["idea"] == %{"text" => "Add dark mode"}
-    end
-
-    test "skips metadata when idea is nil" do
-      {:ok, ws} =
-        Workflows.create_session_from_wizard(:prompt_chore_task, 1, %{
-          idea: nil
-        })
-
-      metadata = Workflows.get_metadata(ws.id)
-      assert metadata == %{}
-    end
-
-    test "sets project_id when provided" do
-      {:ok, project} =
-        Destila.Projects.create_project(%{name: "Test Project", local_folder: "/tmp/test"})
-
-      {:ok, ws} =
-        Workflows.create_session_from_wizard(:prompt_chore_task, 1, %{
-          project_id: project.id,
-          idea: "Some idea"
-        })
-
-      assert ws.project_id == project.id
-    end
-  end
-
   describe "advance_phase/2" do
     test "advances to the next phase with nil phase_status by default" do
       ws = create_session(%{current_phase: 3, total_phases: 6})

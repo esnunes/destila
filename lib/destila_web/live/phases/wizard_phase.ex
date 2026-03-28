@@ -25,7 +25,8 @@ defmodule DestilaWeb.Phases.WizardPhase do
      assign(socket,
        opts: assigns.opts,
        phase_number: assigns.phase_number,
-       workflow_type: assigns.workflow_type
+       workflow_type: assigns.workflow_type,
+       workflow: assigns.workflow
      )}
   end
 
@@ -44,20 +45,37 @@ defmodule DestilaWeb.Phases.WizardPhase do
   end
 
   def handle_event("create_and_select_project", params, socket) do
-    case Destila.Workflows.validate_and_create_project(socket.assigns.workflow_type, params) do
-      {:ok, project} ->
-        {:noreply,
-         socket
-         |> assign(:project_id, project.id)
-         |> assign(:projects, Destila.Projects.list_projects())
-         |> assign(:project_step, :select)
-         |> assign(:errors, %{})}
+    name = String.trim(params["name"] || "")
+    git_repo_url = non_blank(params["git_repo_url"])
+    local_folder = non_blank(params["local_folder"])
 
-      {:error, errors} ->
-        {:noreply,
-         socket
-         |> assign(:project_form, to_form(params))
-         |> assign(:errors, errors)}
+    errors = %{}
+    errors = if name == "", do: Map.put(errors, :name, "Name is required"), else: errors
+
+    errors =
+      if git_repo_url == nil && local_folder == nil,
+        do: Map.put(errors, :location, "Provide at least one"),
+        else: errors
+
+    if errors == %{} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: name,
+          git_repo_url: git_repo_url,
+          local_folder: local_folder
+        })
+
+      {:noreply,
+       socket
+       |> assign(:project_id, project.id)
+       |> assign(:projects, Destila.Projects.list_projects())
+       |> assign(:project_step, :select)
+       |> assign(:errors, %{})}
+    else
+      {:noreply,
+       socket
+       |> assign(:project_form, to_form(params))
+       |> assign(:errors, errors)}
     end
   end
 
@@ -71,19 +89,29 @@ defmodule DestilaWeb.Phases.WizardPhase do
   end
 
   def handle_event("start_workflow", %{"initial_idea" => idea}, socket) when idea != "" do
-    case Destila.Workflows.validate_wizard_fields(socket.assigns.workflow_type, %{
+    workflow = socket.assigns.workflow
+
+    case workflow.validate_wizard_fields(%{
            project_id: socket.assigns.project_id,
            idea: idea
          }) do
       :ok ->
+        session_attrs = %{
+          title: workflow.default_title(),
+          workflow_type: socket.assigns.workflow_type,
+          current_phase: 2,
+          total_phases: workflow.total_phases(),
+          project_id: socket.assigns.project_id,
+          title_generating: true
+        }
+
         send(
           self(),
           {:phase_complete, socket.assigns.phase_number,
            %{
              action: :session_create,
-             project_id: socket.assigns.project_id,
-             idea: idea,
-             title_generating: true
+             session_attrs: session_attrs,
+             idea: idea
            }}
         )
 
@@ -319,4 +347,8 @@ defmodule DestilaWeb.Phases.WizardPhase do
     </div>
     """
   end
+
+  defp non_blank(nil), do: nil
+  defp non_blank(""), do: nil
+  defp non_blank(str), do: str
 end

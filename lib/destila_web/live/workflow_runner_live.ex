@@ -42,12 +42,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   defp mount_workflow(workflow_type_str, socket) do
     workflow_type = String.to_existing_atom(workflow_type_str)
-    phases = Workflows.phases(workflow_type)
+    workflow = Workflows.workflow_module(workflow_type)
+    phases = workflow.phases()
 
     {:ok,
      socket
      |> assign(:view, :running)
      |> assign(:workflow_type, workflow_type)
+     |> assign(:workflow, workflow)
      |> assign(:workflow_session, nil)
      |> assign(:project, nil)
      |> assign(:phases, phases)
@@ -55,7 +57,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:total_phases, length(phases))
      |> assign(:editing_title, false)
      |> assign(:metadata, %{})
-     |> assign(:page_title, Workflows.default_title(workflow_type))}
+     |> assign(:page_title, workflow.default_title())}
   end
 
   defp mount_session(id, socket) do
@@ -67,7 +69,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       end
 
       workflow_type = workflow_session.workflow_type
-      phases = Workflows.phases(workflow_type)
+      workflow = Workflows.workflow_module(workflow_type)
+      phases = workflow.phases()
 
       project =
         if workflow_session.project_id,
@@ -77,6 +80,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        socket
        |> assign(:view, :running)
        |> assign(:workflow_type, workflow_type)
+       |> assign(:workflow, workflow)
        |> assign(:workflow_session, workflow_session)
        |> assign(:project, project)
        |> assign(:phases, phases)
@@ -138,8 +142,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   # --- Phase signals from LiveComponents ---
 
   # Phase complete with session creation request
-  def handle_info({:phase_complete, phase, %{action: :session_create} = data}, socket) do
-    {:ok, ws} = Workflows.create_session_from_wizard(socket.assigns.workflow_type, phase, data)
+  def handle_info({:phase_complete, _phase, %{action: :session_create} = data}, socket) do
+    {:ok, ws} = Workflows.create_workflow_session(data[:session_attrs])
+
+    if data[:idea] do
+      Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
+    end
+
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
   end
 
@@ -410,6 +419,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           id={"phase-#{@current_phase}"}
           workflow_session={@workflow_session}
           workflow_type={@workflow_type}
+          workflow={@workflow}
           metadata={@metadata}
           opts={@phase_opts}
           phase_number={@current_phase}

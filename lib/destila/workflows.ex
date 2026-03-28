@@ -55,61 +55,7 @@ defmodule Destila.Workflows do
   defp normalize_strategy(:new), do: {:new, []}
   defp normalize_strategy({action, opts}) when action in [:resume, :new], do: {action, opts}
 
-  # --- Phase-specific dispatchers ---
-
-  def validate_wizard_fields(workflow_type, params) do
-    workflow_module(workflow_type).validate_wizard_fields(params)
-  end
-
-  def validate_and_create_project(workflow_type, params) do
-    workflow_module(workflow_type).validate_and_create_project(params)
-  end
-
-  def initiate_setup(workflow_type, workflow_session, metadata) do
-    workflow_module(workflow_type).initiate_setup(workflow_session, metadata)
-  end
-
-  def retry_setup(workflow_type, workflow_session) do
-    workflow_module(workflow_type).retry_setup(workflow_session)
-  end
-
-  def initialize_ai_conversation(workflow_type, ws, phase_number, opts) do
-    workflow_module(workflow_type).initialize_ai_conversation(ws, phase_number, opts)
-  end
-
-  def send_user_message(workflow_type, ws, ai_session, content) do
-    workflow_module(workflow_type).send_user_message(ws, ai_session, content)
-  end
-
   # --- High-level workflow operations ---
-
-  @doc """
-  Creates a new workflow session from wizard phase data.
-
-  Builds the session record with the next phase set to `phase + 1`,
-  and optionally upserts the initial idea as metadata.
-
-  Returns `{:ok, session}`.
-  """
-  def create_session_from_wizard(workflow_type, phase, data) do
-    session_attrs =
-      %{
-        title: default_title(workflow_type),
-        workflow_type: workflow_type,
-        current_phase: phase + 1,
-        total_phases: total_phases(workflow_type)
-      }
-      |> maybe_put(:project_id, data[:project_id])
-      |> maybe_put(:title_generating, data[:title_generating])
-
-    {:ok, ws} = create_workflow_session(session_attrs)
-
-    if data[:idea] do
-      upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
-    end
-
-    {:ok, ws}
-  end
 
   @doc """
   Advances the workflow session to the next phase.
@@ -291,7 +237,4 @@ defmodule Destila.Workflows do
   end
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

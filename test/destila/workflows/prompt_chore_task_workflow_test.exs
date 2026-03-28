@@ -69,65 +69,6 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflowTest do
     end
   end
 
-  describe "validate_and_create_project/1" do
-    test "creates project when params are valid" do
-      assert {:ok, project} =
-               PromptChoreTaskWorkflow.validate_and_create_project(%{
-                 "name" => "My Project",
-                 "git_repo_url" => "https://github.com/org/repo",
-                 "local_folder" => ""
-               })
-
-      assert project.name == "My Project"
-      assert project.git_repo_url == "https://github.com/org/repo"
-    end
-
-    test "creates project with local_folder only" do
-      assert {:ok, project} =
-               PromptChoreTaskWorkflow.validate_and_create_project(%{
-                 "name" => "Local Project",
-                 "git_repo_url" => "",
-                 "local_folder" => "/home/user/project"
-               })
-
-      assert project.local_folder == "/home/user/project"
-      assert project.git_repo_url == nil
-    end
-
-    test "returns error when name is empty" do
-      assert {:error, errors} =
-               PromptChoreTaskWorkflow.validate_and_create_project(%{
-                 "name" => "",
-                 "git_repo_url" => "https://github.com/org/repo",
-                 "local_folder" => ""
-               })
-
-      assert errors[:name] == "Name is required"
-    end
-
-    test "returns error when both location fields are empty" do
-      assert {:error, errors} =
-               PromptChoreTaskWorkflow.validate_and_create_project(%{
-                 "name" => "My Project",
-                 "git_repo_url" => "",
-                 "local_folder" => ""
-               })
-
-      assert errors[:location] == "Provide at least one"
-    end
-
-    test "trims whitespace from name" do
-      assert {:ok, project} =
-               PromptChoreTaskWorkflow.validate_and_create_project(%{
-                 "name" => "  Trimmed  ",
-                 "git_repo_url" => "",
-                 "local_folder" => "/tmp"
-               })
-
-      assert project.name == "Trimmed"
-    end
-  end
-
   describe "initiate_setup/2" do
     setup do
       ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->

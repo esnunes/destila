@@ -10,11 +10,12 @@ defmodule DestilaWeb.Phases.SetupPhase do
 
   def update(assigns, socket) do
     ws = assigns.workflow_session
+    workflow = assigns.workflow
     metadata = assigns[:metadata] || %{}
     steps = build_steps(ws, metadata)
 
     if connected?(socket) && ws do
-      Destila.Workflows.initiate_setup(ws.workflow_type, ws, metadata)
+      workflow.initiate_setup(ws, metadata)
     end
 
     if all_completed?(steps) do
@@ -24,6 +25,7 @@ defmodule DestilaWeb.Phases.SetupPhase do
     {:ok,
      socket
      |> assign(:workflow_session, ws)
+     |> assign(:workflow, workflow)
      |> assign(:phase_number, assigns.phase_number)
      |> assign(:steps, steps)
      |> assign(:all_done, all_completed?(steps))
@@ -31,8 +33,7 @@ defmodule DestilaWeb.Phases.SetupPhase do
   end
 
   def handle_event("retry_setup", _params, socket) do
-    ws = socket.assigns.workflow_session
-    Destila.Workflows.retry_setup(ws.workflow_type, ws)
+    socket.assigns.workflow.retry_setup(socket.assigns.workflow_session)
     {:noreply, socket}
   end
 
