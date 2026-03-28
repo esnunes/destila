@@ -55,6 +55,16 @@ defmodule Destila.Workflows do
   defp normalize_strategy(:new), do: {:new, []}
   defp normalize_strategy({action, opts}) when action in [:resume, :new], do: {action, opts}
 
+  # --- Phase-specific dispatchers ---
+
+  def validate_wizard_fields(workflow_type, params) do
+    workflow_module(workflow_type).validate_wizard_fields(params)
+  end
+
+  def validate_and_create_project(workflow_type, params) do
+    workflow_module(workflow_type).validate_and_create_project(params)
+  end
+
   # --- High-level workflow operations ---
 
   @doc """

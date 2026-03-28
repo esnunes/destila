@@ -60,6 +60,62 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
 
   def session_strategy(_phase), do: :resume
 
+  # --- Wizard phase business logic ---
+
+  @doc """
+  Validates wizard fields (project selection and idea).
+
+  Returns `:ok` or `{:error, errors_map}`.
+  """
+  def validate_wizard_fields(%{project_id: project_id, idea: idea}) do
+    errors = %{}
+
+    errors =
+      if is_nil(project_id),
+        do: Map.put(errors, :project, "Please select a project"),
+        else: errors
+
+    errors =
+      if idea == "" or is_nil(idea),
+        do: Map.put(errors, :idea, "Please describe your initial idea"),
+        else: errors
+
+    if errors == %{}, do: :ok, else: {:error, errors}
+  end
+
+  @doc """
+  Validates and creates a project inline from wizard params.
+
+  Returns `{:ok, project}` or `{:error, errors_map}`.
+  """
+  def validate_and_create_project(params) do
+    name = String.trim(params["name"] || "")
+    git_repo_url = non_blank(params["git_repo_url"])
+    local_folder = non_blank(params["local_folder"])
+
+    errors = %{}
+    errors = if name == "", do: Map.put(errors, :name, "Name is required"), else: errors
+
+    errors =
+      if git_repo_url == nil && local_folder == nil,
+        do: Map.put(errors, :location, "Provide at least one"),
+        else: errors
+
+    if errors == %{} do
+      Destila.Projects.create_project(%{
+        name: name,
+        git_repo_url: git_repo_url,
+        local_folder: local_folder
+      })
+    else
+      {:error, errors}
+    end
+  end
+
+  defp non_blank(nil), do: nil
+  defp non_blank(""), do: nil
+  defp non_blank(str), do: str
+
   # AI system prompts
 
   @tool_instructions """
