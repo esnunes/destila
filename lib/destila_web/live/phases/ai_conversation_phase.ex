@@ -39,7 +39,10 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     opts = assigns.opts
 
     ai_session = AI.get_ai_session_for_workflow(ws.id)
-    messages = if ai_session, do: AI.list_messages(ai_session.id), else: []
+    # Load messages from ALL AI sessions for this workflow (not just the latest)
+    # so that earlier phase messages (e.g., planning phases 3-4) are visible
+    # even when the current AI session is the implementation one (phases 5-8).
+    messages = AI.list_messages_for_workflow_session(ws.id)
     current_step = compute_current_step(ws, messages)
 
     socket =
