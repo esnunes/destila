@@ -127,12 +127,15 @@ defmodule Destila.Workflows do
     ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)
 
     if ai_session do
+      # Filter for AI-generated messages (raw_response != nil) to exclude
+      # system-injected messages like the completion message from mark_done.
       Repo.one(
         from(m in Destila.AI.Message,
           where:
             m.ai_session_id == ^ai_session.id and
               m.role == :system and
-              m.phase == ^workflow_session.total_phases,
+              m.phase == ^workflow_session.total_phases and
+              not is_nil(m.raw_response),
           order_by: [desc: m.inserted_at],
           limit: 1,
           select: m.content

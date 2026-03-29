@@ -54,6 +54,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
       Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: "This is the generated implementation prompt for the task.",
+        raw_response: %{"text" => "This is the generated implementation prompt for the task."},
         phase: 6
       })
 
