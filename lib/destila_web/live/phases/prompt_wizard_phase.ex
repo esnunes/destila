@@ -8,14 +8,7 @@ defmodule DestilaWeb.Phases.PromptWizardPhase do
   use DestilaWeb, :live_component
 
   def mount(socket) do
-    sessions = Destila.Workflows.list_done_sessions_by_type(:prompt_chore_task)
-
-    sessions_with_prompts =
-      Enum.map(sessions, fn ws ->
-        prompt = Destila.Workflows.get_generated_prompt_text(ws)
-        {ws, prompt}
-      end)
-      |> Enum.reject(fn {_ws, prompt} -> is_nil(prompt) || prompt == "" end)
+    sessions_with_prompts = Destila.Workflows.list_sessions_with_generated_prompts()
 
     {:ok,
      socket

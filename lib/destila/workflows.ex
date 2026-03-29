@@ -114,38 +114,22 @@ defmodule Destila.Workflows do
     end
   end
 
-  def list_done_sessions_by_type(workflow_type) do
+  @doc """
+  Lists completed workflow sessions that have a `prompt_generated` metadata entry.
+  Returns `{session, prompt_text}` tuples, ordered by most recently done.
+  """
+  def list_sessions_with_generated_prompts do
     from(ws in Session,
-      where: ws.workflow_type == ^workflow_type and not is_nil(ws.done_at),
+      join: m in SessionMetadata,
+      on: m.workflow_session_id == ws.id and m.key == "prompt_generated",
+      where: not is_nil(ws.done_at),
       preload: [:project],
-      order_by: [desc: ws.done_at]
+      order_by: [desc: ws.done_at],
+      select: {ws, m.value}
     )
     |> Repo.all()
-  end
-
-  def get_generated_prompt_text(workflow_session) do
-    ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)
-
-    if ai_session do
-      # Filter for AI-generated messages (raw_response != nil) to exclude
-      # system-injected messages like the completion message from mark_done.
-      Repo.one(
-        from(m in Destila.AI.Message,
-          where:
-            m.ai_session_id == ^ai_session.id and
-              m.role == :system and
-              m.phase == ^workflow_session.total_phases and
-              not is_nil(m.raw_response),
-          order_by: [desc: m.inserted_at],
-          limit: 1,
-          select: m.content
-        )
-      )
-      |> case do
-        nil -> nil
-        content -> String.trim(content)
-      end
-    end
+    |> Enum.map(fn {ws, value} -> {ws, value["text"]} end)
+    |> Enum.reject(fn {_ws, text} -> is_nil(text) || text == "" end)
   end
 
   def count_by_project(project_id) do

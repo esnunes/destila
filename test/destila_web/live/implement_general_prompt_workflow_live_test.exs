@@ -48,15 +48,12 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         done_at: DateTime.utc_now()
       })
 
-    {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
-
-    {:ok, _} =
-      Destila.AI.create_message(ai_session.id, %{
-        role: :system,
-        content: "This is the generated implementation prompt for the task.",
-        raw_response: %{"text" => "This is the generated implementation prompt for the task."},
-        phase: 6
-      })
+    Destila.Workflows.upsert_metadata(
+      ws.id,
+      "Prompt Generation",
+      "prompt_generated",
+      %{"text" => "This is the generated implementation prompt for the task."}
+    )
 
     {ws, project}
   end
