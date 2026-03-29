@@ -185,6 +185,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
           current_phase: 2,
           total_phases: 6,
           phase_status: :setup,
+          title_generating: true,
           project_id: create_project().id
         })
 

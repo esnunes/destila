@@ -6,7 +6,7 @@ defmodule Destila.Workflows.Session do
   @foreign_key_type :binary_id
   schema "workflow_sessions" do
     field(:title, :string, default: "Untitled Session")
-    field(:workflow_type, Ecto.Enum, values: [:prompt_chore_task])
+    field(:workflow_type, Ecto.Enum, values: [:prompt_chore_task, :implement_general_prompt])
 
     field(:current_phase, :integer, default: 1)
     field(:total_phases, :integer)

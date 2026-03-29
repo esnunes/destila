@@ -1,0 +1,215 @@
+defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
+  @moduledoc """
+  Defines the Implement General Prompt workflow — takes a user-provided prompt
+  and implements it end-to-end through AI-driven planning, coding, reviewing,
+  testing, and video recording.
+
+  Phases:
+  1. Prompt & Project — Wizard collecting prompt selection/entry and project
+  2. Setup — Prepares the project environment (repo sync, worktree, title gen)
+  3. Generate Plan — AI creates an implementation plan (non-interactive)
+  4. Deepen Plan — AI evaluates and optionally deepens the plan (non-interactive)
+  5. Work — AI implements the plan (non-interactive)
+  6. Review — AI reviews and fixes P1/P2 issues (non-interactive)
+  7. Browser Tests — AI runs tests if applicable (non-interactive, optional)
+  8. Feature Video — AI records a feature video (non-interactive)
+  """
+
+  @implementation_tools [
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Glob",
+    "Grep",
+    "mcp__destila__session"
+  ]
+
+  @non_interactive_tool_instructions """
+
+  ## Phase Transitions
+
+  When you have completed this phase's work, call `mcp__destila__session` \
+  with `action: "phase_complete"` and a `message` summarizing what was done.
+
+  Do NOT use `suggest_phase_complete` — this phase runs autonomously.
+  Do NOT call `mcp__destila__ask_user_question` — no user is present.
+  """
+
+  def phases do
+    [
+      {DestilaWeb.Phases.PromptWizardPhase, name: "Prompt & Project"},
+      {DestilaWeb.Phases.SetupPhase, name: "Setup"},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Generate Plan",
+       system_prompt: &plan_prompt/1,
+       non_interactive: true,
+       allowed_tools: @implementation_tools},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Deepen Plan",
+       system_prompt: &deepen_plan_prompt/1,
+       non_interactive: true,
+       skippable: true,
+       allowed_tools: @implementation_tools},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Work",
+       system_prompt: &work_prompt/1,
+       non_interactive: true,
+       allowed_tools: @implementation_tools},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Review",
+       system_prompt: &review_prompt/1,
+       non_interactive: true,
+       allowed_tools: @implementation_tools},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Browser Tests",
+       system_prompt: &browser_tests_prompt/1,
+       non_interactive: true,
+       skippable: true,
+       allowed_tools: @implementation_tools},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Feature Video",
+       system_prompt: &feature_video_prompt/1,
+       non_interactive: true,
+       allowed_tools: @implementation_tools,
+       final: true}
+    ]
+  end
+
+  def total_phases, do: length(phases())
+
+  def phase_name(phase) when is_integer(phase) do
+    case Enum.at(phases(), phase - 1) do
+      {_mod, opts} -> Keyword.get(opts, :name)
+      nil -> nil
+    end
+  end
+
+  def phase_name(_phase), do: nil
+
+  def phase_columns do
+    columns =
+      1..total_phases()
+      |> Enum.map(fn n -> {n, phase_name(n)} end)
+      |> Enum.reject(fn {_, name} -> is_nil(name) end)
+
+    columns ++ [{:done, "Done"}]
+  end
+
+  def default_title, do: "New Implementation"
+
+  def label, do: "Implement a Prompt"
+
+  def description,
+    do: "Take a prompt through planning, coding, review, testing, and recording"
+
+  def icon, do: "hero-rocket-launch"
+  def icon_class, do: "text-primary"
+
+  def completion_message do
+    "Implementation complete! Plan executed, code reviewed, tests run, and feature recorded."
+  end
+
+  # Phases 1-4: resume (single AI session for planning)
+  # Phase 5: new (fresh AI session for implementation)
+  # Phases 6-8: resume (reuse implementation AI session)
+  def session_strategy(5), do: :new
+  def session_strategy(_phase), do: :resume
+
+  # --- AI System Prompts ---
+
+  defp plan_prompt(workflow_session) do
+    metadata = Destila.Workflows.get_metadata(workflow_session.id)
+    prompt = get_in(metadata, ["prompt", "text"])
+
+    """
+    You are an AI planning agent working in a git worktree. Your task is to \
+    create a detailed implementation plan for the following prompt:
+
+    #{prompt}
+
+    Steps:
+    1. Analyze the codebase to understand the project structure and conventions
+    2. Create a detailed implementation plan
+    3. Save the plan to `plan.md` in the current directory
+    4. Commit your changes: `git add . && git commit -m "Add implementation plan"`
+    5. Push to the remote: `git push`
+    """ <> @non_interactive_tool_instructions
+  end
+
+  defp deepen_plan_prompt(_workflow_session) do
+    """
+    Review the plan in `plan.md`. Evaluate whether a more detailed plan would \
+    be beneficial for the implementation.
+
+    If the plan needs more detail:
+    1. Enhance the plan with additional implementation specifics
+    2. Commit your changes: `git add . && git commit -m "Deepen implementation plan"`
+    3. Push to the remote: `git push`
+    4. Call `mcp__destila__session` with `action: "phase_complete"`
+
+    If the plan is already sufficient:
+    - Call `mcp__destila__session` with `action: "phase_complete"` and a message \
+    explaining why further detail is not needed
+    """ <> @non_interactive_tool_instructions
+  end
+
+  defp work_prompt(_workflow_session) do
+    """
+    Read the implementation plan from `plan.md` in the current directory and \
+    implement it completely.
+
+    Steps:
+    1. Read `plan.md` to understand what needs to be done
+    2. Implement all changes described in the plan
+    3. Ensure the code compiles and basic tests pass
+    4. Commit all changes: `git add . && git commit -m "Implement plan"`
+    5. Push to the remote: `git push`
+    """ <> @non_interactive_tool_instructions
+  end
+
+  defp review_prompt(_workflow_session) do
+    """
+    Review the implementation against the plan in `plan.md`.
+
+    Steps:
+    1. Read the plan and understand the requirements
+    2. Review all changed files for correctness, quality, and completeness
+    3. Identify P1 (critical) and P2 (important) issues
+    4. Fix all P1 and P2 items
+    5. Commit fixes: `git add . && git commit -m "Fix review issues"`
+    6. Push to the remote: `git push`
+    """ <> @non_interactive_tool_instructions
+  end
+
+  defp browser_tests_prompt(_workflow_session) do
+    """
+    Evaluate whether the implementation changes affect existing tests or \
+    require new browser tests.
+
+    If tests need attention:
+    1. Run the test suite to identify failures
+    2. Fix any broken tests
+    3. Add new tests for new functionality if appropriate
+    4. Commit changes: `git add . && git commit -m "Fix and add tests"`
+    5. Push to the remote: `git push`
+    6. Call `mcp__destila__session` with `action: "phase_complete"`
+
+    If no test-impacting changes exist:
+    - Call `mcp__destila__session` with `action: "phase_complete"` and a message \
+    explaining why no test changes are needed
+    """ <> @non_interactive_tool_instructions
+  end
+
+  defp feature_video_prompt(_workflow_session) do
+    """
+    Record a feature video walkthrough of the implemented changes.
+
+    Steps:
+    1. Identify the key features and changes that were implemented
+    2. Record a walkthrough demonstrating the changes
+    3. Commit any artifacts: `git add . && git commit -m "Add feature video"`
+    4. Push to the remote: `git push`
+    """ <> @non_interactive_tool_instructions
+  end
+end

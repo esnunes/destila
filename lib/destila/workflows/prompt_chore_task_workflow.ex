@@ -23,7 +23,10 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
       {DestilaWeb.Phases.AiConversationPhase,
        name: "Technical Concerns", system_prompt: &technical_concerns_prompt/1},
       {DestilaWeb.Phases.AiConversationPhase,
-       name: "Prompt Generation", system_prompt: &prompt_generation_prompt/1, final: true}
+       name: "Prompt Generation",
+       system_prompt: &prompt_generation_prompt/1,
+       final: true,
+       message_type: :generated_prompt}
     ]
   end
 

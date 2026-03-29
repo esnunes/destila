@@ -2,11 +2,11 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   @moduledoc """
   LiveComponent for AI conversation phases.
 
-  Fully self-contained: subscribes to PubSub, handles all chat events
-  (send_text, select, advance, decline, mark_done), manages its own
-  DB writes and worker enqueuing.
+  Receives updates from the parent LiveView via `update/2` (driven by
+  PubSub events the parent handles). Manages chat events, DB writes,
+  and worker enqueuing.
 
-  Signals parent only for phase-level changes via:
+  Signals parent for phase-level changes via:
   - `{:phase_advanced, new_phase}` — phase changed, parent should update chrome
   - `{:workflow_done}` — workflow marked as done
 
@@ -15,6 +15,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   - `system_prompt` — fn/1 returning the system prompt (required)
   - `skippable` — supports phase_complete session tool action (default false)
   - `final` — shows "Mark as Done" instead of advance (default false)
+  - `non_interactive` — hides user input, shows retry/cancel (default false)
+  - `allowed_tools` — list of tools for ClaudeCode session (optional)
   """
 
   use DestilaWeb, :live_component
@@ -23,13 +25,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   alias Destila.AI
   alias Destila.Workflows
-  alias Destila.Workflows
 
   def mount(socket) do
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
-    end
-
     {:ok,
      socket
      |> assign(:question_answers, %{})
@@ -65,22 +62,6 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
     {:ok, socket}
   end
-
-  # --- PubSub ---
-
-  def handle_info({:message_added, _msg}, socket) do
-    refresh_from_db(socket)
-  end
-
-  def handle_info({:workflow_session_updated, updated_ws}, socket) do
-    if updated_ws.id == socket.assigns.workflow_session.id do
-      refresh_from_db(socket)
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_info(_msg, socket), do: {:noreply, socket}
 
   # --- Chat events (targeted via phx-target={@myself}) ---
 
@@ -255,12 +236,45 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     {:noreply, assign(socket, :workflow_session, ws)}
   end
 
+  def handle_event("retry_phase", _params, socket) do
+    ws = socket.assigns.workflow_session
+    opts = socket.assigns.opts
+
+    if ws.phase_status != :generating do
+      system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
+      query = system_prompt_fn.(ws)
+
+      Workflows.update_workflow_session(ws, %{phase_status: :generating})
+
+      %{"workflow_session_id" => ws.id, "phase" => ws.current_phase, "query" => query}
+      |> Destila.Workers.AiQueryWorker.new()
+      |> Oban.insert()
+
+      {:noreply, assign(socket, :workflow_session, %{ws | phase_status: :generating})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_phase", _params, socket) do
+    ws = socket.assigns.workflow_session
+
+    if ws.phase_status == :generating do
+      AI.ClaudeSession.stop_for_workflow_session(ws.id)
+      {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
+      {:noreply, assign(socket, :workflow_session, ws)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   # --- Render ---
 
   def render(assigns) do
     assigns =
       assigns
       |> assign(:phase_groups, phase_groups(assigns.messages, assigns.phase_number))
+      |> assign(:non_interactive, Keyword.get(assigns.opts, :non_interactive, false))
 
     ~H"""
     <div class="flex flex-col h-full">
@@ -292,10 +306,11 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
             </details>
           <% end %>
 
-          <%!-- Inline structured options --%>
+          <%!-- Interactive-only: inline structured options --%>
           <div
             :if={
-              !@current_step.completed &&
+              !@non_interactive &&
+                !@current_step.completed &&
                 @current_step.input_type in [:single_select, :multi_select]
             }
             class="ml-11 mb-4"
@@ -308,9 +323,13 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
             />
           </div>
 
-          <%!-- Inline multi-question form --%>
+          <%!-- Interactive-only: inline multi-question form --%>
           <div
-            :if={!@current_step.completed && @current_step.input_type == :questions}
+            :if={
+              !@non_interactive &&
+                !@current_step.completed &&
+                @current_step.input_type == :questions
+            }
             class="ml-11 mb-4"
           >
             <.multi_question_input
@@ -322,10 +341,38 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
         </div>
       </div>
 
-      <%!-- Text input --%>
+      <%!-- Non-interactive: retry/cancel controls --%>
+      <div
+        :if={@non_interactive && !@current_step.completed}
+        class="max-w-2xl mx-auto w-full px-6 pb-4"
+      >
+        <div class="flex items-center justify-center gap-3">
+          <button
+            :if={@workflow_session.phase_status == :generating}
+            phx-click="cancel_phase"
+            phx-target={@myself}
+            id="cancel-phase-btn"
+            class="btn btn-outline btn-error btn-sm"
+          >
+            <.icon name="hero-stop-micro" class="size-4" /> Cancel
+          </button>
+          <button
+            :if={@workflow_session.phase_status == :conversing}
+            phx-click="retry_phase"
+            phx-target={@myself}
+            id="retry-phase-btn"
+            class="btn btn-primary btn-sm"
+          >
+            <.icon name="hero-arrow-path-micro" class="size-4" /> Retry
+          </button>
+        </div>
+      </div>
+
+      <%!-- Interactive-only: text input --%>
       <div
         :if={
-          !@current_step.completed &&
+          !@non_interactive &&
+            !@current_step.completed &&
             @workflow_session.phase_status not in [:advance_suggested]
         }
         class="max-w-2xl mx-auto w-full px-6 pb-4"
@@ -340,20 +387,6 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   end
 
   # --- Private helpers ---
-
-  defp refresh_from_db(socket) do
-    ws = Workflows.get_workflow_session!(socket.assigns.workflow_session.id)
-    ai_session = AI.get_ai_session_for_workflow(ws.id)
-    messages = if ai_session, do: AI.list_messages(ai_session.id), else: []
-    current_step = compute_current_step(ws, messages)
-
-    {:noreply,
-     socket
-     |> assign(:workflow_session, ws)
-     |> assign(:ai_session, ai_session)
-     |> assign(:messages, messages)
-     |> assign(:current_step, current_step)}
-  end
 
   defp maybe_initialize_ai(socket, ws, ai_session, phase_number, opts) do
     messages = if ai_session, do: AI.list_messages(ai_session.id), else: []

@@ -10,7 +10,8 @@ defmodule Destila.Workflows do
   alias Destila.Workflows.{Session, SessionMetadata}
 
   @workflow_modules %{
-    prompt_chore_task: Destila.Workflows.PromptChoreTaskWorkflow
+    prompt_chore_task: Destila.Workflows.PromptChoreTaskWorkflow,
+    implement_general_prompt: Destila.Workflows.ImplementGeneralPromptWorkflow
   }
 
   def workflow_module(workflow_type) do
@@ -110,6 +111,31 @@ defmodule Destila.Workflows do
       workflow_session.phase_status in [:conversing, :advance_suggested] -> :waiting_for_user
       workflow_session.phase_status == :generating -> :ai_processing
       true -> :in_progress
+    end
+  end
+
+  def list_done_sessions_by_type(workflow_type) do
+    from(ws in Session,
+      where: ws.workflow_type == ^workflow_type and not is_nil(ws.done_at),
+      preload: [:project],
+      order_by: [desc: ws.done_at]
+    )
+    |> Repo.all()
+  end
+
+  def get_generated_prompt_text(workflow_session) do
+    ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)
+
+    if ai_session do
+      messages = Destila.AI.list_messages(ai_session.id)
+
+      messages
+      |> Enum.filter(&(&1.role == :system && &1.phase == workflow_session.total_phases))
+      |> List.last()
+      |> case do
+        nil -> nil
+        msg -> String.trim(msg.content)
+      end
     end
   end
 

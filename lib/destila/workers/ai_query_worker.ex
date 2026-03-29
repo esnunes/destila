@@ -1,5 +1,12 @@
 defmodule Destila.Workers.AiQueryWorker do
-  use Oban.Worker, queue: :default, max_attempts: 1
+  use Oban.Worker,
+    queue: :default,
+    max_attempts: 1,
+    unique: [
+      keys: [:workflow_session_id, :phase],
+      period: 30,
+      states: [:available, :scheduled, :executing]
+    ]
 
   alias Destila.{AI, Workflows}
 
@@ -100,27 +107,37 @@ defmodule Destila.Workers.AiQueryWorker do
     total = ws.total_phases
 
     if next_phase > total do
+      # Final phase — auto-mark workflow as done
       Workflows.update_workflow_session(workflow_session_id, %{
-        phase_status: :conversing
+        done_at: DateTime.utc_now(),
+        phase_status: nil
       })
     else
       {action, _} =
         Destila.Workflows.session_strategy(ws.workflow_type, next_phase)
 
-      update_attrs = %{current_phase: next_phase, phase_status: :generating}
-
       if action == :new do
         Destila.AI.ClaudeSession.stop_for_workflow_session(workflow_session_id)
+
+        # Create new AI session record (old one stays for message history)
+        metadata = Destila.Workflows.get_metadata(workflow_session_id)
+        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
+
+        {:ok, _new_session} =
+          Destila.AI.create_ai_session(%{
+            workflow_session_id: workflow_session_id,
+            worktree_path: worktree_path
+          })
       end
 
-      Workflows.update_workflow_session(workflow_session_id, update_attrs)
-      ws = Workflows.get_workflow_session!(workflow_session_id)
-
+      # Build prompt BEFORE broadcasting (avoids spinner-with-no-backing-job)
       phases = Destila.Workflows.phases(ws.workflow_type)
       {_module, opts} = Enum.at(phases, next_phase - 1)
       system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
-      phase_prompt = system_prompt_fn.(ws)
+      ws_for_prompt = %{ws | current_phase: next_phase}
+      phase_prompt = system_prompt_fn.(ws_for_prompt)
 
+      # Enqueue job first
       %{
         "workflow_session_id" => workflow_session_id,
         "phase" => next_phase,
@@ -128,6 +145,12 @@ defmodule Destila.Workers.AiQueryWorker do
       }
       |> __MODULE__.new()
       |> Oban.insert()
+
+      # Then update session (which broadcasts via PubSub)
+      Workflows.update_workflow_session(workflow_session_id, %{
+        current_phase: next_phase,
+        phase_status: :generating
+      })
     end
   end
 end

@@ -17,7 +17,9 @@ defmodule DestilaWeb.Phases.SetupPhase do
       maybe_start_setup(ws, metadata)
     end
 
-    if all_completed?(steps) do
+    all_done = all_completed?(steps)
+
+    if all_done && !socket.assigns[:phase_complete_sent] do
       send(self(), {:phase_complete, assigns.phase_number, %{}})
     end
 
@@ -26,7 +28,8 @@ defmodule DestilaWeb.Phases.SetupPhase do
      |> assign(:workflow_session, ws)
      |> assign(:phase_number, assigns.phase_number)
      |> assign(:steps, steps)
-     |> assign(:all_done, all_completed?(steps))
+     |> assign(:all_done, all_done)
+     |> assign(:phase_complete_sent, all_done || socket.assigns[:phase_complete_sent])
      |> assign(:has_failure, has_failure?(steps))}
   end
 
@@ -97,11 +100,14 @@ defmodule DestilaWeb.Phases.SetupPhase do
   defp maybe_start_setup(ws, metadata) do
     Destila.Workflows.update_workflow_session(ws, %{phase_status: :setup})
 
-    idea = get_in(metadata, ["idea", "text"]) || ""
+    # Only generate title if title_generating is true (not pre-set from source session)
+    if ws.title_generating do
+      idea = get_in(metadata, ["idea", "text"]) || get_in(metadata, ["prompt", "text"]) || ""
 
-    %{"workflow_session_id" => ws.id, "idea" => idea}
-    |> Destila.Workers.TitleGenerationWorker.new()
-    |> Oban.insert()
+      %{"workflow_session_id" => ws.id, "idea" => idea}
+      |> Destila.Workers.TitleGenerationWorker.new()
+      |> Oban.insert()
+    end
 
     if ws.project_id do
       %{"workflow_session_id" => ws.id}
@@ -111,39 +117,49 @@ defmodule DestilaWeb.Phases.SetupPhase do
   end
 
   defp build_steps(ws, metadata) do
-    title_step = %{
-      key: "title_gen",
-      label: step_label("title_gen", metadata),
-      status: get_step_status(metadata, "title_gen"),
-      error: get_step_error(metadata, "title_gen")
-    }
+    # Only include title gen step if title generation was requested
+    title_steps =
+      if ws.title_generating do
+        [
+          %{
+            key: "title_gen",
+            label: step_label("title_gen", metadata),
+            status: get_step_status(metadata, "title_gen"),
+            error: get_step_error(metadata, "title_gen")
+          }
+        ]
+      else
+        []
+      end
 
-    if ws.project_id do
-      project = Destila.Projects.get_project(ws.project_id)
+    repo_steps =
+      if ws.project_id do
+        project = Destila.Projects.get_project(ws.project_id)
 
-      repo_label =
-        if project && project.local_folder && project.local_folder != "",
-          do: "Pulling latest changes...",
-          else: "Syncing repository..."
+        repo_label =
+          if project && project.local_folder && project.local_folder != "",
+            do: "Pulling latest changes...",
+            else: "Syncing repository..."
 
-      [
-        title_step,
-        %{
-          key: "repo_sync",
-          label: repo_label,
-          status: get_step_status(metadata, "repo_sync"),
-          error: get_step_error(metadata, "repo_sync")
-        },
-        %{
-          key: "worktree",
-          label: "Creating worktree...",
-          status: get_step_status(metadata, "worktree"),
-          error: get_step_error(metadata, "worktree")
-        }
-      ]
-    else
-      [title_step]
-    end
+        [
+          %{
+            key: "repo_sync",
+            label: repo_label,
+            status: get_step_status(metadata, "repo_sync"),
+            error: get_step_error(metadata, "repo_sync")
+          },
+          %{
+            key: "worktree",
+            label: "Creating worktree...",
+            status: get_step_status(metadata, "worktree"),
+            error: get_step_error(metadata, "worktree")
+          }
+        ]
+      else
+        []
+      end
+
+    title_steps ++ repo_steps
   end
 
   defp step_label("title_gen", _), do: "Generating title..."

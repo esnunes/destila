@@ -97,7 +97,8 @@ defmodule Destila.AI.ClaudeSession do
   Resets the inactivity timer after each call completes.
   """
   def query(session, prompt, opts \\ []) do
-    GenServer.call(session, {:query, prompt, opts}, :infinity)
+    timeout = Keyword.get(opts, :timeout, :timer.minutes(15))
+    GenServer.call(session, {:query, prompt, opts}, timeout)
   end
 
   @doc """
@@ -121,8 +122,15 @@ defmodule Destila.AI.ClaudeSession do
     name = {:via, Registry, {Destila.AI.SessionRegistry, workflow_session_id}}
 
     case GenServer.whereis(name) do
-      nil -> :ok
-      pid -> stop(pid)
+      nil ->
+        :ok
+
+      pid ->
+        try do
+          stop(pid)
+        catch
+          :exit, _ -> :ok
+        end
     end
   end
 
@@ -305,6 +313,14 @@ defmodule Destila.AI.ClaudeSession do
 
   defp reset_timer(state) do
     Process.cancel_timer(state.timer_ref)
+
+    # Flush any queued timeout message that fired during a long handle_call
+    receive do
+      :inactivity_timeout -> :ok
+    after
+      0 -> :ok
+    end
+
     timer_ref = schedule_timeout(state.timeout_ms)
     %{state | timer_ref: timer_ref}
   end
