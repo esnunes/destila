@@ -123,8 +123,8 @@ defmodule Destila.Executions.Engine do
     # Handle session strategy (new vs resume)
     handle_session_strategy(ws, next_phase)
 
-    # Create phase execution for the new phase
-    {:ok, pe} = Executions.create_phase_execution(ws, next_phase)
+    # Get or create phase execution for the new phase (idempotent to handle concurrent calls)
+    {:ok, pe} = Executions.ensure_phase_execution(ws, next_phase)
 
     phase_opts = get_phase_opts(ws, next_phase)
     interactive = !Keyword.get(phase_opts, :non_interactive, false)
@@ -165,6 +165,8 @@ defmodule Destila.Executions.Engine do
           worktree_path: worktree_path
         })
     end
+
+    :ok
   end
 
   defp enqueue_phase_worker(ws, phase, phase_opts) do

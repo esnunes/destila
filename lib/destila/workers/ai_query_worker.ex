@@ -99,6 +99,15 @@ defmodule Destila.Workers.AiQueryWorker do
           phase: phase
         })
 
+        # Update phase execution to reflect the failure
+        case Executions.get_current_phase_execution(ws.id) do
+          %{status: "processing"} = pe ->
+            Executions.update_phase_execution_status(pe, "awaiting_input")
+
+          _ ->
+            :ok
+        end
+
         Workflows.update_workflow_session(ws.id, %{
           phase_status: :conversing
         })
