@@ -1,7 +1,7 @@
 Feature: Implement General Prompt Workflow
   The "Implement a Prompt" workflow takes a user-provided prompt and implements
   it end-to-end through AI-driven planning, coding, reviewing, testing, and
-  video recording. It progresses through eight phases:
+  video recording. It progresses through nine phases:
   1. Prompt & Project - Wizard collecting prompt selection/entry and project
   2. Setup - Prepares the project environment (repo sync, worktree, title gen)
   3. Generate Plan - AI creates an implementation plan (non-interactive)
@@ -9,7 +9,8 @@ Feature: Implement General Prompt Workflow
   5. Work - AI implements the plan (non-interactive)
   6. Review - AI reviews and fixes issues (non-interactive)
   7. Browser Tests - AI runs tests if applicable (non-interactive, optional)
-  8. Feature Video - AI records a feature video (non-interactive)
+  8. Feature Video - AI records a feature video (non-interactive, optional)
+  9. Adjustments - User reviews the PR and requests changes (interactive)
 
   Background:
     Given I am logged in
@@ -86,6 +87,16 @@ Feature: Implement General Prompt Workflow
     Then I should see a "Retry" button
     When I click "Retry"
     Then the AI should restart the phase
+
+  Scenario: Phase 9 - Adjustments phase is interactive
+    Given the non-interactive phases are complete
+    When I reach the adjustments phase
+    Then the AI should create a pull request
+    And I should see the worktree path
+    And I should see a text input to request changes
+    When I request an adjustment
+    Then the AI should apply the change and push
+    And I can mark the workflow as done when satisfied
 
   Scenario: Crafting board shows implementation workflow
     Given I have an active implementation workflow

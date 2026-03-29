@@ -12,7 +12,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
   5. Work — AI implements the plan (non-interactive)
   6. Review — AI reviews and fixes P1/P2 issues (non-interactive)
   7. Browser Tests — AI runs tests if applicable (non-interactive, optional)
-  8. Feature Video — AI records a feature video (non-interactive)
+  8. Feature Video — AI records a feature video (non-interactive, optional)
+  9. Adjustments — User reviews the PR and requests changes (interactive)
   """
 
   @implementation_tools [
@@ -71,6 +72,11 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
        name: "Feature Video",
        system_prompt: &feature_video_prompt/1,
        non_interactive: true,
+       skippable: true,
+       allowed_tools: @implementation_tools},
+      {DestilaWeb.Phases.AiConversationPhase,
+       name: "Adjustments",
+       system_prompt: &adjustments_prompt/1,
        allowed_tools: @implementation_tools,
        final: true}
     ]
@@ -112,7 +118,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   # Phases 1-4: resume (single AI session for planning)
   # Phase 5: new (fresh AI session for implementation)
-  # Phases 6-8: resume (reuse implementation AI session)
+  # Phases 6-9: resume (reuse implementation AI session)
   def session_strategy(5), do: :new
   def session_strategy(_phase), do: :resume
 
@@ -216,5 +222,37 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     3. Commit any artifacts: `git add . && git commit -m "Add feature video"`
     4. Push to the remote: `git push`
     """ <> @non_interactive_tool_instructions
+  end
+
+  defp adjustments_prompt(workflow_session) do
+    metadata = Destila.Workflows.get_metadata(workflow_session.id)
+    worktree_path = get_in(metadata, ["worktree", "worktree_path"]) || "unknown"
+
+    """
+    The implementation is complete. Before starting, do two things:
+
+    1. Create a pull request for the current branch using `gh pr create`. \
+    Use a clear title and summarize the changes in the body.
+
+    2. Tell the user:
+       - The PR URL
+       - The source code location: `#{worktree_path}`
+       - That they can request any adjustments and you will make them
+
+    Then wait for the user. They may ask you to make changes to the code, \
+    fix issues, or adjust the implementation. Apply any requested changes, \
+    commit, and push. The PR will update automatically.
+
+    The user will mark this phase as done when they are satisfied.
+
+    ## Asking Questions
+
+    When asking questions with clear, discrete options, use the \
+    `mcp__destila__ask_user_question` tool to present structured choices. \
+    The tool accepts a `questions` array — batch all your independent questions \
+    in a single call. An 'Other' free-text input is always available automatically.
+
+    For open-ended questions without clear options, just ask in plain text.
+    """
   end
 end

@@ -68,7 +68,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         workflow_type: :implement_general_prompt,
         project_id: project_id,
         current_phase: phase,
-        total_phases: 8,
+        total_phases: 9,
         phase_status: phase_status,
         title_generating: Keyword.get(opts, :title_generating, true)
       })
@@ -253,7 +253,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Phase 5 - AI starts a new session for implementation"
     test "session strategy returns :resume for other phases" do
-      for phase <- [1, 2, 3, 4, 6, 7, 8] do
+      for phase <- [1, 2, 3, 4, 6, 7, 8, 9] do
         assert Destila.Workflows.session_strategy(:implement_general_prompt, phase) ==
                  {:resume, []}
       end
