@@ -6,11 +6,21 @@ defmodule DestilaWeb.ChatComponents do
 
   defp markdown_to_html(text) when is_binary(text) do
     text
-    |> Earmark.as_html!(code_class_prefix: "language-", smartypants: false)
+    |> Earmark.as_html!(
+      code_class_prefix: "language-",
+      smartypants: false,
+      registered_processors: [
+        {"a", &open_links_in_new_tab/1}
+      ]
+    )
     |> HtmlSanitizeEx.markdown_html()
   end
 
   defp markdown_to_html(_), do: ""
+
+  defp open_links_in_new_tab({"a", attrs, children, meta}) do
+    {"a", [{"target", "_blank"} | attrs], children, meta}
+  end
 
   attr :message, :map, required: true
   attr :workflow_session, :map, default: %{}
