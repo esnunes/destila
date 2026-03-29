@@ -26,6 +26,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     "mcp__destila__session"
   ]
 
+  use Destila.Workflow
+
   @non_interactive_tool_instructions """
 
   ## Phase Transitions
@@ -80,26 +82,6 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
        allowed_tools: @implementation_tools,
        final: true}
     ]
-  end
-
-  def total_phases, do: length(phases())
-
-  def phase_name(phase) when is_integer(phase) do
-    case Enum.at(phases(), phase - 1) do
-      {_mod, opts} -> Keyword.get(opts, :name)
-      nil -> nil
-    end
-  end
-
-  def phase_name(_phase), do: nil
-
-  def phase_columns do
-    columns =
-      1..total_phases()
-      |> Enum.map(fn n -> {n, phase_name(n)} end)
-      |> Enum.reject(fn {_, name} -> is_nil(name) end)
-
-    columns ++ [{:done, "Done"}]
   end
 
   def default_title, do: "New Implementation"

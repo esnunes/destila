@@ -12,6 +12,8 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   6. Prompt Generation — AI generates the final implementation prompt
   """
 
+  use Destila.Workflow
+
   def phases do
     [
       {DestilaWeb.Phases.WizardPhase, name: "Project & Idea", fields: [:project, :idea]},
@@ -30,26 +32,6 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     ]
   end
 
-  def total_phases, do: length(phases())
-
-  def phase_name(phase) when is_integer(phase) do
-    case Enum.at(phases(), phase - 1) do
-      {_mod, opts} -> Keyword.get(opts, :name)
-      nil -> nil
-    end
-  end
-
-  def phase_name(_phase), do: nil
-
-  def phase_columns do
-    columns =
-      1..total_phases()
-      |> Enum.map(fn n -> {n, phase_name(n)} end)
-      |> Enum.reject(fn {_, name} -> is_nil(name) end)
-
-    columns ++ [{:done, "Done"}]
-  end
-
   def default_title, do: "New Chore/Task"
 
   def label, do: "Prompt for a Chore / Task"
@@ -60,8 +42,6 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   def completion_message do
     "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
   end
-
-  def session_strategy(_phase), do: :resume
 
   # AI system prompts
 

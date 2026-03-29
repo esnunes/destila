@@ -187,24 +187,15 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     if next_phase > ws.total_phases do
       {:noreply, socket}
     else
-      {action, _} = Workflows.session_strategy(ws.workflow_type, next_phase)
+      Destila.Executions.Engine.advance_to_next(ws)
+      updated_ws = Workflows.get_workflow_session!(ws.id)
 
-      if action == :new do
-        AI.ClaudeSession.stop_for_workflow_session(ws.id)
-      end
-
-      {:ok, updated_ws} =
-        Workflows.update_workflow_session(ws, %{
-          current_phase: next_phase,
-          phase_status: nil
-        })
-
-      send(self(), {:phase_advanced, next_phase})
+      send(self(), {:phase_advanced, updated_ws.current_phase})
 
       {:noreply,
        socket
        |> assign(:workflow_session, updated_ws)
-       |> assign(:phase_number, next_phase)
+       |> assign(:phase_number, updated_ws.current_phase)
        |> assign(:question_answers, %{})
        |> assign(:initialized, false)}
     end
@@ -212,6 +203,13 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   def handle_event("decline_advance", _params, socket) do
     ws = socket.assigns.workflow_session
+
+    # Reject completion in phase execution if it exists
+    case Destila.Executions.get_current_phase_execution(ws.id) do
+      %{status: "awaiting_confirmation"} = pe -> Destila.Executions.reject_completion(pe)
+      _ -> :ok
+    end
+
     {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
     {:noreply, assign(socket, :workflow_session, ws)}
   end
@@ -433,6 +431,9 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
           session
         end
+
+      # Ensure phase execution exists for this phase
+      Destila.Executions.ensure_phase_execution(ws, phase_number)
 
       system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
       query = system_prompt_fn.(ws)

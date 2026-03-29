@@ -40,16 +40,7 @@ defmodule Destila.Workflows do
   def completion_message(workflow_type), do: workflow_module(workflow_type).completion_message()
 
   def session_strategy(workflow_type, phase) do
-    module = workflow_module(workflow_type)
-
-    strategy =
-      if function_exported?(module, :session_strategy, 1) do
-        module.session_strategy(phase)
-      else
-        :resume
-      end
-
-    normalize_strategy(strategy)
+    workflow_module(workflow_type).session_strategy(phase) |> normalize_strategy()
   end
 
   defp normalize_strategy(:resume), do: {:resume, []}
@@ -106,11 +97,29 @@ defmodule Destila.Workflows do
 
   def classify(%Session{} = workflow_session) do
     cond do
-      Session.done?(workflow_session) -> :done
-      workflow_session.phase_status == :setup -> :setup
-      workflow_session.phase_status in [:conversing, :advance_suggested] -> :waiting_for_user
-      workflow_session.phase_status == :generating -> :ai_processing
-      true -> :in_progress
+      Session.done?(workflow_session) ->
+        :done
+
+      workflow_session.phase_status == :setup ->
+        :setup
+
+      true ->
+        # Check phase execution first, fall back to phase_status
+        case Destila.Executions.get_current_phase_execution(workflow_session.id) do
+          %{status: status} when status in ["awaiting_input", "awaiting_confirmation"] ->
+            :waiting_for_user
+
+          %{status: "processing"} ->
+            :ai_processing
+
+          _ ->
+            # Fallback to legacy phase_status
+            case workflow_session.phase_status do
+              status when status in [:conversing, :advance_suggested] -> :waiting_for_user
+              :generating -> :ai_processing
+              _ -> :in_progress
+            end
+        end
     end
   end
 

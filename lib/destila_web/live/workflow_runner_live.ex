@@ -201,11 +201,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       when phase == socket.assigns.current_phase do
     ws = socket.assigns.workflow_session
 
-    {:ok, ws} =
-      Workflows.update_workflow_session(ws, %{
-        current_phase: phase + 1,
-        phase_status: nil
-      })
+    Destila.Executions.Engine.advance_to_next(ws)
+    ws = Workflows.get_workflow_session!(ws.id)
 
     {:noreply,
      socket

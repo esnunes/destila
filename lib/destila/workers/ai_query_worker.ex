@@ -8,7 +8,7 @@ defmodule Destila.Workers.AiQueryWorker do
       states: [:available, :scheduled, :executing]
     ]
 
-  alias Destila.{AI, Workflows}
+  alias Destila.{AI, Executions, Workflows}
 
   @impl Oban.Worker
   def perform(%Oban.Job{
@@ -24,6 +24,9 @@ defmodule Destila.Workers.AiQueryWorker do
     unless ai_session_record do
       raise "No AI session record found for workflow session #{workflow_session_id}"
     end
+
+    # Ensure phase execution exists for tracking
+    {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
 
     session_opts = Destila.AI.ClaudeSession.session_opts_for_workflow(ws, phase)
 
@@ -85,16 +88,7 @@ defmodule Destila.Workers.AiQueryWorker do
           })
         end
 
-        case session_action do
-          %{action: "phase_complete"} ->
-            handle_skip_phase(ws.id, phase)
-
-          %{action: "suggest_phase_complete"} ->
-            Workflows.update_workflow_session(ws.id, %{phase_status: :advance_suggested})
-
-          _ ->
-            Workflows.update_workflow_session(ws.id, %{phase_status: :conversing})
-        end
+        Destila.Executions.Engine.handle_phase_result(ws.id, phase, session_action)
 
         :ok
 
@@ -110,70 +104,6 @@ defmodule Destila.Workers.AiQueryWorker do
         })
 
         :ok
-    end
-  end
-
-  defp handle_skip_phase(workflow_session_id, current_phase) do
-    next_phase = current_phase + 1
-    ws = Workflows.get_workflow_session!(workflow_session_id)
-    total = ws.total_phases
-
-    if next_phase > total do
-      # Final phase — auto-mark workflow as done
-      Workflows.update_workflow_session(workflow_session_id, %{
-        done_at: DateTime.utc_now(),
-        phase_status: nil
-      })
-    else
-      {action, _} =
-        Destila.Workflows.session_strategy(ws.workflow_type, next_phase)
-
-      if action == :new do
-        Destila.AI.ClaudeSession.stop_for_workflow_session(workflow_session_id)
-
-        # Create new AI session record (old one stays for message history)
-        metadata = Destila.Workflows.get_metadata(workflow_session_id)
-        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
-
-        {:ok, _new_session} =
-          Destila.AI.create_ai_session(%{
-            workflow_session_id: workflow_session_id,
-            worktree_path: worktree_path
-          })
-      end
-
-      next_phase_opts = get_phase_opts(ws, next_phase)
-      interactive = !Keyword.get(next_phase_opts, :non_interactive, false)
-
-      if interactive do
-        # Interactive phase — just advance. The LiveComponent's
-        # maybe_initialize_ai will send the system prompt when the user
-        # sees the page.
-        Workflows.update_workflow_session(workflow_session_id, %{
-          current_phase: next_phase,
-          phase_status: nil
-        })
-      else
-        # Non-interactive — enqueue job BEFORE broadcasting
-        phases = Destila.Workflows.phases(ws.workflow_type)
-        {_module, opts} = Enum.at(phases, next_phase - 1)
-        system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
-        ws_for_prompt = %{ws | current_phase: next_phase}
-        phase_prompt = system_prompt_fn.(ws_for_prompt)
-
-        %{
-          "workflow_session_id" => workflow_session_id,
-          "phase" => next_phase,
-          "query" => phase_prompt
-        }
-        |> __MODULE__.new()
-        |> Oban.insert()
-
-        Workflows.update_workflow_session(workflow_session_id, %{
-          current_phase: next_phase,
-          phase_status: :generating
-        })
-      end
     end
   end
 
