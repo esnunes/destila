@@ -41,18 +41,21 @@ defmodule DestilaWeb.Phases.PromptWizardPhase do
   # --- Prompt selection events ---
 
   def handle_event("select_session", %{"id" => session_id}, socket) do
-    {ws, prompt} =
-      Enum.find(socket.assigns.sessions_with_prompts, fn {ws, _} -> ws.id == session_id end)
+    case Enum.find(socket.assigns.sessions_with_prompts, fn {ws, _} -> ws.id == session_id end) do
+      nil ->
+        {:noreply, socket}
 
-    project_id = if ws.project_id, do: ws.project_id, else: socket.assigns.project_id
+      {ws, prompt} ->
+        project_id = if ws.project_id, do: ws.project_id, else: socket.assigns.project_id
 
-    {:noreply,
-     socket
-     |> assign(:selected_session_id, session_id)
-     |> assign(:selected_prompt, prompt)
-     |> assign(:project_id, project_id)
-     |> assign(:prompt_mode, :select)
-     |> assign(:errors, Map.delete(socket.assigns.errors, :prompt))}
+        {:noreply,
+         socket
+         |> assign(:selected_session_id, session_id)
+         |> assign(:selected_prompt, prompt)
+         |> assign(:project_id, project_id)
+         |> assign(:prompt_mode, :select)
+         |> assign(:errors, Map.delete(socket.assigns.errors, :prompt))}
+    end
   end
 
   def handle_event("switch_to_manual", _params, socket) do

@@ -240,7 +240,10 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     ws = socket.assigns.workflow_session
     opts = socket.assigns.opts
 
-    if ws.phase_status != :generating do
+    if Keyword.get(opts, :non_interactive, false) && ws.phase_status != :generating do
+      # Stop existing session to avoid sending duplicate prompts
+      AI.ClaudeSession.stop_for_workflow_session(ws.id)
+
       system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
       query = system_prompt_fn.(ws)
 
@@ -258,8 +261,9 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   def handle_event("cancel_phase", _params, socket) do
     ws = socket.assigns.workflow_session
+    opts = socket.assigns.opts
 
-    if ws.phase_status == :generating do
+    if Keyword.get(opts, :non_interactive, false) && ws.phase_status == :generating do
       AI.ClaudeSession.stop_for_workflow_session(ws.id)
       {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
       {:noreply, assign(socket, :workflow_session, ws)}

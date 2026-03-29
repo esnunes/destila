@@ -127,14 +127,20 @@ defmodule Destila.Workflows do
     ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)
 
     if ai_session do
-      messages = Destila.AI.list_messages(ai_session.id)
-
-      messages
-      |> Enum.filter(&(&1.role == :system && &1.phase == workflow_session.total_phases))
-      |> List.last()
+      Repo.one(
+        from(m in Destila.AI.Message,
+          where:
+            m.ai_session_id == ^ai_session.id and
+              m.role == :system and
+              m.phase == ^workflow_session.total_phases,
+          order_by: [desc: m.inserted_at],
+          limit: 1,
+          select: m.content
+        )
+      )
       |> case do
         nil -> nil
-        msg -> String.trim(msg.content)
+        content -> String.trim(content)
       end
     end
   end
