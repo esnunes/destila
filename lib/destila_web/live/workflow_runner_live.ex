@@ -157,9 +157,18 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   def handle_info({:phase_complete, phase, %{action: :session_create} = data}, socket) do
     workflow_type = socket.assigns.workflow_type
 
+    # If a source session was selected, reuse its title
+    title =
+      if data[:selected_session_id] do
+        source = Workflows.get_workflow_session(data[:selected_session_id])
+        if source, do: source.title, else: Workflows.default_title(workflow_type)
+      else
+        Workflows.default_title(workflow_type)
+      end
+
     session_attrs =
       %{
-        title: Workflows.default_title(workflow_type),
+        title: title,
         workflow_type: workflow_type,
         current_phase: phase + 1,
         total_phases: Workflows.total_phases(workflow_type)
@@ -169,15 +178,27 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
     {:ok, ws} = Workflows.create_workflow_session(session_attrs)
 
+    # Store wizard metadata based on what was provided
     if data[:idea] do
       Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
+    end
+
+    if data[:prompt] do
+      Workflows.upsert_metadata(ws.id, "wizard", "prompt", %{"text" => data[:prompt]})
+    end
+
+    if data[:selected_session_id] do
+      Workflows.upsert_metadata(ws.id, "wizard", "source_session", %{
+        "id" => data[:selected_session_id]
+      })
     end
 
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
   end
 
-  # Phase complete — advance to next phase
-  def handle_info({:phase_complete, phase, _data}, socket) do
+  # Phase complete — advance to next phase (guard: phase must match current)
+  def handle_info({:phase_complete, phase, _data}, socket)
+      when phase == socket.assigns.current_phase do
     ws = socket.assigns.workflow_session
 
     {:ok, ws} =
@@ -192,6 +213,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:current_phase, ws.current_phase)
      |> assign(:metadata, Workflows.get_metadata(ws.id))
      |> assign(:page_title, ws.title)}
+  end
+
+  # Stale phase_complete — ignore
+  def handle_info({:phase_complete, _stale_phase, _data}, socket) do
+    {:noreply, socket}
   end
 
   # Phase advanced (AI conversation moved to next phase)

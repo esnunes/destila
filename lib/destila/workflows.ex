@@ -10,7 +10,8 @@ defmodule Destila.Workflows do
   alias Destila.Workflows.{Session, SessionMetadata}
 
   @workflow_modules %{
-    prompt_chore_task: Destila.Workflows.PromptChoreTaskWorkflow
+    prompt_chore_task: Destila.Workflows.PromptChoreTaskWorkflow,
+    implement_general_prompt: Destila.Workflows.ImplementGeneralPromptWorkflow
   }
 
   def workflow_module(workflow_type) do
@@ -111,6 +112,24 @@ defmodule Destila.Workflows do
       workflow_session.phase_status == :generating -> :ai_processing
       true -> :in_progress
     end
+  end
+
+  @doc """
+  Lists completed workflow sessions that have a `prompt_generated` metadata entry.
+  Returns `{session, prompt_text}` tuples, ordered by most recently done.
+  """
+  def list_sessions_with_generated_prompts do
+    from(ws in Session,
+      join: m in SessionMetadata,
+      on: m.workflow_session_id == ws.id and m.key == "prompt_generated",
+      where: not is_nil(ws.done_at),
+      preload: [:project],
+      order_by: [desc: ws.done_at],
+      select: {ws, m.value}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {ws, value} -> {ws, value["text"]} end)
+    |> Enum.reject(fn {_ws, text} -> is_nil(text) || text == "" end)
   end
 
   def count_by_project(project_id) do

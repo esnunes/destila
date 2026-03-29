@@ -86,6 +86,7 @@ defmodule DestilaWeb do
       import Phoenix.HTML
       # Core UI components
       import DestilaWeb.CoreComponents
+      import DestilaWeb.ProjectComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

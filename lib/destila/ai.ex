@@ -15,7 +15,13 @@ defmodule Destila.AI do
   end
 
   def get_ai_session_for_workflow(workflow_session_id) do
-    Repo.get_by(Session, workflow_session_id: workflow_session_id)
+    Repo.one(
+      from(s in Session,
+        where: s.workflow_session_id == ^workflow_session_id,
+        order_by: [desc: s.inserted_at],
+        limit: 1
+      )
+    )
   end
 
   def get_or_create_ai_session(workflow_session_id, attrs \\ %{}) do
@@ -240,13 +246,16 @@ defmodule Destila.AI do
   end
 
   defp workflow_type_label(:prompt_chore_task), do: "chore/task"
+  defp workflow_type_label(:implement_general_prompt), do: "prompt implementation"
   defp workflow_type_label(other), do: to_string(other)
 
   # --- Private helpers ---
 
   defp derive_message_type(raw, phase, workflow_session) do
+    phase_opts = get_phase_opts(workflow_session.workflow_type, phase)
+
     cond do
-      phase == workflow_session.total_phases ->
+      Keyword.get(phase_opts, :message_type) == :generated_prompt ->
         {nil, :generated_prompt}
 
       session = extract_session_action(raw) ->
@@ -263,6 +272,13 @@ defmodule Destila.AI do
 
       true ->
         {nil, nil}
+    end
+  end
+
+  defp get_phase_opts(workflow_type, phase) do
+    case Enum.at(Destila.Workflows.phases(workflow_type), phase - 1) do
+      {_mod, opts} -> opts
+      nil -> []
     end
   end
 
