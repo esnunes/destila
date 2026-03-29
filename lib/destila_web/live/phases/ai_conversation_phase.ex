@@ -219,29 +219,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   def handle_event("mark_done", _params, socket) do
     ws = socket.assigns.workflow_session
     ai_session = socket.assigns.ai_session
-    opts = socket.assigns.opts
 
     if ai_session do
-      # If this phase produces a generated prompt, save it as metadata
-      # so other workflows can discover it without parsing messages.
-      if Keyword.get(opts, :message_type) == :generated_prompt do
-        messages = AI.list_messages(ai_session.id)
-
-        last_ai_msg =
-          messages
-          |> Enum.filter(&(&1.role == :system && &1.phase == ws.current_phase && &1.raw_response))
-          |> List.last()
-
-        if last_ai_msg do
-          Workflows.upsert_metadata(
-            ws.id,
-            Workflows.phase_name(ws.workflow_type, ws.current_phase),
-            "prompt_generated",
-            %{"text" => String.trim(last_ai_msg.content)}
-          )
-        end
-      end
-
       AI.create_message(ai_session.id, %{
         role: :system,
         content: Workflows.completion_message(ws.workflow_type),

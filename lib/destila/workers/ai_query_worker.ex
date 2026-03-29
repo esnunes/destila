@@ -66,6 +66,18 @@ defmodule Destila.Workers.AiQueryWorker do
           phase: phase
         })
 
+        # If this phase produces a generated prompt, save it as metadata
+        # so other workflows can discover it via the prompt_generated key.
+        phase_opts = get_phase_opts(ws, phase)
+
+        if Keyword.get(phase_opts, :message_type) == :generated_prompt do
+          phase_name = Workflows.phase_name(ws.workflow_type, phase)
+
+          Workflows.upsert_metadata(ws.id, phase_name, "prompt_generated", %{
+            "text" => String.trim(response_text)
+          })
+        end
+
         # Save claude_session_id on the AI session record
         if result[:session_id] do
           AI.update_ai_session(ai_session_record, %{
@@ -151,6 +163,13 @@ defmodule Destila.Workers.AiQueryWorker do
         current_phase: next_phase,
         phase_status: :generating
       })
+    end
+  end
+
+  defp get_phase_opts(ws, phase) do
+    case Enum.at(Workflows.phases(ws.workflow_type), phase - 1) do
+      {_mod, opts} -> opts
+      nil -> []
     end
   end
 end
