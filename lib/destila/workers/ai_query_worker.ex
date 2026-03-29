@@ -142,27 +142,38 @@ defmodule Destila.Workers.AiQueryWorker do
           })
       end
 
-      # Build prompt BEFORE broadcasting (avoids spinner-with-no-backing-job)
-      phases = Destila.Workflows.phases(ws.workflow_type)
-      {_module, opts} = Enum.at(phases, next_phase - 1)
-      system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
-      ws_for_prompt = %{ws | current_phase: next_phase}
-      phase_prompt = system_prompt_fn.(ws_for_prompt)
+      next_phase_opts = get_phase_opts(ws, next_phase)
+      interactive = !Keyword.get(next_phase_opts, :non_interactive, false)
 
-      # Enqueue job first
-      %{
-        "workflow_session_id" => workflow_session_id,
-        "phase" => next_phase,
-        "query" => phase_prompt
-      }
-      |> __MODULE__.new()
-      |> Oban.insert()
+      if interactive do
+        # Interactive phase — just advance. The LiveComponent's
+        # maybe_initialize_ai will send the system prompt when the user
+        # sees the page.
+        Workflows.update_workflow_session(workflow_session_id, %{
+          current_phase: next_phase,
+          phase_status: nil
+        })
+      else
+        # Non-interactive — enqueue job BEFORE broadcasting
+        phases = Destila.Workflows.phases(ws.workflow_type)
+        {_module, opts} = Enum.at(phases, next_phase - 1)
+        system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
+        ws_for_prompt = %{ws | current_phase: next_phase}
+        phase_prompt = system_prompt_fn.(ws_for_prompt)
 
-      # Then update session (which broadcasts via PubSub)
-      Workflows.update_workflow_session(workflow_session_id, %{
-        current_phase: next_phase,
-        phase_status: :generating
-      })
+        %{
+          "workflow_session_id" => workflow_session_id,
+          "phase" => next_phase,
+          "query" => phase_prompt
+        }
+        |> __MODULE__.new()
+        |> Oban.insert()
+
+        Workflows.update_workflow_session(workflow_session_id, %{
+          current_phase: next_phase,
+          phase_status: :generating
+        })
+      end
     end
   end
 
