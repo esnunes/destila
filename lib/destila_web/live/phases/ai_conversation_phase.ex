@@ -3,12 +3,10 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   LiveComponent for AI conversation phases.
 
   Receives updates from the parent LiveView via `update/2` (driven by
-  PubSub events the parent handles). Manages chat events, DB writes,
-  and worker enqueuing.
-
-  Signals parent for phase-level changes via:
-  - `{:phase_advanced, new_phase}` — phase changed, parent should update chrome
-  - `{:workflow_done}` — workflow marked as done
+  PubSub events the parent handles). Handles conversation-specific events
+  (sending messages, retrying, cancelling). Workflow-level actions
+  (confirm advance, decline advance, mark done) are handled by the
+  parent `WorkflowRunnerLive`.
 
   Opts:
   - `name` — phase display name (required)
@@ -157,62 +155,6 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     else
       {:noreply, socket}
     end
-  end
-
-  def handle_event("confirm_advance", _params, socket) do
-    ws = socket.assigns.workflow_session
-    next_phase = ws.current_phase + 1
-
-    if next_phase > ws.total_phases do
-      {:noreply, socket}
-    else
-      Destila.Executions.Engine.advance_to_next(ws)
-      updated_ws = Workflows.get_workflow_session!(ws.id)
-
-      send(self(), {:phase_advanced, updated_ws.current_phase})
-
-      {:noreply,
-       socket
-       |> assign(:workflow_session, updated_ws)
-       |> assign(:phase_number, updated_ws.current_phase)
-       |> assign(:question_answers, %{})}
-    end
-  end
-
-  def handle_event("decline_advance", _params, socket) do
-    ws = socket.assigns.workflow_session
-
-    # Reject completion in phase execution if it exists
-    case Destila.Executions.get_current_phase_execution(ws.id) do
-      %{status: "awaiting_confirmation"} = pe -> Destila.Executions.reject_completion(pe)
-      _ -> :ok
-    end
-
-    {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
-    {:noreply, assign(socket, :workflow_session, ws)}
-  end
-
-  def handle_event("mark_done", _params, socket) do
-    ws = socket.assigns.workflow_session
-    ai_session = socket.assigns.ai_session
-
-    if ai_session do
-      AI.create_message(ai_session.id, %{
-        role: :system,
-        content: Workflows.completion_message(ws.workflow_type),
-        phase: ws.current_phase
-      })
-    end
-
-    {:ok, ws} =
-      Workflows.update_workflow_session(ws, %{
-        done_at: DateTime.utc_now(),
-        phase_status: nil
-      })
-
-    send(self(), :workflow_done)
-
-    {:noreply, assign(socket, :workflow_session, ws)}
   end
 
   def handle_event("retry_phase", _params, socket) do
