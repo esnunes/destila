@@ -417,8 +417,9 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   defp maybe_initialize_ai(socket, ws, ai_session, phase_number, opts) do
     messages = if ai_session, do: AI.list_messages(ai_session.id), else: []
     phase_messages = Enum.filter(messages, &(&1.phase == phase_number))
+    system_prompt_fn = Keyword.get(opts, :system_prompt)
 
-    if phase_messages == [] && ws.phase_status != :generating do
+    if phase_messages == [] && ws.phase_status != :generating && system_prompt_fn do
       ai_session =
         if ai_session do
           ai_session
@@ -435,7 +436,6 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       # Ensure phase execution exists for this phase
       Destila.Executions.ensure_phase_execution(ws, phase_number)
 
-      system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
       query = system_prompt_fn.(ws)
 
       Workflows.update_workflow_session(ws, %{phase_status: :generating})

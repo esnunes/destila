@@ -39,6 +39,16 @@ defmodule Destila.Workflow do
   @callback session_strategy(integer()) ::
               :resume | :new | {:resume, keyword()} | {:new, keyword()}
 
+  @doc """
+  Returns the action to perform when entering a phase.
+
+  Return values:
+  - `{:enqueue, query}` — enqueue the AI worker with the given query
+  - `:await_input` — wait for user input (interactive phase)
+  """
+  @callback phase_start_action(workflow_session :: map(), phase_number :: integer()) ::
+              {:enqueue, String.t()} | :await_input
+
   defmacro __using__(_opts) do
     quote do
       @behaviour Destila.Workflow
@@ -65,7 +75,29 @@ defmodule Destila.Workflow do
 
       def session_strategy(_phase), do: :resume
 
-      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0, session_strategy: 1
+      def phase_start_action(workflow_session, phase_number) do
+        case Enum.at(phases(), phase_number - 1) do
+          {_mod, opts} ->
+            non_interactive = Keyword.get(opts, :non_interactive, false)
+
+            case {non_interactive, Keyword.get(opts, :system_prompt)} do
+              {true, prompt_fn} when not is_nil(prompt_fn) ->
+                {:enqueue, prompt_fn.(workflow_session)}
+
+              _ ->
+                :await_input
+            end
+
+          nil ->
+            :await_input
+        end
+      end
+
+      defoverridable total_phases: 0,
+                     phase_name: 1,
+                     phase_columns: 0,
+                     session_strategy: 1,
+                     phase_start_action: 2
     end
   end
 end

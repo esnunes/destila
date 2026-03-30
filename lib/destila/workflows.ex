@@ -43,6 +43,13 @@ defmodule Destila.Workflows do
     workflow_module(workflow_type).session_strategy(phase) |> normalize_strategy()
   end
 
+  def phase_start_action(workflow_session) do
+    workflow_module(workflow_session.workflow_type).phase_start_action(
+      workflow_session,
+      workflow_session.current_phase
+    )
+  end
+
   defp normalize_strategy(:resume), do: {:resume, []}
   defp normalize_strategy(:new), do: {:new, []}
   defp normalize_strategy({action, opts}) when action in [:resume, :new], do: {action, opts}

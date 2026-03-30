@@ -126,26 +126,26 @@ defmodule Destila.Executions.Engine do
     # Get or create phase execution for the new phase (idempotent to handle concurrent calls)
     {:ok, pe} = Executions.ensure_phase_execution(ws, next_phase)
 
-    phase_opts = get_phase_opts(ws, next_phase)
-    interactive = !Keyword.get(phase_opts, :non_interactive, false)
+    # Ask the workflow what should happen when entering this phase
+    ws_at_phase = %{ws | current_phase: next_phase}
 
-    if interactive do
-      # Interactive phase — update state and let LiveView handle initialization
-      Executions.start_phase(pe, "awaiting_input")
+    case Workflows.phase_start_action(ws_at_phase) do
+      {:enqueue, query} ->
+        enqueue_phase_worker(ws, next_phase, query)
+        Executions.start_phase(pe, "processing")
 
-      Workflows.update_workflow_session(ws, %{
-        current_phase: next_phase,
-        phase_status: nil
-      })
-    else
-      # Non-interactive — enqueue worker, then update state
-      enqueue_phase_worker(ws, next_phase, phase_opts)
-      Executions.start_phase(pe, "processing")
+        Workflows.update_workflow_session(ws, %{
+          current_phase: next_phase,
+          phase_status: :generating
+        })
 
-      Workflows.update_workflow_session(ws, %{
-        current_phase: next_phase,
-        phase_status: :generating
-      })
+      :await_input ->
+        Executions.start_phase(pe, "awaiting_input")
+
+        Workflows.update_workflow_session(ws, %{
+          current_phase: next_phase,
+          phase_status: nil
+        })
     end
   end
 
@@ -169,11 +169,7 @@ defmodule Destila.Executions.Engine do
     :ok
   end
 
-  defp enqueue_phase_worker(ws, phase, phase_opts) do
-    system_prompt_fn = Keyword.fetch!(phase_opts, :system_prompt)
-    ws_for_prompt = %{ws | current_phase: phase}
-    query = system_prompt_fn.(ws_for_prompt)
-
+  defp enqueue_phase_worker(ws, phase, query) do
     %{
       "workflow_session_id" => ws.id,
       "phase" => phase,
@@ -188,13 +184,6 @@ defmodule Destila.Executions.Engine do
       nil -> :ok
       pe when pe.status in ["completed", "skipped"] -> :ok
       pe -> Executions.complete_phase(pe)
-    end
-  end
-
-  defp get_phase_opts(ws, phase) do
-    case Enum.at(Workflows.phases(ws.workflow_type), phase - 1) do
-      {_mod, opts} -> opts
-      nil -> []
     end
   end
 end
