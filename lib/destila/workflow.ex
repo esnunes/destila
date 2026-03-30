@@ -40,14 +40,30 @@ defmodule Destila.Workflow do
               :resume | :new | {:resume, keyword()} | {:new, keyword()}
 
   @doc """
-  Returns the action to perform when entering a phase.
+  Called when a phase is entered. Performs any startup work (e.g. enqueuing
+  a worker) and returns the resulting status.
 
   Return values:
-  - `{:enqueue, query}` — enqueue the AI worker with the given query
-  - `:await_input` — wait for user input (interactive phase)
+  - `:processing` — work was enqueued, phase is actively processing
+  - `:awaiting_input` — waiting for user/external input
   """
   @callback phase_start_action(workflow_session :: map(), phase_number :: integer()) ::
-              {:enqueue, String.t()} | :await_input
+              :processing | :awaiting_input
+
+  @doc """
+  Called when a phase receives user input or external params. Performs the
+  work (e.g. saving a message and enqueuing a worker) and returns the
+  resulting status.
+
+  Return values:
+  - `:processing` — work was enqueued, phase is actively processing
+  - `:awaiting_input` — no action taken, still waiting
+  """
+  @callback phase_continue_action(
+              workflow_session :: map(),
+              phase_number :: integer(),
+              params :: map()
+            ) :: :processing | :awaiting_input
 
   defmacro __using__(_opts) do
     quote do
@@ -75,29 +91,7 @@ defmodule Destila.Workflow do
 
       def session_strategy(_phase), do: :resume
 
-      def phase_start_action(workflow_session, phase_number) do
-        case Enum.at(phases(), phase_number - 1) do
-          {_mod, opts} ->
-            non_interactive = Keyword.get(opts, :non_interactive, false)
-
-            case {non_interactive, Keyword.get(opts, :system_prompt)} do
-              {true, prompt_fn} when not is_nil(prompt_fn) ->
-                {:enqueue, prompt_fn.(workflow_session)}
-
-              _ ->
-                :await_input
-            end
-
-          nil ->
-            :await_input
-        end
-      end
-
-      defoverridable total_phases: 0,
-                     phase_name: 1,
-                     phase_columns: 0,
-                     session_strategy: 1,
-                     phase_start_action: 2
+      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0, session_strategy: 1
     end
   end
 end

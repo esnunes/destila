@@ -27,10 +27,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   alias Destila.Workflows
 
   def mount(socket) do
-    {:ok,
-     socket
-     |> assign(:question_answers, %{})
-     |> assign(:initialized, false)}
+    {:ok, assign(socket, :question_answers, %{})}
   end
 
   def update(assigns, socket) do
@@ -54,15 +51,6 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       |> assign(:messages, messages)
       |> assign(:current_step, current_step)
 
-    socket =
-      if !socket.assigns.initialized && connected?(socket) do
-        socket
-        |> maybe_initialize_ai(ws, ai_session, phase_number, opts)
-        |> assign(:initialized, true)
-      else
-        socket
-      end
-
     {:ok, socket}
   end
 
@@ -72,30 +60,21 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     ws = socket.assigns.workflow_session
 
     if ws.phase_status not in [:generating] do
-      ai_session = socket.assigns.ai_session
+      case Workflows.phase_continue_action(ws, %{message: content}) do
+        :processing ->
+          {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :generating})
+          ai_session = AI.get_ai_session_for_workflow(ws.id)
+          messages = if ai_session, do: AI.list_messages(ai_session.id), else: []
 
-      if ai_session do
-        AI.create_message(ai_session.id, %{
-          role: :user,
-          content: content,
-          phase: ws.current_phase
-        })
+          {:noreply,
+           socket
+           |> assign(:workflow_session, ws)
+           |> assign(:ai_session, ai_session)
+           |> assign(:messages, messages)
+           |> assign(:current_step, compute_current_step(ws, messages))}
 
-        {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :generating})
-
-        %{"workflow_session_id" => ws.id, "phase" => ws.current_phase, "query" => content}
-        |> Destila.Workers.AiQueryWorker.new()
-        |> Oban.insert()
-
-        messages = AI.list_messages(ai_session.id)
-
-        {:noreply,
-         socket
-         |> assign(:workflow_session, ws)
-         |> assign(:messages, messages)
-         |> assign(:current_step, compute_current_step(ws, messages))}
-      else
-        {:noreply, socket}
+        :awaiting_input ->
+          {:noreply, socket}
       end
     else
       {:noreply, socket}
@@ -196,8 +175,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
        socket
        |> assign(:workflow_session, updated_ws)
        |> assign(:phase_number, updated_ws.current_phase)
-       |> assign(:question_answers, %{})
-       |> assign(:initialized, false)}
+       |> assign(:question_answers, %{})}
     end
   end
 
@@ -245,16 +223,14 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       # Stop existing session to avoid sending duplicate prompts
       AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
-      system_prompt_fn = Keyword.fetch!(opts, :system_prompt)
-      query = system_prompt_fn.(ws)
+      case Workflows.phase_start_action(ws) do
+        :processing ->
+          Workflows.update_workflow_session(ws, %{phase_status: :generating})
+          {:noreply, assign(socket, :workflow_session, %{ws | phase_status: :generating})}
 
-      Workflows.update_workflow_session(ws, %{phase_status: :generating})
-
-      %{"workflow_session_id" => ws.id, "phase" => ws.current_phase, "query" => query}
-      |> Destila.Workers.AiQueryWorker.new()
-      |> Oban.insert()
-
-      {:noreply, assign(socket, :workflow_session, %{ws | phase_status: :generating})}
+        :awaiting_input ->
+          {:noreply, socket}
+      end
     else
       {:noreply, socket}
     end
@@ -413,42 +389,6 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   end
 
   # --- Private helpers ---
-
-  defp maybe_initialize_ai(socket, ws, ai_session, phase_number, opts) do
-    messages = if ai_session, do: AI.list_messages(ai_session.id), else: []
-    phase_messages = Enum.filter(messages, &(&1.phase == phase_number))
-    system_prompt_fn = Keyword.get(opts, :system_prompt)
-
-    if phase_messages == [] && ws.phase_status != :generating && system_prompt_fn do
-      ai_session =
-        if ai_session do
-          ai_session
-        else
-          metadata = Destila.Workflows.get_metadata(ws.id)
-          worktree_path = get_in(metadata, ["worktree", "worktree_path"])
-
-          {:ok, session} =
-            AI.get_or_create_ai_session(ws.id, %{worktree_path: worktree_path})
-
-          session
-        end
-
-      # Ensure phase execution exists for this phase
-      Destila.Executions.ensure_phase_execution(ws, phase_number)
-
-      query = system_prompt_fn.(ws)
-
-      Workflows.update_workflow_session(ws, %{phase_status: :generating})
-
-      %{"workflow_session_id" => ws.id, "phase" => phase_number, "query" => query}
-      |> Destila.Workers.AiQueryWorker.new()
-      |> Oban.insert()
-
-      assign(socket, :ai_session, ai_session)
-    else
-      socket
-    end
-  end
 
   defp compute_current_step(ws, messages) do
     cond do

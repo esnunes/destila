@@ -43,6 +43,69 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
   end
 
+  # --- Phase actions ---
+
+  def phase_start_action(ws, phase_number) do
+    case Enum.at(phases(), phase_number - 1) do
+      {_mod, opts} ->
+        case Keyword.get(opts, :system_prompt) do
+          nil ->
+            :awaiting_input
+
+          prompt_fn ->
+            ensure_ai_session(ws)
+            Destila.Executions.ensure_phase_execution(ws, phase_number)
+            query = prompt_fn.(ws)
+            enqueue_ai_worker(ws, phase_number, query)
+            :processing
+        end
+
+      nil ->
+        :awaiting_input
+    end
+  end
+
+  def phase_continue_action(ws, phase_number, %{message: message}) do
+    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
+
+    if ai_session do
+      Destila.AI.create_message(ai_session.id, %{
+        role: :user,
+        content: message,
+        phase: phase_number
+      })
+
+      enqueue_ai_worker(ws, phase_number, message)
+      :processing
+    else
+      :awaiting_input
+    end
+  end
+
+  def phase_continue_action(_ws, _phase_number, _params), do: :awaiting_input
+
+  defp ensure_ai_session(ws) do
+    case Destila.AI.get_ai_session_for_workflow(ws.id) do
+      nil ->
+        metadata = Destila.Workflows.get_metadata(ws.id)
+        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
+
+        {:ok, session} =
+          Destila.AI.get_or_create_ai_session(ws.id, %{worktree_path: worktree_path})
+
+        session
+
+      session ->
+        session
+    end
+  end
+
+  defp enqueue_ai_worker(ws, phase, query) do
+    %{"workflow_session_id" => ws.id, "phase" => phase, "query" => query}
+    |> Destila.Workers.AiQueryWorker.new()
+    |> Oban.insert()
+  end
+
   # AI system prompts
 
   @tool_instructions """
