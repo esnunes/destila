@@ -126,7 +126,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     end
   end
 
-  def phase_continue_action(ws, phase_number, %{message: message}) do
+  def phase_update_action(ws, phase_number, %{message: message}) do
     ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
 
     if ai_session do
@@ -143,7 +143,55 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     end
   end
 
-  def phase_continue_action(_ws, _phase_number, _params), do: :awaiting_input
+  def phase_update_action(ws, phase_number, %{ai_result: result}) do
+    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
+
+    if ai_session do
+      response_text = Destila.AI.response_text(result)
+      session_action = Destila.AI.extract_session_action(result)
+
+      content =
+        case session_action do
+          %{message: msg} when is_binary(msg) and msg != "" -> msg
+          _ -> response_text
+        end
+
+      Destila.AI.create_message(ai_session.id, %{
+        role: :system,
+        content: content,
+        raw_response: result,
+        phase: phase_number
+      })
+
+      if result[:session_id] do
+        Destila.AI.update_ai_session(ai_session, %{claude_session_id: result[:session_id]})
+      end
+
+      case session_action do
+        %{action: "phase_complete"} -> :phase_complete
+        %{action: "suggest_phase_complete"} -> :suggest_phase_complete
+        _ -> :awaiting_input
+      end
+    else
+      :awaiting_input
+    end
+  end
+
+  def phase_update_action(ws, phase_number, %{ai_error: _reason}) do
+    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
+
+    if ai_session do
+      Destila.AI.create_message(ai_session.id, %{
+        role: :system,
+        content: "Something went wrong. Please try sending your message again.",
+        phase: phase_number
+      })
+    end
+
+    :awaiting_input
+  end
+
+  def phase_update_action(_ws, _phase_number, _params), do: :awaiting_input
 
   defp handle_session_strategy(ws, phase_number) do
     case session_strategy(phase_number) do

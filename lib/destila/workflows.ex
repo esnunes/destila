@@ -50,8 +50,8 @@ defmodule Destila.Workflows do
     )
   end
 
-  def phase_continue_action(workflow_session, params) do
-    workflow_module(workflow_session.workflow_type).phase_continue_action(
+  def phase_update_action(workflow_session, params) do
+    workflow_module(workflow_session.workflow_type).phase_update_action(
       workflow_session,
       workflow_session.current_phase,
       params

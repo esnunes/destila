@@ -58,22 +58,18 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     ws = socket.assigns.workflow_session
 
     if ws.phase_status not in [:generating] do
-      case Workflows.phase_continue_action(ws, %{message: content}) do
-        :processing ->
-          {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :generating})
-          ai_session = AI.get_ai_session_for_workflow(ws.id)
-          messages = if ai_session, do: AI.list_messages(ai_session.id), else: []
+      Destila.Executions.Engine.phase_update(ws.id, ws.current_phase, %{message: content})
 
-          {:noreply,
-           socket
-           |> assign(:workflow_session, ws)
-           |> assign(:ai_session, ai_session)
-           |> assign(:messages, messages)
-           |> assign(:current_step, compute_current_step(ws, messages))}
+      ws = Workflows.get_workflow_session!(ws.id)
+      ai_session = AI.get_ai_session_for_workflow(ws.id)
+      messages = if ai_session, do: AI.list_messages(ai_session.id), else: []
 
-        :awaiting_input ->
-          {:noreply, socket}
-      end
+      {:noreply,
+       socket
+       |> assign(:workflow_session, ws)
+       |> assign(:ai_session, ai_session)
+       |> assign(:messages, messages)
+       |> assign(:current_step, compute_current_step(ws, messages))}
     else
       {:noreply, socket}
     end

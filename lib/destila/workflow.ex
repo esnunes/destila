@@ -51,19 +51,21 @@ defmodule Destila.Workflow do
               :processing | :awaiting_input
 
   @doc """
-  Called when a phase receives user input or external params. Performs the
-  work (e.g. saving a message and enqueuing a worker) and returns the
-  resulting status.
+  Called when a phase receives an update (user input, AI response, etc.).
+  Performs the work (e.g. saving messages, enqueuing workers) and returns
+  the resulting status.
 
   Return values:
   - `:processing` — work was enqueued, phase is actively processing
-  - `:awaiting_input` — no action taken, still waiting
+  - `:awaiting_input` — waiting for user/external input
+  - `:phase_complete` — phase is done, auto-advance to next
+  - `:suggest_phase_complete` — suggest completion, wait for user confirmation
   """
-  @callback phase_continue_action(
+  @callback phase_update_action(
               workflow_session :: map(),
               phase_number :: integer(),
               params :: map()
-            ) :: :processing | :awaiting_input
+            ) :: :processing | :awaiting_input | :phase_complete | :suggest_phase_complete
 
   defmacro __using__(_opts) do
     quote do

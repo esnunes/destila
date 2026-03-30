@@ -15,7 +15,7 @@ defmodule Destila.Executions.EngineTest do
     :ok
   end
 
-  defp create_session(attrs \\ %{}) do
+  defp create_session(attrs) do
     default = %{
       title: "Test Session",
       workflow_type: :prompt_chore_task,
@@ -34,13 +34,33 @@ defmodule Destila.Executions.EngineTest do
     ws
   end
 
-  describe "handle_phase_result/3 with suggest_phase_complete" do
+  describe "phase_update/3 with suggest_phase_complete" do
     test "sets phase_status to advance_suggested" do
-      ws = create_session()
+      ws = create_session_with_ai(%{})
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
       Executions.start_phase(pe)
 
-      Engine.handle_phase_result(ws.id, 3, %{action: "suggest_phase_complete"})
+      # Simulate AI response that suggests phase complete
+      ai_session = AI.get_ai_session_for_workflow(ws.id)
+
+      AI.create_message(ai_session.id, %{
+        role: :system,
+        content: "Ready to advance",
+        phase: 3
+      })
+
+      Engine.phase_update(ws.id, 3, %{
+        ai_result: %{
+          text: "Ready to advance",
+          result: "Ready to advance",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "suggest_phase_complete", message: "Done"}
+            }
+          ]
+        }
+      })
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.phase_status == :advance_suggested
@@ -50,12 +70,14 @@ defmodule Destila.Executions.EngineTest do
     end
   end
 
-  describe "handle_phase_result/3 with nil action (continue conversation)" do
+  describe "phase_update/3 with continue conversation" do
     test "sets phase_status to conversing" do
-      ws = create_session(%{phase_status: :generating})
+      ws = create_session_with_ai(%{phase_status: :generating})
       {:ok, pe} = Executions.create_phase_execution(ws, 3, %{status: "processing"})
 
-      Engine.handle_phase_result(ws.id, 3, nil)
+      Engine.phase_update(ws.id, 3, %{
+        ai_result: %{text: "More questions", result: "More questions"}
+      })
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.phase_status == :conversing
@@ -65,12 +87,23 @@ defmodule Destila.Executions.EngineTest do
     end
   end
 
-  describe "handle_phase_result/3 with phase_complete on final phase" do
+  describe "phase_update/3 with phase_complete on final phase" do
     test "marks workflow as done" do
-      ws = create_session(%{current_phase: 6, total_phases: 6})
+      ws = create_session_with_ai(%{current_phase: 6, total_phases: 6})
       {:ok, _pe} = Executions.create_phase_execution(ws, 6)
 
-      Engine.handle_phase_result(ws.id, 6, %{action: "phase_complete"})
+      Engine.phase_update(ws.id, 6, %{
+        ai_result: %{
+          text: "Done",
+          result: "Done",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "phase_complete", message: "All done"}
+            }
+          ]
+        }
+      })
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.done_at != nil
@@ -78,13 +111,24 @@ defmodule Destila.Executions.EngineTest do
     end
   end
 
-  describe "handle_phase_result/3 with phase_complete on non-final phase" do
+  describe "phase_update/3 with phase_complete on non-final phase" do
     test "auto-advances to next phase and creates phase execution" do
       ws = create_session_with_ai(%{current_phase: 3, total_phases: 6})
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
       Executions.start_phase(pe)
 
-      Engine.handle_phase_result(ws.id, 3, %{action: "phase_complete"})
+      Engine.phase_update(ws.id, 3, %{
+        ai_result: %{
+          text: "Phase done",
+          result: "Phase done",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "phase_complete", message: "Moving on"}
+            }
+          ]
+        }
+      })
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       # Should advance to phase 4 (Gherkin Review)
@@ -99,6 +143,17 @@ defmodule Destila.Executions.EngineTest do
       new_pe = Executions.get_phase_execution_by_number(ws.id, 4)
       assert new_pe != nil
       assert new_pe.phase_name == "Gherkin Review"
+    end
+  end
+
+  describe "phase_update/3 with user message" do
+    test "enqueues worker and sets status to generating" do
+      ws = create_session_with_ai(%{})
+
+      Engine.phase_update(ws.id, 3, %{message: "Hello"})
+
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert updated_ws.phase_status == :generating
     end
   end
 

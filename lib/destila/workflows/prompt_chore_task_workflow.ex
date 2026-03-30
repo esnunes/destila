@@ -64,7 +64,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     end
   end
 
-  def phase_continue_action(ws, phase_number, %{message: message}) do
+  def phase_update_action(ws, phase_number, %{message: message}) do
     ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
 
     if ai_session do
@@ -81,7 +81,74 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     end
   end
 
-  def phase_continue_action(_ws, _phase_number, _params), do: :awaiting_input
+  def phase_update_action(ws, phase_number, %{ai_result: result}) do
+    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
+
+    if ai_session do
+      response_text = Destila.AI.response_text(result)
+      session_action = Destila.AI.extract_session_action(result)
+
+      content =
+        case session_action do
+          %{message: msg} when is_binary(msg) and msg != "" -> msg
+          _ -> response_text
+        end
+
+      Destila.AI.create_message(ai_session.id, %{
+        role: :system,
+        content: content,
+        raw_response: result,
+        phase: phase_number
+      })
+
+      if result[:session_id] do
+        Destila.AI.update_ai_session(ai_session, %{claude_session_id: result[:session_id]})
+      end
+
+      # Check if this phase produces metadata (e.g. generated prompt)
+      save_phase_metadata(ws, phase_number, response_text)
+
+      case session_action do
+        %{action: "phase_complete"} -> :phase_complete
+        %{action: "suggest_phase_complete"} -> :suggest_phase_complete
+        _ -> :awaiting_input
+      end
+    else
+      :awaiting_input
+    end
+  end
+
+  def phase_update_action(ws, phase_number, %{ai_error: _reason}) do
+    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
+
+    if ai_session do
+      Destila.AI.create_message(ai_session.id, %{
+        role: :system,
+        content: "Something went wrong. Please try sending your message again.",
+        phase: phase_number
+      })
+    end
+
+    :awaiting_input
+  end
+
+  def phase_update_action(_ws, _phase_number, _params), do: :awaiting_input
+
+  defp save_phase_metadata(ws, phase_number, response_text) do
+    case Enum.at(phases(), phase_number - 1) do
+      {_mod, opts} ->
+        if Keyword.get(opts, :message_type) == :generated_prompt do
+          phase_name = phase_name(phase_number)
+
+          Destila.Workflows.upsert_metadata(ws.id, phase_name, "prompt_generated", %{
+            "text" => String.trim(response_text)
+          })
+        end
+
+      _ ->
+        :ok
+    end
+  end
 
   defp ensure_ai_session(ws) do
     case Destila.AI.get_ai_session_for_workflow(ws.id) do

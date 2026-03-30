@@ -2,18 +2,14 @@ defmodule Destila.Executions.Engine do
   @moduledoc """
   Central orchestration engine for workflow phase transitions.
 
-  Consolidates transition logic that was previously scattered across
-  `WorkflowRunnerLive`, `AiConversationPhase`, and `AiQueryWorker`
-  into a single, testable module.
-
   The Engine is responsible for:
   - Advancing workflows to the next phase
-  - Handling phase completion results (from AI or user)
+  - Routing phase updates to the workflow and acting on the result
   - Updating phase execution and workflow session status
   - Broadcasting state changes via PubSub
 
-  Phase startup logic (e.g. enqueuing workers, creating AI sessions) is
-  delegated to the workflow module via `phase_start_action/2`.
+  Phase-specific logic (e.g. enqueuing workers, saving messages, parsing
+  AI responses) is delegated to the workflow module via callbacks.
 
   During the migration period, the Engine writes to both `phase_executions`
   AND `workflow_sessions.phase_status` to maintain backwards compatibility.
@@ -35,14 +31,12 @@ defmodule Destila.Executions.Engine do
   end
 
   def advance_to_next(ws) do
-    current_phase = ws.current_phase
-    next_phase = current_phase + 1
-    total = ws.total_phases
+    next_phase = ws.current_phase + 1
 
     # Complete current phase execution if it exists
     complete_current_phase_execution(ws)
 
-    if next_phase > total do
+    if next_phase > ws.total_phases do
       complete_workflow(ws)
     else
       transition_to_phase(ws, next_phase)
@@ -50,23 +44,27 @@ defmodule Destila.Executions.Engine do
   end
 
   @doc """
-  Handles the result from an AI query for a phase.
+  Routes a phase update to the workflow and acts on the result.
 
-  Called by `AiQueryWorker` after processing an AI response.
-  Determines the next action based on the session action in the response.
+  Called by `AiQueryWorker` after an AI response, or by `AiConversationPhase`
+  when the user sends a message. The workflow's `phase_update_action/3`
+  processes the params and returns a status the Engine uses to update state.
   """
-  def handle_phase_result(workflow_session_id, phase, session_action) do
+  def phase_update(workflow_session_id, phase, params) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
 
-    case session_action do
-      %{action: "phase_complete"} ->
+    case Workflows.phase_update_action(%{ws | current_phase: phase}, params) do
+      :processing ->
+        Workflows.update_workflow_session(ws, %{phase_status: :generating})
+
+      :awaiting_input ->
+        handle_awaiting_input(ws)
+
+      :phase_complete ->
         handle_auto_advance(ws, phase)
 
-      %{action: "suggest_phase_complete"} ->
-        handle_suggest_advance(ws, phase)
-
-      _ ->
-        handle_continue_conversation(ws)
+      :suggest_phase_complete ->
+        handle_suggest_advance(ws)
     end
   end
 
@@ -92,7 +90,7 @@ defmodule Destila.Executions.Engine do
     end
   end
 
-  defp handle_suggest_advance(ws, _phase) do
+  defp handle_suggest_advance(ws) do
     # Update phase execution to awaiting_confirmation
     case Executions.get_current_phase_execution(ws.id) do
       nil -> :ok
@@ -103,7 +101,7 @@ defmodule Destila.Executions.Engine do
     Workflows.update_workflow_session(ws, %{phase_status: :advance_suggested})
   end
 
-  defp handle_continue_conversation(ws) do
+  defp handle_awaiting_input(ws) do
     # Update phase execution status
     case Executions.get_current_phase_execution(ws.id) do
       nil ->
