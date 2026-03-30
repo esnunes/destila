@@ -25,9 +25,6 @@ defmodule Destila.Workers.AiQueryWorker do
       raise "No AI session record found for workflow session #{workflow_session_id}"
     end
 
-    # Ensure phase execution exists for tracking
-    {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
-
     session_opts = Destila.AI.ClaudeSession.session_opts_for_workflow(ws, phase)
 
     case Destila.AI.ClaudeSession.for_workflow_session(workflow_session_id, session_opts) do

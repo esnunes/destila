@@ -115,7 +115,6 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
           prompt_fn ->
             ensure_ai_session(ws)
-            Destila.Executions.ensure_phase_execution(ws, phase_number)
             query = prompt_fn.(ws)
             enqueue_ai_worker(ws, phase_number, query)
             :processing

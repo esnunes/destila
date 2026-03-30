@@ -12,7 +12,6 @@ defmodule Destila.AI.Message do
     field(:phase, :integer, default: 1)
 
     belongs_to(:ai_session, Destila.AI.Session)
-    belongs_to(:phase_execution, Destila.Executions.PhaseExecution)
 
     field(:inserted_at, :utc_datetime_usec, autogenerate: {DateTime, :utc_now, []})
   end
@@ -26,8 +25,7 @@ defmodule Destila.AI.Message do
       :content,
       :raw_response,
       :selected,
-      :phase,
-      :phase_execution_id
+      :phase
     ])
     |> validate_required([:ai_session_id, :role])
     |> validate_number(:phase, greater_than_or_equal_to: 1)
