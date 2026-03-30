@@ -9,7 +9,6 @@ defmodule Destila.Executions.Engine do
   The Engine is responsible for:
   - Advancing workflows to the next phase
   - Handling phase completion results (from AI or user)
-  - Managing session strategy (resume vs new AI session)
   - Updating phase execution and workflow session status
   - Broadcasting state changes via PubSub
 
@@ -20,7 +19,7 @@ defmodule Destila.Executions.Engine do
   AND `workflow_sessions.phase_status` to maintain backwards compatibility.
   """
 
-  alias Destila.{AI, Executions, Workflows}
+  alias Destila.{Executions, Workflows}
 
   @doc """
   Advances the workflow to the next phase after the current phase completes.
@@ -28,7 +27,6 @@ defmodule Destila.Executions.Engine do
   Handles:
   - Completing the workflow if all phases are done
   - Creating phase execution records
-  - Managing AI session lifecycle (new vs resume)
   - Delegating phase startup to the workflow
   """
   def advance_to_next(workflow_session_id) when is_binary(workflow_session_id) do
@@ -122,9 +120,6 @@ defmodule Destila.Executions.Engine do
   end
 
   defp transition_to_phase(ws, next_phase) do
-    # Handle session strategy (new vs resume)
-    handle_session_strategy(ws, next_phase)
-
     # Get or create phase execution for the new phase (idempotent to handle concurrent calls)
     {:ok, pe} = Executions.ensure_phase_execution(ws, next_phase)
 
@@ -150,26 +145,6 @@ defmodule Destila.Executions.Engine do
           Executions.start_phase(pe, "awaiting_input")
       end
     end
-  end
-
-  defp handle_session_strategy(ws, next_phase) do
-    {action, _opts} = Workflows.session_strategy(ws.workflow_type, next_phase)
-
-    if action == :new do
-      AI.ClaudeSession.stop_for_workflow_session(ws.id)
-
-      # Create new AI session record
-      metadata = Workflows.get_metadata(ws.id)
-      worktree_path = get_in(metadata, ["worktree", "worktree_path"])
-
-      {:ok, _new_session} =
-        AI.create_ai_session(%{
-          workflow_session_id: ws.id,
-          worktree_path: worktree_path
-        })
-    end
-
-    :ok
   end
 
   defp complete_current_phase_execution(ws) do

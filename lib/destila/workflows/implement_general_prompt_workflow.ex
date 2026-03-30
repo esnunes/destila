@@ -114,6 +114,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
             :awaiting_input
 
           prompt_fn ->
+            handle_session_strategy(ws, phase_number)
             ensure_ai_session(ws)
             query = prompt_fn.(ws)
             enqueue_ai_worker(ws, phase_number, query)
@@ -143,6 +144,24 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
   end
 
   def phase_continue_action(_ws, _phase_number, _params), do: :awaiting_input
+
+  defp handle_session_strategy(ws, phase_number) do
+    case session_strategy(phase_number) do
+      :new ->
+        Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
+
+        metadata = Destila.Workflows.get_metadata(ws.id)
+        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
+
+        Destila.AI.create_ai_session(%{
+          workflow_session_id: ws.id,
+          worktree_path: worktree_path
+        })
+
+      _ ->
+        :ok
+    end
+  end
 
   defp ensure_ai_session(ws) do
     case Destila.AI.get_ai_session_for_workflow(ws.id) do
