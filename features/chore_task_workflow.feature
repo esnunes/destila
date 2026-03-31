@@ -83,6 +83,13 @@ Feature: Prompt for a Chore / Task Workflow
     And I click "Mark as Done"
     Then the workflow should be marked as complete
 
+  Scenario: Un-done a completed session
+    Given the session is marked as done
+    When I click "Reopen"
+    Then the workflow should no longer be marked as complete
+    And I should see the last phase of the workflow
+    And I should be able to continue interacting with the session
+
   Scenario: Edit session title
     Given I am on a session detail page
     When I click the session title

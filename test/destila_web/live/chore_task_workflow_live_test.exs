@@ -359,6 +359,31 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       assert render(view) =~ "Workflow complete"
       refute has_element?(view, "button[phx-click='mark_done']")
     end
+
+    @tag feature: @feature, scenario: "Un-done a completed session"
+    test "reopens a completed workflow via Reopen button", %{conn: conn} do
+      ws = create_session_in_phase(6)
+      # Mark as done first
+      {:ok, ws} =
+        Destila.Workflows.update_workflow_session(ws, %{
+          done_at: DateTime.utc_now(),
+          phase_status: nil
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert render(view) =~ "Workflow complete"
+      assert has_element?(view, "button[phx-click='mark_undone']")
+
+      view |> element("button[phx-click='mark_undone']") |> render_click()
+
+      refute render(view) =~ "Workflow complete"
+      refute has_element?(view, "button[phx-click='mark_undone']")
+
+      # Verify done_at is cleared in DB
+      ws = Destila.Workflows.get_workflow_session!(ws.id)
+      assert is_nil(ws.done_at)
+    end
   end
 
   # --- Title editing ---

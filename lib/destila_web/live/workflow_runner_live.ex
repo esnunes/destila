@@ -181,6 +181,18 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     {:noreply, assign(socket, :workflow_session, ws)}
   end
 
+  def handle_event("mark_undone", _params, socket) do
+    ws = socket.assigns.workflow_session
+
+    {:ok, ws} =
+      Workflows.update_workflow_session(ws, %{
+        done_at: nil,
+        phase_status: nil
+      })
+
+    {:noreply, assign(socket, :workflow_session, ws)}
+  end
+
   # --- Phase signals from LiveComponents ---
 
   # Phase complete with session creation request
@@ -409,7 +421,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 </span>
               </div>
 
-              <%!-- Mark as Done --%>
+              <%!-- Mark as Done / Reopen --%>
               <button
                 :if={
                   @workflow_session &&
@@ -421,6 +433,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 class="btn btn-success btn-sm"
               >
                 <.icon name="hero-check-micro" class="size-4" /> Mark as Done
+              </button>
+              <button
+                :if={@workflow_session && Session.done?(@workflow_session)}
+                phx-click="mark_undone"
+                id="reopen-btn"
+                class="btn btn-soft btn-sm"
+              >
+                <.icon name="hero-arrow-path-micro" class="size-4" /> Reopen
               </button>
 
               <%!-- Archive / Unarchive --%>
