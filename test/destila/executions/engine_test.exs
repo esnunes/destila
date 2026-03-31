@@ -155,6 +155,19 @@ defmodule Destila.Executions.EngineTest do
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.phase_status == :processing
     end
+
+    test "updates phase_execution status from awaiting_input to processing" do
+      ws = create_session_with_ai(%{phase_status: :conversing})
+      {:ok, pe} = Executions.create_phase_execution(ws, 3, %{status: "awaiting_input"})
+
+      Engine.phase_update(ws.id, 3, %{message: "Hello"})
+
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert updated_ws.phase_status == :processing
+
+      updated_pe = Executions.get_phase_execution!(pe.id)
+      assert updated_pe.status == "processing"
+    end
   end
 
   describe "advance_to_next/1" do
