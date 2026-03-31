@@ -38,10 +38,26 @@ const FocusFirstErrorHook = {
   }
 }
 
+const AutoDismissHook = {
+  mounted() {
+    this.timeout = setTimeout(() => {
+      this.el.style.transition = "opacity 0.3s ease-out"
+      this.el.style.opacity = "0"
+      setTimeout(() => {
+        this.pushEvent("lv:clear-flash", {key: this.el.dataset.kind})
+      }, 300)
+    }, 3000)
+  },
+  destroyed() {
+    clearTimeout(this.timeout)
+  }
+}
+
 const Hooks = {
   ...colocatedHooks,
   ScrollBottom: ScrollBottomHook,
   FocusFirstError: FocusFirstErrorHook,
+  AutoDismiss: AutoDismissHook,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
