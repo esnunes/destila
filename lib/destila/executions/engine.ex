@@ -55,7 +55,7 @@ defmodule Destila.Executions.Engine do
 
     case Workflows.phase_update_action(%{ws | current_phase: phase}, params) do
       :processing ->
-        Workflows.update_workflow_session(ws, %{phase_status: :generating})
+        Workflows.update_workflow_session(ws, %{phase_status: :processing})
 
       :awaiting_input ->
         handle_awaiting_input(ws)
@@ -137,7 +137,7 @@ defmodule Destila.Executions.Engine do
       case status do
         :processing ->
           Executions.start_phase(pe, "processing")
-          Workflows.update_workflow_session(reloaded, %{phase_status: :generating})
+          Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
 
         :awaiting_input ->
           Executions.start_phase(pe, "awaiting_input")

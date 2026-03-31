@@ -12,7 +12,7 @@ defmodule Destila.Workflows.Session do
     field(:total_phases, :integer)
 
     field(:phase_status, Ecto.Enum,
-      values: [:setup, :generating, :conversing, :advance_suggested]
+      values: [:setup, :processing, :conversing, :advance_suggested]
     )
 
     field(:title_generating, :boolean, default: false)

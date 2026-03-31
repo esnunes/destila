@@ -59,7 +59,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
   end
 
   defp create_implement_session(phase, opts) do
-    phase_status = Keyword.get(opts, :phase_status, :generating)
+    phase_status = Keyword.get(opts, :phase_status, :processing)
     project_id = Keyword.get(opts, :project_id)
 
     {:ok, ws} =
@@ -202,7 +202,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
   describe "Non-interactive AI phases" do
     @tag feature: @feature, scenario: "Phase 3 - Non-interactive AI generates plan"
     test "non-interactive phase hides text input", %{conn: conn} do
-      ws = create_implement_session(3, phase_status: :generating)
+      ws = create_implement_session(3, phase_status: :processing)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -265,7 +265,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
   describe "Crafting board" do
     @tag feature: @feature, scenario: "Crafting board shows implementation workflow"
     test "shows implementation badge on crafting board", %{conn: conn} do
-      _ws = create_implement_session(3, phase_status: :generating)
+      _ws = create_implement_session(3, phase_status: :processing)
 
       {:ok, _view, html} = live(conn, ~p"/crafting")
       assert html =~ "Implementation"

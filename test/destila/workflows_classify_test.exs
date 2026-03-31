@@ -50,8 +50,8 @@ defmodule Destila.WorkflowsClassifyTest do
       assert Workflows.classify(ws) == :waiting_for_user
     end
 
-    test "falls back to phase_status :generating when no phase execution exists" do
-      ws = create_session(%{phase_status: :generating})
+    test "falls back to phase_status :processing when no phase execution exists" do
+      ws = create_session(%{phase_status: :processing})
       assert Workflows.classify(ws) == :ai_processing
     end
 

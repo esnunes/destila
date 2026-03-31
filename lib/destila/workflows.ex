@@ -131,7 +131,7 @@ defmodule Destila.Workflows do
             # Fallback to legacy phase_status
             case workflow_session.phase_status do
               status when status in [:conversing, :advance_suggested] -> :waiting_for_user
-              :generating -> :ai_processing
+              :processing -> :ai_processing
               _ -> :in_progress
             end
         end
@@ -185,7 +185,7 @@ defmodule Destila.Workflows do
 
   def unarchive_workflow_session(%Session{} = ws) do
     attrs =
-      if ws.phase_status == :generating,
+      if ws.phase_status == :processing,
         do: %{archived_at: nil, phase_status: :conversing},
         else: %{archived_at: nil}
 

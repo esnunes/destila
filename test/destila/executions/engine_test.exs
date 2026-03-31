@@ -72,7 +72,7 @@ defmodule Destila.Executions.EngineTest do
 
   describe "phase_update/3 with continue conversation" do
     test "sets phase_status to conversing" do
-      ws = create_session_with_ai(%{phase_status: :generating})
+      ws = create_session_with_ai(%{phase_status: :processing})
       {:ok, pe} = Executions.create_phase_execution(ws, 3, %{status: "processing"})
 
       Engine.phase_update(ws.id, 3, %{
@@ -153,7 +153,7 @@ defmodule Destila.Executions.EngineTest do
       Engine.phase_update(ws.id, 3, %{message: "Hello"})
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :generating
+      assert updated_ws.phase_status == :processing
     end
   end
 

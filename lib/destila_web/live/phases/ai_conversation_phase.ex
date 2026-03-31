@@ -57,7 +57,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   def handle_event("send_text", %{"content" => content}, socket) when content != "" do
     ws = socket.assigns.workflow_session
 
-    if ws.phase_status not in [:generating] do
+    if ws.phase_status not in [:processing] do
       Destila.Executions.Engine.phase_update(ws.id, ws.current_phase, %{message: content})
 
       ws = Workflows.get_workflow_session!(ws.id)
@@ -157,14 +157,14 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     ws = socket.assigns.workflow_session
     opts = socket.assigns.opts
 
-    if Keyword.get(opts, :non_interactive, false) && ws.phase_status != :generating do
+    if Keyword.get(opts, :non_interactive, false) && ws.phase_status != :processing do
       # Stop existing session to avoid sending duplicate prompts
       AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
       case Workflows.phase_start_action(ws) do
         :processing ->
-          Workflows.update_workflow_session(ws, %{phase_status: :generating})
-          {:noreply, assign(socket, :workflow_session, %{ws | phase_status: :generating})}
+          Workflows.update_workflow_session(ws, %{phase_status: :processing})
+          {:noreply, assign(socket, :workflow_session, %{ws | phase_status: :processing})}
 
         :awaiting_input ->
           {:noreply, socket}
@@ -178,7 +178,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     ws = socket.assigns.workflow_session
     opts = socket.assigns.opts
 
-    if Keyword.get(opts, :non_interactive, false) && ws.phase_status == :generating do
+    if Keyword.get(opts, :non_interactive, false) && ws.phase_status == :processing do
       AI.ClaudeSession.stop_for_workflow_session(ws.id)
       {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
       {:noreply, assign(socket, :workflow_session, ws)}
@@ -241,7 +241,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
                 target={@myself}
               />
               <.chat_typing_indicator :if={
-                phase == @phase_number && @workflow_session.phase_status == :generating
+                phase == @phase_number && @workflow_session.phase_status == :processing
               } />
             </details>
           <% end %>
@@ -288,7 +288,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       >
         <div class="flex items-center justify-center gap-3">
           <button
-            :if={@workflow_session.phase_status == :generating}
+            :if={@workflow_session.phase_status == :processing}
             phx-click="cancel_phase"
             phx-target={@myself}
             id="cancel-phase-btn"
@@ -318,7 +318,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
         class="max-w-2xl mx-auto w-full px-6 pb-4"
       >
         <.text_input
-          disabled={@workflow_session.phase_status == :generating}
+          disabled={@workflow_session.phase_status == :processing}
           target={@myself}
         />
       </div>
@@ -336,7 +336,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       ws.phase_status == :advance_suggested ->
         %{input_type: nil, options: nil, questions: [], completed: false}
 
-      ws.phase_status == :generating ->
+      ws.phase_status == :processing ->
         %{input_type: :text, options: nil, questions: [], completed: false}
 
       true ->

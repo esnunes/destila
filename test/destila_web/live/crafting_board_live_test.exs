@@ -73,7 +73,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       generating_prompt =
         create_prompt(%{
           title: "Generating Prompt",
-          phase_status: :generating,
+          phase_status: :processing,
           project_id: project.id
         })
 
