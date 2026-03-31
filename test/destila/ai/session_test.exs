@@ -80,6 +80,28 @@ defmodule Destila.AI.ClaudeSessionTest do
     end
   end
 
+  describe "stop_for_workflow_session/1" do
+    test "stops a registered session" do
+      ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+        [ClaudeCode.Test.result("ok")]
+      end)
+
+      ws_id = "test-stop-ws-#{System.unique_integer([:positive])}"
+      {:ok, session} = Destila.AI.ClaudeSession.for_workflow_session(ws_id)
+      ClaudeCode.Test.allow(ClaudeCode, self(), session)
+
+      assert Process.alive?(session)
+
+      assert :ok = Destila.AI.ClaudeSession.stop_for_workflow_session(ws_id)
+      Process.sleep(50)
+      refute Process.alive?(session)
+    end
+
+    test "returns :ok for non-existent session" do
+      assert :ok = Destila.AI.ClaudeSession.stop_for_workflow_session("nonexistent-ws")
+    end
+  end
+
   describe "inactivity timeout" do
     test "session stops after inactivity timeout" do
       ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->

@@ -143,6 +143,7 @@ defmodule Destila.AI.ClaudeSession do
             # Forcefully kill if graceful stop times out (e.g., blocked mid-stream).
             # Safe: linked ClaudeCode process dies too.
             Process.exit(pid, :kill)
+            :ok
         end
     end
   end
