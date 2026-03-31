@@ -260,7 +260,12 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     Steps:
     1. Analyze the codebase to understand the project structure and conventions
     2. Create a detailed implementation plan
-    3. Save the plan to `plan.md` in the current directory
+    3. Save the plan to `docs/plans/` using the naming convention \
+    `YYYY-MM-DD-<type>-<slug>-plan.md` where:
+       - `YYYY-MM-DD` is today's date
+       - `<type>` is `feat`, `refactor`, `fix`, etc.
+       - `<slug>` is a short kebab-case description of the change
+       Look at existing files in `docs/plans/` for examples.
     4. Commit your changes: `git add . && git commit -m "Add implementation plan"`
     5. Push to the remote: `git push`
     """ <> @non_interactive_tool_instructions
@@ -268,8 +273,9 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   defp deepen_plan_prompt(_workflow_session) do
     """
-    Review the plan in `plan.md`. Evaluate whether a more detailed plan would \
-    be beneficial for the implementation.
+    Find the plan file in `docs/plans/` (it will be the most recently added \
+    `*-plan.md` file). Review it and evaluate whether a more detailed plan \
+    would be beneficial for the implementation.
 
     If the plan needs more detail:
     1. Enhance the plan with additional implementation specifics
@@ -285,11 +291,11 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   defp work_prompt(_workflow_session) do
     """
-    Read the implementation plan from `plan.md` in the current directory and \
-    implement it completely.
+    Find the plan file in `docs/plans/` (it will be the most recently added \
+    `*-plan.md` file) and implement it completely.
 
     Steps:
-    1. Read `plan.md` to understand what needs to be done
+    1. Find and read the plan file in `docs/plans/` to understand what needs to be done
     2. Implement all changes described in the plan
     3. Ensure the code compiles and basic tests pass
     4. Commit all changes: `git add . && git commit -m "Implement plan"`
@@ -299,7 +305,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   defp review_prompt(_workflow_session) do
     """
-    Review the implementation against the plan in `plan.md`.
+    Review the implementation against the plan in `docs/plans/` (find the most \
+    recently added `*-plan.md` file).
 
     Steps:
     1. Read the plan and understand the requirements

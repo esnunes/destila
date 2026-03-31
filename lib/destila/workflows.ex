@@ -136,14 +136,14 @@ defmodule Destila.Workflows do
   end
 
   @doc """
-  Lists completed workflow sessions that have a `prompt_generated` metadata entry.
+  Lists completed, non-archived workflow sessions that have a `prompt_generated` metadata entry.
   Returns `{session, prompt_text}` tuples, ordered by most recently done.
   """
   def list_sessions_with_generated_prompts do
     from(ws in Session,
       join: m in SessionMetadata,
       on: m.workflow_session_id == ws.id and m.key == "prompt_generated",
-      where: not is_nil(ws.done_at),
+      where: not is_nil(ws.done_at) and is_nil(ws.archived_at),
       preload: [:project],
       order_by: [desc: ws.done_at],
       select: {ws, m.value}
