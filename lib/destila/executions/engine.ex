@@ -55,6 +55,17 @@ defmodule Destila.Executions.Engine do
 
     case Workflows.phase_update_action(%{ws | current_phase: phase}, params) do
       :processing ->
+        case Executions.get_current_phase_execution(ws.id) do
+          nil ->
+            :ok
+
+          pe when pe.status in ["awaiting_input", "awaiting_confirmation"] ->
+            Executions.update_phase_execution_status(pe, "processing")
+
+          _pe ->
+            :ok
+        end
+
         Workflows.update_workflow_session(ws, %{phase_status: :processing})
 
       :awaiting_input ->
