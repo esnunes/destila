@@ -28,7 +28,7 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
       workflow_type: :prompt_chore_task,
       current_phase: 1,
       total_phases: 6,
-      phase_status: :conversing,
+      phase_status: :awaiting_input,
       position: System.unique_integer([:positive])
     }
 

@@ -37,7 +37,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
   # Creates a chore_task session in the given phase with appropriate state.
   defp create_session_in_phase(phase, opts \\ []) do
-    phase_status = Keyword.get(opts, :phase_status, :conversing)
+    phase_status = Keyword.get(opts, :phase_status, :awaiting_input)
     last_message_type = Keyword.get(opts, :last_message_type)
 
     {last_content, session_tool_uses} =
@@ -565,7 +565,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
         workflow_type: :prompt_chore_task,
         current_phase: 3,
         total_phases: 6,
-        phase_status: :conversing
+        phase_status: :awaiting_input
       })
 
     {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
@@ -617,7 +617,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
         workflow_type: :prompt_chore_task,
         current_phase: 3,
         total_phases: 6,
-        phase_status: :conversing
+        phase_status: :awaiting_input
       })
 
     {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)

@@ -9,7 +9,7 @@ defmodule Destila.WorkflowsClassifyTest do
       workflow_type: :prompt_chore_task,
       current_phase: 3,
       total_phases: 6,
-      phase_status: :conversing
+      phase_status: :awaiting_input
     }
 
     {:ok, ws} = Workflows.create_workflow_session(Map.merge(default, attrs))
@@ -46,7 +46,7 @@ defmodule Destila.WorkflowsClassifyTest do
     end
 
     test "falls back to phase_status when no phase execution exists" do
-      ws = create_session(%{phase_status: :conversing})
+      ws = create_session(%{phase_status: :awaiting_input})
       assert Workflows.classify(ws) == :waiting_for_user
     end
 

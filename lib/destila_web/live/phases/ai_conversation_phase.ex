@@ -181,7 +181,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
     if Keyword.get(opts, :non_interactive, false) && ws.phase_status == :processing do
       AI.ClaudeSession.stop_for_workflow_session(ws.id)
-      {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
+      {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :awaiting_input})
       {:noreply, assign(socket, :workflow_session, ws)}
     else
       {:noreply, socket}
@@ -305,7 +305,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
             <.icon name="hero-stop-micro" class="size-4" /> Cancel
           </button>
           <button
-            :if={@workflow_session.phase_status == :conversing}
+            :if={@workflow_session.phase_status == :awaiting_input}
             phx-click="retry_phase"
             phx-target={@myself}
             id="retry-phase-btn"

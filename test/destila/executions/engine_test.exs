@@ -21,7 +21,7 @@ defmodule Destila.Executions.EngineTest do
       workflow_type: :prompt_chore_task,
       current_phase: 3,
       total_phases: 6,
-      phase_status: :conversing
+      phase_status: :awaiting_input
     }
 
     {:ok, ws} = Workflows.create_workflow_session(Map.merge(default, attrs))
@@ -80,7 +80,7 @@ defmodule Destila.Executions.EngineTest do
       })
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :conversing
+      assert updated_ws.phase_status == :awaiting_input
 
       updated_pe = Executions.get_phase_execution!(pe.id)
       assert updated_pe.status == "awaiting_input"
@@ -157,7 +157,7 @@ defmodule Destila.Executions.EngineTest do
     end
 
     test "updates phase_execution status from awaiting_input to processing" do
-      ws = create_session_with_ai(%{phase_status: :conversing})
+      ws = create_session_with_ai(%{phase_status: :awaiting_input})
       {:ok, pe} = Executions.create_phase_execution(ws, 3, %{status: "awaiting_input"})
 
       Engine.phase_update(ws.id, 3, %{message: "Hello"})

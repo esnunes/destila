@@ -125,7 +125,7 @@ defmodule Destila.Executions.Engine do
         :ok
     end
 
-    Workflows.update_workflow_session(ws, %{phase_status: :conversing})
+    Workflows.update_workflow_session(ws, %{phase_status: :awaiting_input})
   end
 
   defp transition_to_phase(ws, next_phase) do
@@ -152,6 +152,7 @@ defmodule Destila.Executions.Engine do
 
         :awaiting_input ->
           Executions.start_phase(pe, "awaiting_input")
+          Workflows.update_workflow_session(reloaded, %{phase_status: :awaiting_input})
       end
     end
   end
