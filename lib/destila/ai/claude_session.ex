@@ -12,6 +12,8 @@ defmodule Destila.AI.ClaudeSession do
     "Read",
     "Grep",
     "Glob",
+    "WebFetch",
+    "Skill",
     "Bash(git log:*)",
     "Bash(git show:*)",
     "mcp__destila__ask_user_question",

@@ -23,6 +23,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     "Bash",
     "Glob",
     "Grep",
+    "WebFetch",
+    "Skill",
     "mcp__destila__session"
   ]
 
