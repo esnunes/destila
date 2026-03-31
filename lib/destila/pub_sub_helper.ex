@@ -11,4 +11,8 @@ defmodule Destila.PubSubHelper do
   def broadcast_event(event, data) do
     Phoenix.PubSub.broadcast(Destila.PubSub, @topic, {event, data})
   end
+
+  def ai_stream_topic(workflow_session_id) do
+    "ai_stream:#{workflow_session_id}"
+  end
 end

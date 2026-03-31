@@ -49,6 +49,37 @@ defmodule Destila.AI.ClaudeSessionTest do
     end
   end
 
+  describe "query_streaming/3" do
+    test "broadcasts stream chunks to the given topic" do
+      topic = Destila.PubSubHelper.ai_stream_topic("test-ws-id")
+      Phoenix.PubSub.subscribe(Destila.PubSub, topic)
+
+      ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+        [
+          ClaudeCode.Test.text("Hello "),
+          ClaudeCode.Test.text("world"),
+          ClaudeCode.Test.result("Hello world")
+        ]
+      end)
+
+      {:ok, session} = Destila.AI.ClaudeSession.start_link(timeout_ms: :timer.seconds(5))
+      ClaudeCode.Test.allow(ClaudeCode, self(), session)
+
+      {:ok, result} =
+        Destila.AI.ClaudeSession.query_streaming(session, "test", stream_topic: topic)
+
+      # Verify chunks were broadcast
+      assert_received {:ai_stream_chunk, %ClaudeCode.Message.AssistantMessage{}}
+      assert_received {:ai_stream_chunk, %ClaudeCode.Message.AssistantMessage{}}
+      assert_received {:ai_stream_chunk, %ClaudeCode.Message.ResultMessage{}}
+
+      # Verify final result is still collected correctly
+      assert result.text == "Hello world"
+
+      Destila.AI.ClaudeSession.stop(session)
+    end
+  end
+
   describe "inactivity timeout" do
     test "session stops after inactivity timeout" do
       ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->

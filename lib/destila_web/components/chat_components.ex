@@ -267,6 +267,23 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
+  attr :content, :string, required: true
+
+  def chat_streaming_message(assigns) do
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="rounded-2xl px-4 py-3 text-sm bg-base-200 text-base-content max-w-[80%]">
+        <div class="prose prose-sm max-w-none">
+          {raw(markdown_to_html(@content))}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   def chat_typing_indicator(assigns) do
     ~H"""
     <div class="flex gap-3 mb-4">

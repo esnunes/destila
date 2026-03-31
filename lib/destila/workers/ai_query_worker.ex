@@ -29,7 +29,9 @@ defmodule Destila.Workers.AiQueryWorker do
 
     case AI.ClaudeSession.for_workflow_session(workflow_session_id, session_opts) do
       {:ok, session} ->
-        case AI.ClaudeSession.query(session, query) do
+        stream_topic = Destila.PubSubHelper.ai_stream_topic(workflow_session_id)
+
+        case AI.ClaudeSession.query_streaming(session, query, stream_topic: stream_topic) do
           {:ok, result} ->
             Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_result: result})
             :ok

@@ -102,6 +102,16 @@ defmodule Destila.AI.ClaudeSession do
   end
 
   @doc """
+  Like `query/3`, but broadcasts each raw stream chunk to the given PubSub topic.
+
+  Requires `stream_topic` in opts.
+  """
+  def query_streaming(session, prompt, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, :timer.minutes(15))
+    GenServer.call(session, {:query_streaming, prompt, opts}, timeout)
+  end
+
+  @doc """
   Returns the underlying ClaudeCode session ID for resumption.
   """
   def session_id(session) do
@@ -127,9 +137,12 @@ defmodule Destila.AI.ClaudeSession do
 
       pid ->
         try do
-          stop(pid)
+          GenServer.stop(pid, :normal, 500)
         catch
-          :exit, _ -> :ok
+          :exit, _ ->
+            # Forcefully kill if graceful stop times out (e.g., blocked mid-stream).
+            # Safe: linked ClaudeCode process dies too.
+            Process.exit(pid, :kill)
         end
     end
   end
@@ -249,6 +262,27 @@ defmodule Destila.AI.ClaudeSession do
   end
 
   @impl true
+  def handle_call({:query_streaming, prompt, opts}, _from, state) do
+    topic = Keyword.fetch!(opts, :stream_topic)
+
+    result =
+      state.claude_session
+      |> ClaudeCode.stream(prompt, Keyword.delete(opts, :stream_topic))
+      |> collect_with_mcp_and_broadcast(topic)
+
+    state = reset_timer(state)
+
+    reply =
+      if result.is_error do
+        {:error, result}
+      else
+        {:ok, result}
+      end
+
+    {:reply, reply, state}
+  end
+
+  @impl true
   def handle_call(:session_id, _from, state) do
     id = ClaudeCode.Session.session_id(state.claude_session)
     {:reply, id, state}
@@ -297,6 +331,51 @@ defmodule Destila.AI.ClaudeSession do
 
         _, acc ->
           acc
+      end)
+
+    %{
+      result: acc.result,
+      text: acc.text |> Enum.reverse() |> Enum.join(),
+      is_error: acc.is_error,
+      session_id: acc.session_id,
+      mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses)
+    }
+  end
+
+  defp collect_with_mcp_and_broadcast(stream, topic) do
+    initial = %{
+      text: [],
+      mcp_tool_uses: [],
+      result: nil,
+      is_error: false,
+      session_id: nil
+    }
+
+    acc =
+      Enum.reduce(stream, initial, fn item, acc ->
+        Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, item})
+
+        case item do
+          %ClaudeCode.Message.AssistantMessage{message: message} ->
+            {texts, mcp_tools} = extract_content(message.content)
+
+            %{
+              acc
+              | text: texts ++ acc.text,
+                mcp_tool_uses: mcp_tools ++ acc.mcp_tool_uses
+            }
+
+          %ClaudeCode.Message.ResultMessage{} = msg ->
+            %{
+              acc
+              | result: msg.result,
+                is_error: msg.is_error,
+                session_id: msg.session_id
+            }
+
+          _ ->
+            acc
+        end
       end)
 
     %{

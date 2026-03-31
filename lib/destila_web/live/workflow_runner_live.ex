@@ -55,7 +55,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:total_phases, length(phases))
      |> assign(:editing_title, false)
      |> assign(:metadata, %{})
-     |> assign(:page_title, Workflows.default_title(workflow_type))}
+     |> assign(:page_title, Workflows.default_title(workflow_type))
+     |> assign(:streaming_content, nil)}
   end
 
   defp mount_session(id, socket) do
@@ -64,6 +65,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     if workflow_session do
       if connected?(socket) do
         Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
+        Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.ai_stream_topic(id))
       end
 
       workflow_type = workflow_session.workflow_type
@@ -84,7 +86,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:total_phases, workflow_session.total_phases)
        |> assign(:editing_title, false)
        |> assign(:metadata, Workflows.get_metadata(workflow_session.id))
-       |> assign(:page_title, workflow_session.title)}
+       |> assign(:page_title, workflow_session.title)
+       |> assign(:streaming_content, nil)}
     else
       {:ok,
        socket
@@ -261,7 +264,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        socket
        |> assign(:workflow_session, ws)
        |> assign(:current_phase, ws.current_phase)
-       |> assign(:page_title, ws.title)}
+       |> assign(:page_title, ws.title)
+       |> assign(
+         :streaming_content,
+         if(ws.phase_status == :processing,
+           do: socket.assigns[:streaming_content],
+           else: nil
+         )
+       )}
     else
       {:noreply, socket}
     end
@@ -274,6 +284,24 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     else
       {:noreply, socket}
     end
+  end
+
+  def handle_info({:ai_stream_chunk, chunk}, socket) do
+    streaming = socket.assigns[:streaming_content] || ""
+
+    new_text =
+      case chunk do
+        %ClaudeCode.Message.AssistantMessage{message: message} ->
+          message.content
+          |> Enum.filter(&match?(%ClaudeCode.Content.TextBlock{}, &1))
+          |> Enum.map(& &1.text)
+          |> Enum.join()
+
+        _ ->
+          ""
+      end
+
+    {:noreply, assign(socket, :streaming_content, streaming <> new_text)}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -484,6 +512,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           metadata={@metadata}
           opts={@phase_opts}
           phase_number={@current_phase}
+          streaming_content={@streaming_content}
         />
         """
 
