@@ -229,19 +229,36 @@ defmodule Destila.AI.ClaudeSession do
     claude_opts =
       Keyword.put_new(claude_opts, :mcp_servers, %{"destila" => Destila.AI.Tools})
 
-    case ClaudeCode.start_link(claude_opts) do
-      {:ok, claude_session} ->
-        timer_ref = schedule_timeout(timeout_ms)
+    claude_opts = Keyword.put_new(claude_opts, :setting_sources, ["user", "project"])
 
-        {:ok,
-         %{
-           claude_session: claude_session,
-           timeout_ms: timeout_ms,
-           timer_ref: timer_ref
-         }}
+    # Register marketplaces and install/enable plugins before starting the session.
+    # Treat "already" errors as success since these operations aren't fully idempotent.
+    with :ok <-
+           plugin_cmd(ClaudeCode.Plugin.Marketplace, :add, [
+             "EveryInc/compound-engineering-plugin"
+           ]),
+         :ok <- plugin_cmd(ClaudeCode.Plugin.Marketplace, :add, ["pbakaus/impeccable"]),
+         :ok <-
+           plugin_cmd(ClaudeCode.Plugin, :install, ["compound-engineering@every-marketplace"]),
+         :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["compound-engineering@every-marketplace"]),
+         :ok <- plugin_cmd(ClaudeCode.Plugin, :install, ["impeccable@impeccable"]),
+         :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["impeccable@impeccable"]) do
+      case ClaudeCode.start_link(claude_opts) do
+        {:ok, claude_session} ->
+          timer_ref = schedule_timeout(timeout_ms)
 
-      {:error, reason} ->
-        {:stop, reason}
+          {:ok,
+           %{
+             claude_session: claude_session,
+             timeout_ms: timeout_ms,
+             timer_ref: timer_ref
+           }}
+
+        {:error, reason} ->
+          {:stop, reason}
+      end
+    else
+      {:error, reason} -> {:stop, {:plugin_setup_failed, reason}}
     end
   end
 
@@ -422,5 +439,22 @@ defmodule Destila.AI.ClaudeSession do
 
     timer_ref = schedule_timeout(state.timeout_ms)
     %{state | timer_ref: timer_ref}
+  end
+
+  defp plugin_cmd(module, function, args) do
+    case apply(module, function, args) do
+      {:ok, _} ->
+        :ok
+
+      {:error, msg} when is_binary(msg) ->
+        if String.contains?(msg, "already") do
+          :ok
+        else
+          {:error, msg}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 end
