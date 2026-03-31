@@ -44,13 +44,11 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
 
   describe "sectioned list view" do
     @tag feature: @feature, scenario: "View sessions in sectioned list"
-    test "shows five sections", %{conn: conn} do
+    test "shows three sections", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
-      assert has_element?(view, "#section-setup")
       assert has_element?(view, "#section-waiting_for_user")
-      assert has_element?(view, "#section-ai_processing")
-      assert has_element?(view, "#section-in_progress")
+      assert has_element?(view, "#section-processing")
       assert has_element?(view, "#section-done")
     end
 
@@ -66,7 +64,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       waiting_prompt =
         create_prompt(%{
           title: "Waiting Prompt",
-          phase_status: :conversing,
+          phase_status: :awaiting_input,
           project_id: project.id
         })
 
@@ -94,17 +92,15 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
-      # Setup section
-      assert has_element?(view, "#section-setup #crafting-card-#{setup_prompt.id}")
+      # Setup sessions now appear in Processing section
+      assert has_element?(view, "#section-processing #crafting-card-#{setup_prompt.id}")
 
       # Waiting for You section (conversing and advance_suggested)
       assert has_element?(view, "#section-waiting_for_user #crafting-card-#{waiting_prompt.id}")
 
-      # AI Processing section (generating)
-      assert has_element?(view, "#section-ai_processing #crafting-card-#{generating_prompt.id}")
-
-      # In Progress section
-      assert has_element?(view, "#section-in_progress #crafting-card-#{in_progress_prompt.id}")
+      # Processing section (generating and catch-all)
+      assert has_element?(view, "#section-processing #crafting-card-#{generating_prompt.id}")
+      assert has_element?(view, "#section-processing #crafting-card-#{in_progress_prompt.id}")
 
       # Done section
       assert has_element?(view, "#section-done #crafting-card-#{done_prompt.id}")

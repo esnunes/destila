@@ -111,14 +111,11 @@ defmodule DestilaWeb.BoardComponents do
     """
   end
 
-  defp status_dot_style(%{phase_status: s}) when s in [:conversing, :advance_suggested],
+  defp status_dot_style(%{phase_status: s}) when s in [:awaiting_input, :advance_suggested],
     do: {"bg-warning", "Waiting for you"}
 
   defp status_dot_style(%{phase_status: :processing}),
     do: {"bg-info animate-pulse", "AI is responding"}
-
-  defp status_dot_style(%{phase_status: :setup}),
-    do: {"bg-base-content/20", "Setting up"}
 
   defp status_dot_style(card) do
     if Session.done?(card) do

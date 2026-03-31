@@ -13,41 +13,17 @@ defmodule DestilaWeb.Phases.SetupPhase do
     metadata = assigns[:metadata] || %{}
     steps = build_steps(ws, metadata)
 
-    if connected?(socket) && ws do
-      maybe_start_setup(ws, metadata)
-    end
-
-    all_done = all_completed?(steps)
-
-    if all_done && !socket.assigns[:phase_complete_sent] do
-      send(self(), {:phase_complete, assigns.phase_number, %{}})
-    end
-
     {:ok,
      socket
      |> assign(:workflow_session, ws)
      |> assign(:phase_number, assigns.phase_number)
      |> assign(:steps, steps)
-     |> assign(:all_done, all_done)
-     |> assign(:phase_complete_sent, all_done || socket.assigns[:phase_complete_sent])
+     |> assign(:all_done, all_completed?(steps))
      |> assign(:has_failure, has_failure?(steps))}
   end
 
   def handle_event("retry_setup", _params, socket) do
-    ws = socket.assigns.workflow_session
-
-    if ws.project_id do
-      %{"workflow_session_id" => ws.id}
-      |> Destila.Workers.SetupWorker.new()
-      |> Oban.insert()
-    end
-
-    if ws.title_generating do
-      %{"workflow_session_id" => ws.id, "idea" => ""}
-      |> Destila.Workers.TitleGenerationWorker.new()
-      |> Oban.insert()
-    end
-
+    Destila.Workflows.Setup.start(socket.assigns.workflow_session)
     {:noreply, socket}
   end
 
@@ -93,27 +69,6 @@ defmodule DestilaWeb.Phases.SetupPhase do
       </button>
     </div>
     """
-  end
-
-  defp maybe_start_setup(%{phase_status: :setup}, _metadata), do: :ok
-
-  defp maybe_start_setup(ws, metadata) do
-    Destila.Workflows.update_workflow_session(ws, %{phase_status: :setup})
-
-    # Only generate title if title_generating is true (not pre-set from source session)
-    if ws.title_generating do
-      idea = get_in(metadata, ["idea", "text"]) || get_in(metadata, ["prompt", "text"]) || ""
-
-      %{"workflow_session_id" => ws.id, "idea" => idea}
-      |> Destila.Workers.TitleGenerationWorker.new()
-      |> Oban.insert()
-    end
-
-    if ws.project_id do
-      %{"workflow_session_id" => ws.id}
-      |> Destila.Workers.SetupWorker.new()
-      |> Oban.insert()
-    end
   end
 
   defp build_steps(ws, metadata) do

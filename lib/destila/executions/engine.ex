@@ -44,6 +44,34 @@ defmodule Destila.Executions.Engine do
   end
 
   @doc """
+  Kicks off the first phase of a newly created workflow session.
+
+  Unlike `advance_to_next/1`, which transitions *from* a completed phase,
+  this starts the session's `current_phase` in place — creating the phase
+  execution and calling `phase_start_action` so workers get enqueued.
+  """
+  def start_session(ws) do
+    phase = ws.current_phase
+    {:ok, pe} = Executions.ensure_phase_execution(ws, phase)
+    status = Workflows.phase_start_action(ws)
+
+    # Reload to check if an inline worker already advanced past this phase.
+    reloaded = Workflows.get_workflow_session!(ws.id)
+
+    if reloaded.current_phase == phase do
+      case status do
+        :processing ->
+          Executions.start_phase(pe, "processing")
+          Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
+
+        :awaiting_input ->
+          Executions.start_phase(pe, "awaiting_input")
+          Workflows.update_workflow_session(reloaded, %{phase_status: :awaiting_input})
+      end
+    end
+  end
+
+  @doc """
   Routes a phase update to the workflow and acts on the result.
 
   Called by `AiQueryWorker` after an AI response, or by `AiConversationPhase`
@@ -125,7 +153,7 @@ defmodule Destila.Executions.Engine do
         :ok
     end
 
-    Workflows.update_workflow_session(ws, %{phase_status: :conversing})
+    Workflows.update_workflow_session(ws, %{phase_status: :awaiting_input})
   end
 
   defp transition_to_phase(ws, next_phase) do
@@ -152,6 +180,7 @@ defmodule Destila.Executions.Engine do
 
         :awaiting_input ->
           Executions.start_phase(pe, "awaiting_input")
+          Workflows.update_workflow_session(reloaded, %{phase_status: :awaiting_input})
       end
     end
   end

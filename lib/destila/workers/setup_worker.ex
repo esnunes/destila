@@ -13,6 +13,12 @@ defmodule Destila.Workers.SetupWorker do
 
     with :ok <- sync_repo(workflow_session, project),
          :ok <- create_worktree(workflow_session, project) do
+      Destila.Executions.Engine.phase_update(
+        workflow_session_id,
+        workflow_session.current_phase,
+        %{setup_step_completed: "worktree"}
+      )
+
       :ok
     end
   end

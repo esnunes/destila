@@ -223,7 +223,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Non-interactive phase shows retry on error"
     test "non-interactive phase shows retry when conversing (error state)", %{conn: conn} do
-      ws = create_implement_session(3, phase_status: :conversing)
+      ws = create_implement_session(3, phase_status: :awaiting_input)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 

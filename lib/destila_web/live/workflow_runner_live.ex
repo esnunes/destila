@@ -159,7 +159,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       _ -> :ok
     end
 
-    {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
+    {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :awaiting_input})
     {:noreply, assign(socket, :workflow_session, ws)}
   end
 
@@ -237,6 +237,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         "id" => data[:selected_session_id]
       })
     end
+
+    Destila.Executions.Engine.start_session(ws)
 
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
   end

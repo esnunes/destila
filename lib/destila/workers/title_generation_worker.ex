@@ -32,6 +32,12 @@ defmodule Destila.Workers.TitleGenerationWorker do
       "status" => "completed"
     })
 
+    Destila.Executions.Engine.phase_update(
+      workflow_session_id,
+      workflow_session.current_phase,
+      %{setup_step_completed: "title_gen"}
+    )
+
     :ok
   end
 end
