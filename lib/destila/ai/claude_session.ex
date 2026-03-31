@@ -242,7 +242,16 @@ defmodule Destila.AI.ClaudeSession do
            plugin_cmd(ClaudeCode.Plugin, :install, ["compound-engineering@every-marketplace"]),
          :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["compound-engineering@every-marketplace"]),
          :ok <- plugin_cmd(ClaudeCode.Plugin, :install, ["impeccable@impeccable"]),
-         :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["impeccable@impeccable"]) do
+         :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["impeccable@impeccable"]),
+         {:ok, installed} <- ClaudeCode.Plugin.list() do
+      # Pass enabled plugin install_paths so they are loaded into the session.
+      plugin_paths =
+        installed
+        |> Enum.filter(&(&1.enabled && &1.install_path))
+        |> Enum.map(& &1.install_path)
+
+      claude_opts = Keyword.put(claude_opts, :plugins, plugin_paths)
+
       case ClaudeCode.start_link(claude_opts) do
         {:ok, claude_session} ->
           timer_ref = schedule_timeout(timeout_ms)
