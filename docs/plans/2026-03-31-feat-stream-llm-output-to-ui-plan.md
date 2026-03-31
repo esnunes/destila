@@ -201,7 +201,13 @@ Add a `streaming_content` assign initialized to `nil`:
 |> assign(:streaming_content, nil)
 ```
 
-**New `handle_info` clause for stream chunks:**
+**Also in `mount_workflow/2`** — add the same assign so that pre-session phase rendering doesn't crash on a missing assign when `render_phase` passes `streaming_content` to the phase component:
+
+```elixir
+|> assign(:streaming_content, nil)
+```
+
+**New `handle_info` clause for stream chunks** (must be placed BEFORE the catch-all `handle_info(_msg, socket)` at line 279):
 
 ```elixir
 def handle_info({:ai_stream_chunk, chunk}, socket) do
@@ -319,17 +325,47 @@ This looks identical to a regular system message, ensuring the transition from s
 
 ### Step 7: Handle edge cases
 
-#### 7a. Cancel during streaming
+#### 7a. Cancel during streaming — requires code change
 
-**File:** `lib/destila_web/live/phases/ai_conversation_phase.ex`
+**Problem:** The current `stop_for_workflow_session/1` calls `GenServer.stop(pid, :normal)`, which sends a system message to the GenServer. However, OTP processes system messages _between_ callbacks, not during them. Since `handle_call({:query_streaming, ...})` blocks on `Enum.reduce(stream, ...)` for the duration of the AI response, `GenServer.stop` will **block indefinitely** until the stream finishes. This means pressing Cancel would hang until the AI completes its full response — directly violating the requirement.
 
-The existing `cancel_phase` handler calls `AI.ClaudeSession.stop_for_workflow_session(ws.id)` which kills the GenServer. When the GenServer dies:
-- The `Enum.reduce` in `collect_with_mcp_and_broadcast` will raise/exit
-- The Oban worker catches this via `{:error, reason}` path
-- The phase_status transitions to `:conversing` via `update_workflow_session`
-- The `handle_info({:workflow_session_updated, ...})` in WorkflowRunnerLive clears `streaming_content` to `nil`
+**Fix — File:** `lib/destila/ai/claude_session.ex`
 
-No additional code needed — the existing cancel mechanism naturally cleans up the stream.
+Change `stop_for_workflow_session/1` to use `Process.exit/2` with a short grace period:
+
+```elixir
+def stop_for_workflow_session(workflow_session_id) do
+  name = {:via, Registry, {Destila.AI.SessionRegistry, workflow_session_id}}
+
+  case GenServer.whereis(name) do
+    nil ->
+      :ok
+
+    pid ->
+      # Try graceful stop with a short timeout. If the GenServer is blocked
+      # mid-stream (inside handle_call), this will timeout quickly.
+      try do
+        GenServer.stop(pid, :normal, 500)
+      catch
+        :exit, _ ->
+          # Forcefully kill the process if graceful stop times out.
+          # This is safe: the Oban worker's GenServer.call will receive
+          # an {:EXIT, pid, :killed} and the job will fail (max_attempts: 1).
+          # The underlying ClaudeCode process is also killed since it's
+          # linked to the GenServer.
+          Process.exit(pid, :kill)
+      end
+  end
+end
+```
+
+**Why this is safe:**
+- `ClaudeCode.start_link` creates a linked process — when the GenServer is killed, the underlying Claude process dies too (no leak).
+- The Oban worker's `GenServer.call` receives an exit signal, causing the job to fail. Since `max_attempts: 1`, it won't retry.
+- The `cancel_phase` handler in AiConversationPhase already updates `phase_status` to `:conversing` after calling `stop_for_workflow_session`, so the UI transitions correctly regardless.
+- The `terminate/2` callback won't run on `:kill`, but that's OK since the linked ClaudeCode process dies automatically.
+
+**Note:** The existing `stop/1` function (used elsewhere for graceful shutdown) is left unchanged. Only `stop_for_workflow_session` gets the timeout+kill fallback since it's the one called during cancel.
 
 #### 7b. Error during streaming
 
@@ -418,6 +454,41 @@ describe "AI streaming" do
 
     # Verify streaming content is cleared
     refute render(view) =~ "Streaming text"
+  end
+end
+```
+
+#### 8c. Unit test — cancel kills the session mid-stream
+
+**File:** `test/destila/ai/session_test.exs`
+
+```elixir
+describe "stop_for_workflow_session/1 during streaming" do
+  test "kills the session even when blocked mid-stream" do
+    # Stub with a slow stream that blocks
+    ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+      # Simulate a long-running stream
+      Process.sleep(5_000)
+      [ClaudeCode.Test.result("never reached")]
+    end)
+
+    ws_id = "test-cancel-ws"
+    {:ok, session} = AI.ClaudeSession.for_workflow_session(ws_id)
+
+    # Start streaming in a separate process
+    task = Task.async(fn ->
+      AI.ClaudeSession.query_streaming(session, "test", stream_topic: "ai_stream:#{ws_id}")
+    end)
+
+    # Give the stream time to start
+    Process.sleep(50)
+
+    # Cancel should return quickly (not block for 5s)
+    {elapsed_us, :ok} = :timer.tc(fn -> AI.ClaudeSession.stop_for_workflow_session(ws_id) end)
+    assert elapsed_us < 2_000_000  # Less than 2 seconds
+
+    # The task should exit with an error
+    assert {:exit, _} = catch_exit(Task.await(task, 1_000))
   end
 end
 ```
