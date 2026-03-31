@@ -38,10 +38,23 @@ const FocusFirstErrorHook = {
   }
 }
 
+const AutoDismissHook = {
+  mounted() {
+    this.timeout = setTimeout(() => {
+      this.pushEvent("lv:clear-flash", {key: this.el.dataset.kind})
+      this.el.style.display = "none"
+    }, 5000)
+  },
+  destroyed() {
+    clearTimeout(this.timeout)
+  }
+}
+
 const Hooks = {
   ...colocatedHooks,
   ScrollBottom: ScrollBottomHook,
   FocusFirstError: FocusFirstErrorHook,
+  AutoDismiss: AutoDismissHook,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
