@@ -421,7 +421,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 </span>
               </div>
 
-              <%!-- Mark as Done --%>
+              <%!-- Mark as Done / Reopen --%>
               <button
                 :if={
                   @workflow_session &&
@@ -433,6 +433,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 class="btn btn-success btn-sm"
               >
                 <.icon name="hero-check-micro" class="size-4" /> Mark as Done
+              </button>
+              <button
+                :if={@workflow_session && Session.done?(@workflow_session)}
+                phx-click="mark_undone"
+                id="reopen-btn"
+                class="btn btn-soft btn-sm"
+              >
+                <.icon name="hero-arrow-path-micro" class="size-4" /> Reopen
               </button>
 
               <%!-- Archive / Unarchive --%>
@@ -472,13 +480,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           <p class="text-sm text-base-content/50 flex items-center justify-center gap-2">
             <.icon name="hero-check-circle-solid" class="size-4 text-success" />
             <span>Workflow complete</span>
-            <button
-              phx-click="mark_undone"
-              id="reopen-btn"
-              class="btn btn-soft btn-sm ml-2"
-            >
-              <.icon name="hero-arrow-path-micro" class="size-4" /> Reopen
-            </button>
           </p>
         </div>
       </div>
