@@ -55,7 +55,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:total_phases, length(phases))
      |> assign(:editing_title, false)
      |> assign(:metadata, %{})
-     |> assign(:page_title, Workflows.default_title(workflow_type))}
+     |> assign(:page_title, Workflows.default_title(workflow_type))
+     |> assign(:streaming_chunks, nil)}
   end
 
   defp mount_session(id, socket) do
@@ -64,6 +65,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     if workflow_session do
       if connected?(socket) do
         Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
+        Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.ai_stream_topic(id))
       end
 
       workflow_type = workflow_session.workflow_type
@@ -84,7 +86,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:total_phases, workflow_session.total_phases)
        |> assign(:editing_title, false)
        |> assign(:metadata, Workflows.get_metadata(workflow_session.id))
-       |> assign(:page_title, workflow_session.title)}
+       |> assign(:page_title, workflow_session.title)
+       |> assign(:streaming_chunks, nil)}
     else
       {:ok,
        socket
@@ -273,7 +276,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        socket
        |> assign(:workflow_session, ws)
        |> assign(:current_phase, ws.current_phase)
-       |> assign(:page_title, ws.title)}
+       |> assign(:page_title, ws.title)
+       |> assign(
+         :streaming_chunks,
+         if(ws.phase_status == :processing,
+           do: socket.assigns[:streaming_chunks],
+           else: nil
+         )
+       )}
     else
       {:noreply, socket}
     end
@@ -286,6 +296,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     else
       {:noreply, socket}
     end
+  end
+
+  def handle_info({:ai_stream_chunk, chunk}, socket) do
+    chunks = socket.assigns[:streaming_chunks] || []
+    {:noreply, assign(socket, :streaming_chunks, chunks ++ [chunk])}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -504,6 +519,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           metadata={@metadata}
           opts={@phase_opts}
           phase_number={@current_phase}
+          streaming_chunks={@streaming_chunks}
         />
         """
 

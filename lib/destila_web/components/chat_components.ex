@@ -267,6 +267,124 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
+  attr :chunks, :list, required: true
+
+  def chat_stream_debug(assigns) do
+    latest = assigns.chunks |> List.last() |> format_chunk()
+    assigns = assign(assigns, :latest, latest)
+
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="rounded-2xl px-4 py-3 bg-base-200 text-base-content max-w-[80%]">
+        <div class="font-mono text-xs text-base-content/70 truncate">
+          <span class="font-semibold">{@latest.label}</span> {@latest.detail}
+        </div>
+        <div class="flex items-center gap-1.5 mt-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-base-content/30 animate-bounce [animation-delay:0ms]" />
+          <span class="w-1.5 h-1.5 rounded-full bg-base-content/30 animate-bounce [animation-delay:150ms]" />
+          <span class="w-1.5 h-1.5 rounded-full bg-base-content/30 animate-bounce [animation-delay:300ms]" />
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp format_chunk(%ClaudeCode.Message.AssistantMessage{message: message}) do
+    texts =
+      message.content
+      |> Enum.filter(&match?(%ClaudeCode.Content.TextBlock{}, &1))
+      |> Enum.map(& &1.text)
+
+    tools =
+      message.content
+      |> Enum.filter(fn
+        %ClaudeCode.Content.ToolUseBlock{} -> true
+        %ClaudeCode.Content.MCPToolUseBlock{} -> true
+        _ -> false
+      end)
+      |> Enum.map(fn
+        %ClaudeCode.Content.ToolUseBlock{name: name} -> name
+        %ClaudeCode.Content.MCPToolUseBlock{name: name} -> name
+      end)
+
+    detail =
+      cond do
+        texts != [] -> Enum.join(texts, "")
+        tools != [] -> "tools: " <> Enum.join(tools, ", ")
+        true -> inspect(message.content, limit: 100)
+      end
+
+    %{label: "[assistant]", detail: truncate(detail, 100)}
+  end
+
+  defp format_chunk(%ClaudeCode.Message.ResultMessage{} = msg) do
+    %{
+      label: "[result]",
+      detail:
+        truncate(
+          "subtype=#{msg.subtype} cost=$#{Float.round(msg.total_cost_usd || 0.0, 4)} turns=#{msg.num_turns}",
+          100
+        )
+    }
+  end
+
+  defp format_chunk(%ClaudeCode.Message.UserMessage{message: message}) do
+    content =
+      case message.content do
+        text when is_binary(text) -> text
+        other -> inspect(other, limit: 100)
+      end
+
+    %{label: "[user]", detail: truncate(content, 100)}
+  end
+
+  defp format_chunk(%ClaudeCode.Message.ToolProgressMessage{} = msg) do
+    %{
+      label: "[tool_progress]",
+      detail: truncate("#{msg.tool_name} (#{msg.elapsed_time_seconds || 0}s)", 100)
+    }
+  end
+
+  defp format_chunk(%ClaudeCode.Message.PartialAssistantMessage{event: event}) do
+    detail =
+      case event do
+        %{type: :content_block_delta, delta: delta} ->
+          "delta: #{inspect(delta, limit: 100)}"
+
+        %{type: type} ->
+          "#{type}"
+
+        other ->
+          inspect(other, limit: 100)
+      end
+
+    %{label: "[stream_event]", detail: truncate(detail, 100)}
+  end
+
+  defp format_chunk(other) do
+    %{
+      label: "[#{struct_type_name(other)}]",
+      detail: truncate(inspect(other, limit: 100), 100)
+    }
+  end
+
+  defp truncate(text, max) do
+    if String.length(text) > max do
+      String.slice(text, 0, max) <> " …"
+    else
+      text
+    end
+  end
+
+  defp struct_type_name(%{__struct__: mod}) do
+    mod |> Module.split() |> List.last() |> Macro.underscore()
+  end
+
+  defp struct_type_name(_), do: "unknown"
+
   def chat_typing_indicator(assigns) do
     ~H"""
     <div class="flex gap-3 mb-4">

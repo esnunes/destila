@@ -524,6 +524,38 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     end
   end
 
+  # --- AI streaming ---
+
+  describe "AI streaming" do
+    @tag feature: @feature, scenario: "Streams AI response chunks to the chat UI"
+    test "streams AI response chunks to the chat UI", %{conn: conn} do
+      ws = create_session_in_phase(3, phase_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      # Initially shows typing indicator
+      assert has_element?(view, "[class*='animate-bounce']")
+
+      # Simulate a stream chunk broadcast
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = %ClaudeCode.Message.AssistantMessage{
+        type: :assistant,
+        session_id: "test",
+        message: %{
+          content: [%ClaudeCode.Content.TextBlock{type: "text", text: "Streaming text"}]
+        }
+      }
+
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      # Verify streaming debug view shows the chunk content and streaming indicator
+      html = render(view)
+      assert html =~ "Streaming text"
+      assert html =~ "[assistant]"
+      assert html =~ "streaming"
+    end
+  end
+
   # --- Helpers for structured AI inputs ---
 
   defp create_session_with_options(input_type) do
