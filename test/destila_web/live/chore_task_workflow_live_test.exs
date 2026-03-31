@@ -523,9 +523,11 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
       Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
 
-      # Verify streaming content replaces typing indicator
-      assert render(view) =~ "Streaming text"
-      refute has_element?(view, "[class*='animate-bounce']")
+      # Verify streaming debug view shows the chunk content and streaming indicator
+      html = render(view)
+      assert html =~ "Streaming text"
+      assert html =~ "[assistant]"
+      assert html =~ "streaming"
     end
   end
 

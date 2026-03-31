@@ -48,7 +48,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       |> assign(:ai_session, ai_session)
       |> assign(:messages, messages)
       |> assign(:current_step, current_step)
-      |> assign(:streaming_content, assigns[:streaming_content])
+      |> assign(:streaming_chunks, assigns[:streaming_chunks])
 
     {:ok, socket}
   end
@@ -242,8 +242,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
                 target={@myself}
               />
               <%= if phase == @phase_number && @workflow_session.phase_status == :processing do %>
-                <%= if @streaming_content && @streaming_content != "" do %>
-                  <.chat_streaming_message content={@streaming_content} />
+                <%= if @streaming_chunks && @streaming_chunks != [] do %>
+                  <.chat_stream_debug chunks={@streaming_chunks} />
                 <% else %>
                   <.chat_typing_indicator />
                 <% end %>

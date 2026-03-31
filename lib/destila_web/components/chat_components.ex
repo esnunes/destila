@@ -267,22 +267,132 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
-  attr :content, :string, required: true
+  attr :chunks, :list, required: true
 
-  def chat_streaming_message(assigns) do
+  def chat_stream_debug(assigns) do
+    assigns = assign(assigns, :entries, Enum.map(assigns.chunks, &format_chunk/1))
+
     ~H"""
     <div class="flex gap-3 mb-4">
       <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
         D
       </div>
-      <div class="rounded-2xl px-4 py-3 text-sm bg-base-200 text-base-content max-w-[80%]">
-        <div class="prose prose-sm max-w-none">
-          {raw(markdown_to_html(@content))}
+      <div class="rounded-2xl px-4 py-3 text-sm bg-base-200 text-base-content max-w-[80%] space-y-1">
+        <div
+          :for={entry <- @entries}
+          class={[
+            "font-mono text-xs whitespace-pre-wrap break-all rounded px-2 py-1",
+            entry.style
+          ]}
+        >
+          <span class="font-semibold">{entry.label}</span>
+          <span :if={entry.detail}>{entry.detail}</span>
+        </div>
+        <%!-- Still generating indicator --%>
+        <div class="flex items-center gap-1.5 pt-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
+          <span class="text-xs text-base-content/40 ml-1">streaming…</span>
         </div>
       </div>
     </div>
     """
   end
+
+  defp format_chunk(%ClaudeCode.Message.AssistantMessage{message: message}) do
+    texts =
+      message.content
+      |> Enum.filter(&match?(%ClaudeCode.Content.TextBlock{}, &1))
+      |> Enum.map(& &1.text)
+
+    tools =
+      message.content
+      |> Enum.filter(fn
+        %ClaudeCode.Content.ToolUseBlock{} -> true
+        %ClaudeCode.Content.MCPToolUseBlock{} -> true
+        _ -> false
+      end)
+      |> Enum.map(fn
+        %ClaudeCode.Content.ToolUseBlock{name: name} -> name
+        %ClaudeCode.Content.MCPToolUseBlock{name: name} -> name
+      end)
+
+    detail =
+      cond do
+        texts != [] && tools != [] ->
+          Enum.join(texts, "") <> " | tools: " <> Enum.join(tools, ", ")
+
+        texts != [] ->
+          Enum.join(texts, "")
+
+        tools != [] ->
+          "tools: " <> Enum.join(tools, ", ")
+
+        true ->
+          inspect(message.content, pretty: true, limit: 200)
+      end
+
+    %{label: "[assistant]", detail: detail, style: "bg-base-300/50"}
+  end
+
+  defp format_chunk(%ClaudeCode.Message.ResultMessage{} = msg) do
+    %{
+      label: "[result]",
+      detail:
+        "subtype=#{msg.subtype} is_error=#{msg.is_error} cost=$#{Float.round(msg.total_cost_usd || 0.0, 4)} turns=#{msg.num_turns}",
+      style: if(msg.is_error, do: "bg-error/10 text-error", else: "bg-success/10 text-success")
+    }
+  end
+
+  defp format_chunk(%ClaudeCode.Message.UserMessage{message: message}) do
+    content =
+      case message.content do
+        text when is_binary(text) -> String.slice(text, 0, 200)
+        list when is_list(list) -> inspect(list, pretty: true, limit: 200)
+        other -> inspect(other, limit: 200)
+      end
+
+    %{label: "[user]", detail: content, style: "bg-info/10"}
+  end
+
+  defp format_chunk(%ClaudeCode.Message.ToolProgressMessage{} = msg) do
+    %{
+      label: "[tool_progress]",
+      detail: "#{msg.tool_name} (#{msg.elapsed_time_seconds || 0}s)",
+      style: "bg-warning/10"
+    }
+  end
+
+  defp format_chunk(%ClaudeCode.Message.PartialAssistantMessage{event: event}) do
+    detail =
+      case event do
+        %{type: :content_block_delta, delta: delta} ->
+          "delta: #{inspect(delta, limit: 200)}"
+
+        %{type: type} ->
+          "#{type}"
+
+        other ->
+          inspect(other, limit: 200)
+      end
+
+    %{label: "[stream_event]", detail: detail, style: "bg-base-300/30 text-base-content/60"}
+  end
+
+  defp format_chunk(other) do
+    %{
+      label: "[#{struct_type_name(other)}]",
+      detail: inspect(other, pretty: true, limit: 300),
+      style: "bg-base-300/30 text-base-content/50"
+    }
+  end
+
+  defp struct_type_name(%{__struct__: mod}) do
+    mod |> Module.split() |> List.last() |> Macro.underscore()
+  end
+
+  defp struct_type_name(_), do: "unknown"
 
   def chat_typing_indicator(assigns) do
     ~H"""
