@@ -12,7 +12,7 @@ defmodule Destila.Workflows.Session do
     field(:total_phases, :integer)
 
     field(:phase_status, Ecto.Enum,
-      values: [:setup, :generating, :conversing, :advance_suggested]
+      values: [:setup, :processing, :conversing, :advance_suggested]
     )
 
     field(:title_generating, :boolean, default: false)
@@ -22,6 +22,11 @@ defmodule Destila.Workflows.Session do
 
     belongs_to(:project, Destila.Projects.Project)
     has_many(:ai_sessions, Destila.AI.Session, foreign_key: :workflow_session_id)
+
+    has_many(:phase_executions, Destila.Executions.PhaseExecution,
+      foreign_key: :workflow_session_id
+    )
+
     has_many(:metadata, Destila.Workflows.SessionMetadata, foreign_key: :workflow_session_id)
 
     timestamps(type: :utc_datetime)

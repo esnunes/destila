@@ -59,7 +59,6 @@ defmodule DestilaWeb.ChatComponents do
           <div class="flex gap-2 mt-2">
             <button
               phx-click="confirm_advance"
-              phx-target={@target}
               class="btn btn-primary btn-sm"
             >
               Continue to Phase {@next_phase}
@@ -70,7 +69,6 @@ defmodule DestilaWeb.ChatComponents do
             </button>
             <button
               phx-click="decline_advance"
-              phx-target={@target}
               class="btn btn-ghost btn-sm"
             >
               I have more to add

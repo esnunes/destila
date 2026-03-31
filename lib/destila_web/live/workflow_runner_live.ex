@@ -130,6 +130,36 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> put_flash(:info, "Session restored")}
   end
 
+  def handle_event("confirm_advance", _params, socket) do
+    ws = socket.assigns.workflow_session
+    next_phase = ws.current_phase + 1
+
+    if next_phase > ws.total_phases do
+      {:noreply, socket}
+    else
+      Destila.Executions.Engine.advance_to_next(ws)
+      ws = Workflows.get_workflow_session!(ws.id)
+
+      {:noreply,
+       socket
+       |> assign(:workflow_session, ws)
+       |> assign(:current_phase, ws.current_phase)
+       |> assign(:page_title, ws.title)}
+    end
+  end
+
+  def handle_event("decline_advance", _params, socket) do
+    ws = socket.assigns.workflow_session
+
+    case Destila.Executions.get_current_phase_execution(ws.id) do
+      %{status: "awaiting_confirmation"} = pe -> Destila.Executions.reject_completion(pe)
+      _ -> :ok
+    end
+
+    {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :conversing})
+    {:noreply, assign(socket, :workflow_session, ws)}
+  end
+
   def handle_event("mark_done", _params, socket) do
     ws = socket.assigns.workflow_session
     ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
@@ -201,11 +231,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       when phase == socket.assigns.current_phase do
     ws = socket.assigns.workflow_session
 
-    {:ok, ws} =
-      Workflows.update_workflow_session(ws, %{
-        current_phase: phase + 1,
-        phase_status: nil
-      })
+    Destila.Executions.Engine.advance_to_next(ws)
+    ws = Workflows.get_workflow_session!(ws.id)
 
     {:noreply,
      socket
@@ -218,27 +245,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   # Stale phase_complete — ignore
   def handle_info({:phase_complete, _stale_phase, _data}, socket) do
     {:noreply, socket}
-  end
-
-  # Phase advanced (AI conversation moved to next phase)
-  def handle_info({:phase_advanced, new_phase}, socket) do
-    ws = Workflows.get_workflow_session!(socket.assigns.workflow_session.id)
-
-    {:noreply,
-     socket
-     |> assign(:workflow_session, ws)
-     |> assign(:current_phase, new_phase)
-     |> assign(:page_title, ws.title)}
-  end
-
-  # Workflow marked as done
-  def handle_info(:workflow_done, socket) do
-    ws = Workflows.get_workflow_session!(socket.assigns.workflow_session.id)
-
-    {:noreply,
-     socket
-     |> assign(:workflow_session, ws)
-     |> assign(:page_title, ws.title)}
   end
 
   def handle_info({:phase_event, _event, _data}, socket) do
