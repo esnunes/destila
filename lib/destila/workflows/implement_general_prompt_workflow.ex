@@ -108,6 +108,9 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   def phase_start_action(ws, phase_number) do
     case Enum.at(phases(), phase_number - 1) do
+      {DestilaWeb.Phases.SetupPhase, _opts} ->
+        Destila.Workflows.Setup.start(ws)
+
       {_mod, opts} ->
         case Keyword.get(opts, :system_prompt) do
           nil ->
@@ -124,6 +127,10 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
       nil ->
         :awaiting_input
     end
+  end
+
+  def phase_update_action(ws, _phase_number, %{setup_step_completed: _} = params) do
+    Destila.Workflows.Setup.update(ws, params)
   end
 
   def phase_update_action(ws, phase_number, %{message: message}) do

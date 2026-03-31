@@ -238,6 +238,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       })
     end
 
+    Destila.Executions.Engine.start_session(ws)
+
     {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
   end
 
