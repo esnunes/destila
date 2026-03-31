@@ -36,17 +36,15 @@ defmodule DestilaWeb.DashboardLive do
   defp crafting_summary(prompts) do
     grouped = Enum.group_by(prompts, &classify_crafting_prompt/1)
 
-    Enum.map([:setup, :waiting_for_user, :ai_processing, :in_progress, :done], fn section ->
+    Enum.map([:waiting_for_user, :processing, :done], fn section ->
       {section, Map.get(grouped, section, [])}
     end)
   end
 
   defp classify_crafting_prompt(prompt), do: Destila.Workflows.classify(prompt)
 
-  defp section_label(:setup), do: "Setup"
   defp section_label(:waiting_for_user), do: "Waiting for You"
-  defp section_label(:ai_processing), do: "AI Processing"
-  defp section_label(:in_progress), do: "In Progress"
+  defp section_label(:processing), do: "Processing"
   defp section_label(:done), do: "Done"
 
   def render(assigns) do

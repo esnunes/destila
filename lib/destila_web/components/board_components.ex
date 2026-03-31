@@ -117,9 +117,6 @@ defmodule DestilaWeb.BoardComponents do
   defp status_dot_style(%{phase_status: :processing}),
     do: {"bg-info animate-pulse", "AI is responding"}
 
-  defp status_dot_style(%{phase_status: :setup}),
-    do: {"bg-base-content/20", "Setting up"}
-
   defp status_dot_style(card) do
     if Session.done?(card) do
       {"bg-success", "Done"}

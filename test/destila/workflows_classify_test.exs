@@ -22,9 +22,9 @@ defmodule Destila.WorkflowsClassifyTest do
       assert Workflows.classify(ws) == :done
     end
 
-    test "returns :setup for sessions in setup phase_status" do
+    test "returns :processing for sessions in setup phase_status" do
       ws = create_session(%{phase_status: :setup})
-      assert Workflows.classify(ws) == :setup
+      assert Workflows.classify(ws) == :processing
     end
 
     test "returns :waiting_for_user when phase execution is awaiting_input" do
@@ -39,10 +39,10 @@ defmodule Destila.WorkflowsClassifyTest do
       assert Workflows.classify(ws) == :waiting_for_user
     end
 
-    test "returns :ai_processing when phase execution is processing" do
+    test "returns :processing when phase execution is processing" do
       ws = create_session(%{phase_status: nil})
       Executions.create_phase_execution(ws, 3, %{status: "processing"})
-      assert Workflows.classify(ws) == :ai_processing
+      assert Workflows.classify(ws) == :processing
     end
 
     test "falls back to phase_status when no phase execution exists" do
@@ -52,12 +52,12 @@ defmodule Destila.WorkflowsClassifyTest do
 
     test "falls back to phase_status :processing when no phase execution exists" do
       ws = create_session(%{phase_status: :processing})
-      assert Workflows.classify(ws) == :ai_processing
+      assert Workflows.classify(ws) == :processing
     end
 
-    test "falls back to :in_progress when no phase execution and nil phase_status" do
+    test "falls back to :processing when no phase execution and nil phase_status" do
       ws = create_session(%{phase_status: nil})
-      assert Workflows.classify(ws) == :in_progress
+      assert Workflows.classify(ws) == :processing
     end
   end
 end

@@ -115,9 +115,6 @@ defmodule Destila.Workflows do
       Session.done?(workflow_session) ->
         :done
 
-      workflow_session.phase_status == :setup ->
-        :setup
-
       true ->
         # Check phase execution first, fall back to phase_status
         case Destila.Executions.get_current_phase_execution(workflow_session.id) do
@@ -125,14 +122,14 @@ defmodule Destila.Workflows do
             :waiting_for_user
 
           %{status: "processing"} ->
-            :ai_processing
+            :processing
 
           _ ->
             # Fallback to legacy phase_status
             case workflow_session.phase_status do
               status when status in [:awaiting_input, :advance_suggested] -> :waiting_for_user
-              :processing -> :ai_processing
-              _ -> :in_progress
+              :processing -> :processing
+              _ -> :processing
             end
         end
     end
