@@ -260,6 +260,9 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
             }
             class="ml-11 mb-4"
           >
+            <p :if={@current_step.question_title} class="text-sm font-medium text-base-content mb-3">
+              {@current_step.question_title}
+            </p>
             <.chat_input
               input_type={@current_step.input_type}
               options={@current_step.options}
@@ -336,13 +339,13 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
   defp compute_current_step(ws, messages) do
     cond do
       Destila.Workflows.Session.done?(ws) ->
-        %{input_type: nil, options: nil, questions: [], completed: true}
+        %{input_type: nil, options: nil, questions: [], question_title: nil, completed: true}
 
       ws.phase_status == :advance_suggested ->
-        %{input_type: nil, options: nil, questions: [], completed: false}
+        %{input_type: nil, options: nil, questions: [], question_title: nil, completed: false}
 
       ws.phase_status == :processing ->
-        %{input_type: :text, options: nil, questions: [], completed: false}
+        %{input_type: :text, options: nil, questions: [], question_title: nil, completed: false}
 
       true ->
         last_system = messages |> Enum.filter(&(&1.role == :system)) |> List.last()
@@ -350,14 +353,21 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
         if last_system do
           processed = AI.process_message(last_system, ws)
 
+          question_title =
+            case processed.questions do
+              [q] -> q.question
+              _ -> nil
+            end
+
           %{
             input_type: processed.input_type,
             options: processed.options,
             questions: processed.questions,
+            question_title: question_title,
             completed: false
           }
         else
-          %{input_type: :text, options: nil, questions: [], completed: false}
+          %{input_type: :text, options: nil, questions: [], question_title: nil, completed: false}
         end
     end
   end

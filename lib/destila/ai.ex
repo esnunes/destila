@@ -301,24 +301,35 @@ defmodule Destila.AI do
     end)
     |> Enum.flat_map(fn tool ->
       input = tool["input"] || %{}
-      questions = input["questions"] || [input]
+      questions = parse_questions(input["questions"], input)
 
       Enum.map(questions, fn q ->
         multi_select = q["multi_select"] == true
 
         %{
-          question: q["question"] || "",
+          question: q["question"] || q["text"] || "",
           title: q["title"],
           input_type: if(multi_select, do: :multi_select, else: :single_select),
           options:
             (q["options"] || [])
-            |> Enum.map(fn opt ->
-              %{label: opt["label"] || "", description: opt["description"]}
+            |> Enum.map(fn
+              opt when is_binary(opt) -> %{label: opt, description: nil}
+              opt -> %{label: opt["label"] || "", description: opt["description"]}
             end)
         }
       end)
     end)
   end
+
+  defp parse_questions(raw, input) when is_binary(raw) do
+    case Jason.decode(raw) do
+      {:ok, list} when is_list(list) -> list
+      _ -> [input]
+    end
+  end
+
+  defp parse_questions(list, _input) when is_list(list), do: list
+  defp parse_questions(_, input), do: [input]
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper
 
