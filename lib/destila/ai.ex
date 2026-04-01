@@ -245,7 +245,7 @@ defmodule Destila.AI do
     end
   end
 
-  defp workflow_type_label(:prompt_chore_task), do: "chore/task"
+  defp workflow_type_label(:brainstorm_idea), do: "brainstorm idea"
   defp workflow_type_label(:implement_general_prompt), do: "prompt implementation"
   defp workflow_type_label(other), do: to_string(other)
 

@@ -5,7 +5,7 @@ Destila is a web application built with the Phoenix framework (Elixir). It appea
 - **Projects management** — organizing work into projects
 - **Prompt crafting** — a "Crafting Board" for building and refining prompts
 - **AI integration** — AI query workers, sessions, and tool support (via `Destila.AI` module)
-- **Workflow automation** — chore task workflows with phases
+- **Workflow automation** — brainstorm idea workflows with phases
 - **Message/chat system** — messages context with PubSub for real-time updates
 
 ## Tech Stack
@@ -27,7 +27,7 @@ lib/destila/          — Business logic (contexts)
   projects/           — Project schema
   prompts/            — Prompt schema
   workers/            — Oban workers (AI query, setup, title generation)
-  workflows/          — Chore task phases
+  workflows/          — Brainstorm Idea phases
 lib/destila_web/      — Web layer
   components/         — Core, chat, board, layout components
   controllers/        — Session controller, error handlers

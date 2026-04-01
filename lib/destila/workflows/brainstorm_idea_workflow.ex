@@ -1,6 +1,6 @@
-defmodule Destila.Workflows.PromptChoreTaskWorkflow do
+defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   @moduledoc """
-  Defines the Chore/Task workflow — an AI-driven multi-phase conversation
+  Defines the Brainstorm Idea workflow — an AI-driven multi-phase conversation
   that clarifies a coding task and produces an implementation prompt.
 
   Phases:
@@ -32,9 +32,9 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
     ]
   end
 
-  def default_title, do: "New Chore/Task"
+  def default_title, do: "New Idea"
 
-  def label, do: "Prompt for a Chore / Task"
+  def label, do: "Brainstorm Idea"
   def description, do: "Straightforward coding tasks, bug fixes, or refactors"
   def icon, do: "hero-wrench-screwdriver"
   def icon_class, do: "text-warning"

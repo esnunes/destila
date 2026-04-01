@@ -10,7 +10,7 @@ defmodule Destila.Workflows do
   alias Destila.Workflows.{Session, SessionMetadata}
 
   @workflow_modules %{
-    prompt_chore_task: Destila.Workflows.PromptChoreTaskWorkflow,
+    brainstorm_idea: Destila.Workflows.BrainstormIdeaWorkflow,
     implement_general_prompt: Destila.Workflows.ImplementGeneralPromptWorkflow
   }
 

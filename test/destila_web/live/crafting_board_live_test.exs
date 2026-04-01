@@ -30,7 +30,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
   defp create_prompt(attrs) do
     defaults = %{
       title: "Test Prompt",
-      workflow_type: :prompt_chore_task,
+      workflow_type: :brainstorm_idea,
       current_phase: 1,
       total_phases: 6,
       position: System.unique_integer([:positive])
@@ -79,7 +79,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         create_prompt(%{
           title: "Active Prompt",
           phase_status: nil,
-          workflow_type: :prompt_chore_task,
+          workflow_type: :brainstorm_idea,
           project_id: project.id
         })
 
@@ -130,7 +130,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         title: "Fix login bug",
         project_id: project.id,
         current_phase: 3,
-        workflow_type: :prompt_chore_task
+        workflow_type: :brainstorm_idea
       })
 
       {:ok, _view, html} = live(conn, ~p"/crafting")
@@ -235,7 +235,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         create_prompt(%{
           title: "No Project",
           project_id: nil,
-          workflow_type: :prompt_chore_task
+          workflow_type: :brainstorm_idea
         })
 
       {:ok, view, _html} = live(conn, ~p"/crafting")
@@ -261,14 +261,14 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
     test "toggle shows workflow boards with phase columns", %{conn: conn, project_a: project} do
       create_prompt(%{
         title: "Chore Prompt",
-        workflow_type: :prompt_chore_task,
+        workflow_type: :brainstorm_idea,
         current_phase: 3,
         project_id: project.id
       })
 
       create_prompt(%{
         title: "Another Chore",
-        workflow_type: :prompt_chore_task,
+        workflow_type: :brainstorm_idea,
         current_phase: 4,
         project_id: project.id
       })
@@ -279,9 +279,9 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       view |> element("#view-toggle button[phx-value-mode=workflow]") |> render_click()
 
       # Should see workflow board
-      assert has_element?(view, "#workflow-board-prompt_chore_task")
+      assert has_element?(view, "#workflow-board-brainstorm_idea")
 
-      # Chore/Task board should have phase columns
+      # Brainstorm Idea board should have phase columns
       html = render(view)
       assert html =~ "Task Description"
       assert html =~ "Gherkin Review"
@@ -291,20 +291,20 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
     test "hides workflow boards with no prompts", %{conn: conn, project_a: project} do
       create_prompt(%{
         title: "Chore Only",
-        workflow_type: :prompt_chore_task,
+        workflow_type: :brainstorm_idea,
         project_id: project.id
       })
 
       {:ok, view, _html} = live(conn, "/crafting?view=workflow")
 
-      assert has_element?(view, "#workflow-board-prompt_chore_task")
+      assert has_element?(view, "#workflow-board-brainstorm_idea")
     end
 
     @tag feature: @feature, scenario: "Boards are read-only (no drag and drop)"
     test "no sortable hooks on workflow boards", %{conn: conn, project_a: project} do
       create_prompt(%{
         title: "Test Prompt",
-        workflow_type: :prompt_chore_task,
+        workflow_type: :brainstorm_idea,
         project_id: project.id
       })
 
@@ -337,14 +337,14 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       prompt_a =
         create_prompt(%{
           title: "Chore A",
-          workflow_type: :prompt_chore_task,
+          workflow_type: :brainstorm_idea,
           project_id: project_a.id
         })
 
       prompt_b =
         create_prompt(%{
           title: "Chore B",
-          workflow_type: :prompt_chore_task,
+          workflow_type: :brainstorm_idea,
           project_id: project_b.id
         })
 

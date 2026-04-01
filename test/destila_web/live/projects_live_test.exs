@@ -197,7 +197,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
         Destila.Workflows.create_workflow_session(%{
           title: "Test Prompt",
           project_id: project.id,
-          workflow_type: :prompt_chore_task,
+          workflow_type: :brainstorm_idea,
           total_phases: 6
         })
 

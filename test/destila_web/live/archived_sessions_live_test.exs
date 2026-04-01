@@ -24,7 +24,7 @@ defmodule DestilaWeb.ArchivedSessionsLiveTest do
   defp create_session(attrs) do
     defaults = %{
       title: "Test Session",
-      workflow_type: :prompt_chore_task,
+      workflow_type: :brainstorm_idea,
       current_phase: 1,
       total_phases: 6,
       position: System.unique_integer([:positive])

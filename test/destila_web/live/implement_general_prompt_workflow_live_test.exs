@@ -35,13 +35,13 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     project
   end
 
-  defp create_completed_chore_task_session do
+  defp create_completed_brainstorm_idea_session do
     project = create_project()
 
     {:ok, ws} =
       Destila.Workflows.create_workflow_session(%{
-        title: "Completed Chore Task",
-        workflow_type: :prompt_chore_task,
+        title: "Completed Brainstorm Idea",
+        workflow_type: :brainstorm_idea,
         project_id: project.id,
         current_phase: 6,
         total_phases: 6,
@@ -123,8 +123,8 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
     @tag feature: @feature,
          scenario: "Phase 1 - Wizard with existing session prompt selection"
-    test "shows completed chore/task sessions for selection", %{conn: conn} do
-      {ws, _project} = create_completed_chore_task_session()
+    test "shows completed brainstorm idea sessions for selection", %{conn: conn} do
+      {ws, _project} = create_completed_brainstorm_idea_session()
       {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
 
       assert has_element?(view, "#session-#{ws.id}")
@@ -133,7 +133,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Phase 1 - Wizard with existing session prompt selection"
     test "pre-selects project when existing session chosen", %{conn: conn} do
-      {ws, project} = create_completed_chore_task_session()
+      {ws, project} = create_completed_brainstorm_idea_session()
       {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
 
       # Select the existing session

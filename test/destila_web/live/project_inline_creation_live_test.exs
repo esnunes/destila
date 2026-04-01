@@ -10,7 +10,7 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
   @feature "project_inline_creation"
 
   # Ensure the atom exists before tests run
-  _ = :prompt_chore_task
+  _ = :brainstorm_idea
 
   setup %{conn: conn} do
     # Create an existing project so #create-new-project-btn is available
@@ -27,7 +27,7 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
   describe "inline project creation" do
     @tag feature: @feature, scenario: "Create a project with a git repository URL"
     test "creates project with git URL and selects it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/workflows/prompt_chore_task")
+      {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
       view |> element("#create-new-project-btn") |> render_click()
 
@@ -49,7 +49,7 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
 
     @tag feature: @feature, scenario: "Create a project with a local folder only"
     test "creates project with local folder and selects it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/workflows/prompt_chore_task")
+      {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
       view |> element("#create-new-project-btn") |> render_click()
 
@@ -67,7 +67,7 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
 
     @tag feature: @feature, scenario: "Create a project with both git URL and local folder"
     test "creates project with both git URL and local folder", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/workflows/prompt_chore_task")
+      {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
       view |> element("#create-new-project-btn") |> render_click()
 
@@ -86,7 +86,7 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
 
     @tag feature: @feature, scenario: "Cannot create a project without git URL or local folder"
     test "shows error when neither git URL nor local folder provided", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/workflows/prompt_chore_task")
+      {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
       view |> element("#create-new-project-btn") |> render_click()
 
@@ -101,7 +101,7 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
 
     @tag feature: @feature, scenario: "Cannot create a project without a name"
     test "shows error when name is empty", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/workflows/prompt_chore_task")
+      {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
       view |> element("#create-new-project-btn") |> render_click()
 

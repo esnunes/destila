@@ -45,7 +45,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
     {:ok, workflow_session} =
       Destila.Workflows.create_workflow_session(%{
         title: "Test Session",
-        workflow_type: :prompt_chore_task,
+        workflow_type: :brainstorm_idea,
         project_id: nil,
         done_at: DateTime.utc_now(),
         current_phase: 6,

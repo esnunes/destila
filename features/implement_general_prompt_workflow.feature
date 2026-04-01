@@ -31,7 +31,7 @@ Feature: Implement General Prompt Workflow
     And I should be redirected to the session detail page
 
   Scenario: Phase 1 - Wizard with existing session prompt selection
-    Given a completed "Prompt for a Chore / Task" session exists
+    Given a completed "Brainstorm Idea" session exists
     When I navigate to start a new "Implement a Prompt" workflow
     Then I should see the completed session in the prompt list
     When I select an existing session prompt
