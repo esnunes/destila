@@ -120,3 +120,17 @@ Feature: Brainstorm Idea Workflow
     When I answer each question in sequence
     And I click "Submit All Answers"
     Then all answers should be sent as a single formatted response
+
+  Scenario: Manually expanded previous phase stays open during updates
+    Given the session is in Phase 5 - Technical Concerns
+    And Phase 3 - Task Description is collapsed
+    When I expand Phase 3 by clicking its header
+    And new activity occurs in the current phase
+    Then Phase 3 should remain expanded
+
+  Scenario: Manually collapsed current phase stays closed during updates
+    Given the session is in Phase 5 - Technical Concerns
+    And Phase 5 is expanded by default
+    When I collapse Phase 5 by clicking its header
+    And new activity occurs in the current phase
+    Then Phase 5 should remain collapsed

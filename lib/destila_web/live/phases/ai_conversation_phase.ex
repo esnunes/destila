@@ -216,6 +216,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
           <%= for {phase, group} <- @phase_groups do %>
             <details
+              id={"phase-section-#{phase}"}
+              phx-hook=".PhaseToggle"
               class={["phase-section", phase == elem(hd(@phase_groups), 0) && "first-phase"]}
               open={phase >= @phase_number}
             >
@@ -322,6 +324,70 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
           target={@myself}
         />
       </div>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".PhaseToggle">
+        // Module-level map: element ID → boolean (user's desired open state).
+        // Shared across all hook instances since each <details> has a unique id.
+        const userOverrides = new Map();
+
+        export default {
+          mounted() {
+            // Snapshot what the server initially set for this element
+            this._serverOpen = this.el.hasAttribute("open");
+            this._restoring = false;
+
+            // The native "toggle" event fires when <details> open state changes,
+            // whether by user click or programmatic attribute change.
+            this.el.addEventListener("toggle", () => {
+              // Skip toggles caused by our own restoration in updated()
+              if (this._restoring) return;
+
+              const isOpen = this.el.hasAttribute("open");
+
+              if (isOpen !== this._serverOpen) {
+                // User toggled away from server default — record override
+                userOverrides.set(this.el.id, isOpen);
+              } else {
+                // User toggled back to match server — clear override
+                userOverrides.delete(this.el.id);
+              }
+            });
+          },
+
+          updated() {
+            // After LiveView patches the DOM, capture what the server wants.
+            // This MUST happen before any restoration so _serverOpen always
+            // reflects the server's intent, not our override.
+            this._serverOpen = this.el.hasAttribute("open");
+
+            if (!userOverrides.has(this.el.id)) return;
+
+            const desired = userOverrides.get(this.el.id);
+
+            // If the server's new default matches the user's preference
+            // (e.g. after phase advance), the override is redundant — clear it
+            if (desired === this._serverOpen) {
+              userOverrides.delete(this.el.id);
+              return;
+            }
+
+            // Restore the user's preference, suppressing the toggle event
+            this._restoring = true;
+            if (desired) {
+              this.el.setAttribute("open", "");
+            } else {
+              this.el.removeAttribute("open");
+            }
+            // The toggle event fires asynchronously after attribute change.
+            // Use requestAnimationFrame to clear the flag after it fires.
+            requestAnimationFrame(() => { this._restoring = false; });
+          },
+
+          destroyed() {
+            userOverrides.delete(this.el.id);
+          }
+        }
+      </script>
     </div>
     """
   end

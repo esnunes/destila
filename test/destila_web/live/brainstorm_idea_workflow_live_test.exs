@@ -556,6 +556,42 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     end
   end
 
+  # --- Phase toggle preservation ---
+
+  describe "phase toggle preservation" do
+    @tag feature: @feature, scenario: "Manually expanded previous phase stays open during updates"
+    test "phase sections have PhaseToggle hook wired with correct IDs", %{conn: conn} do
+      ws = create_session_in_phase(5)
+      {:ok, view, _html} = live(conn, "/sessions/#{ws.id}")
+
+      # Phase 3 (< 5) should be collapsed by default, with the hook attached
+      assert has_element?(view, "details#phase-section-3[phx-hook]")
+      refute has_element?(view, "details#phase-section-3[open]")
+
+      # Phase 5 (== current) should be open by default, with the hook attached
+      assert has_element?(view, "details#phase-section-5[phx-hook]")
+      assert has_element?(view, "details#phase-section-5[open]")
+    end
+
+    @tag feature: @feature,
+         scenario: "Manually collapsed current phase stays closed during updates"
+    test "server re-render preserves default open states without JS hook", %{conn: conn} do
+      ws = create_session_in_phase(5)
+      {:ok, view, _html} = live(conn, "/sessions/#{ws.id}")
+
+      # Verify initial defaults
+      assert has_element?(view, "details#phase-section-5[open]")
+      refute has_element?(view, "details#phase-section-3[open]")
+
+      # Simulate a PubSub-driven re-render (e.g., metadata update)
+      send(view.pid, {:metadata_updated, ws.id})
+
+      # Server should recompute the same open states
+      assert has_element?(view, "details#phase-section-5[open]")
+      refute has_element?(view, "details#phase-section-3[open]")
+    end
+  end
+
   # --- Helpers for structured AI inputs ---
 
   defp create_session_with_options(input_type) do
