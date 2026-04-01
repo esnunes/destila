@@ -159,17 +159,9 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
     opts = socket.assigns.opts
 
     if Keyword.get(opts, :non_interactive, false) && ws.phase_status != :processing do
-      # Stop existing session to avoid sending duplicate prompts
-      AI.ClaudeSession.stop_for_workflow_session(ws.id)
-
-      case Workflows.phase_start_action(ws) do
-        :processing ->
-          Workflows.update_workflow_session(ws, %{phase_status: :processing})
-          {:noreply, assign(socket, :workflow_session, %{ws | phase_status: :processing})}
-
-        :awaiting_input ->
-          {:noreply, socket}
-      end
+      Destila.Executions.Engine.phase_retry(ws)
+      ws = Workflows.get_workflow_session!(ws.id)
+      {:noreply, assign(socket, :workflow_session, ws)}
     else
       {:noreply, socket}
     end

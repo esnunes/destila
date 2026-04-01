@@ -72,6 +72,29 @@ defmodule Destila.Executions.Engine do
   end
 
   @doc """
+  Retries the current phase by re-running `phase_start_action`.
+
+  Follows the phase's session strategy:
+  - `:resume` — stops the running ClaudeSession (prompt may be re-sent by the worker)
+  - `:new` — stops the ClaudeSession and creates a fresh AI session
+
+  Updates both phase execution and workflow session status.
+  Returns `{:ok, ws}` on success, or `:noop` if the phase is already processing.
+  """
+  def phase_retry(workflow_session_id) when is_binary(workflow_session_id) do
+    ws = Workflows.get_workflow_session!(workflow_session_id)
+    phase_retry(ws)
+  end
+
+  def phase_retry(ws) do
+    if ws.phase_status == :processing do
+      :noop
+    else
+      handle_retry(ws)
+    end
+  end
+
+  @doc """
   Routes a phase update to the workflow and acts on the result.
 
   Called by `AiQueryWorker` after an AI response, or by `AiConversationPhase`
@@ -182,6 +205,51 @@ defmodule Destila.Executions.Engine do
           Executions.start_phase(pe, "awaiting_input")
           Workflows.update_workflow_session(reloaded, %{phase_status: :awaiting_input})
       end
+    end
+  end
+
+  defp handle_retry(ws) do
+    phase = ws.current_phase
+    {strategy, _opts} = Workflows.session_strategy(ws.workflow_type, phase)
+
+    case strategy do
+      :new ->
+        Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
+
+        metadata = Workflows.get_metadata(ws.id)
+        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
+
+        Destila.AI.create_ai_session(%{
+          workflow_session_id: ws.id,
+          worktree_path: worktree_path
+        })
+
+      :resume ->
+        Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
+    end
+
+    # Reload from DB to get fresh state after stopping the session
+    ws = Workflows.get_workflow_session!(ws.id)
+    status = Workflows.phase_start_action(ws)
+
+    case status do
+      :processing ->
+        case Executions.get_current_phase_execution(ws.id) do
+          nil -> :ok
+          pe -> Executions.update_phase_execution_status(pe, "processing")
+        end
+
+        Workflows.update_workflow_session(ws, %{phase_status: :processing})
+
+      :awaiting_input ->
+        require Logger
+
+        Logger.warning(
+          "phase_retry: phase_start_action returned :awaiting_input " <>
+            "for phase #{phase} on workflow_session #{ws.id}"
+        )
+
+        {:ok, ws}
     end
   end
 
