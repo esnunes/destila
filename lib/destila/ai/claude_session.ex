@@ -369,7 +369,7 @@ defmodule Destila.AI.ClaudeSession do
 
     %{
       result: acc.result,
-      text: acc.text |> Enum.reverse() |> Enum.join(),
+      text: acc.text |> Enum.reverse() |> Enum.join("\n\n"),
       is_error: acc.is_error,
       session_id: acc.session_id,
       mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses)
@@ -414,7 +414,7 @@ defmodule Destila.AI.ClaudeSession do
 
     %{
       result: acc.result,
-      text: acc.text |> Enum.reverse() |> Enum.join(),
+      text: acc.text |> Enum.reverse() |> Enum.join("\n\n"),
       is_error: acc.is_error,
       session_id: acc.session_id,
       mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses)

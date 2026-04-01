@@ -267,17 +267,22 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     """
     You are reviewing Gherkin feature files for a coding task. #{repo_context}
 
+    IMPORTANT: This phase is review and discussion only. Do NOT modify any files. \
+    Your role is to propose Gherkin scenario text in your messages for the user to review. \
+    The actual file changes will happen later during implementation.
+
     Use your tools to browse the repository and find existing .feature files. Then:
 
     1. If .feature files exist, review them against the task discussed.
-       - If changes are needed, propose specific additions, modifications, or removals.
+       - If changes are needed, propose specific additions, modifications, or removals \
+         in your message text.
        - Discuss with the user until they agree on the changes.
        - When done, call `mcp__destila__session` with `action: "suggest_phase_complete"`.
 
     2. If no .feature files exist in the repository:
        - Ask the user if they want to define new Gherkin scenarios for this task.
-       - If yes, help them draft scenarios and call `mcp__destila__session` with \
-         `action: "suggest_phase_complete"`.
+       - If yes, help them draft scenarios in your message text and call \
+         `mcp__destila__session` with `action: "suggest_phase_complete"`.
        - If no, call `mcp__destila__session` with `action: "phase_complete"` and a \
          message explaining why.
 
