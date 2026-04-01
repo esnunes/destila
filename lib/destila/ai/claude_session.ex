@@ -239,8 +239,13 @@ defmodule Destila.AI.ClaudeSession do
            ]),
          :ok <- plugin_cmd(ClaudeCode.Plugin.Marketplace, :add, ["pbakaus/impeccable"]),
          :ok <-
-           plugin_cmd(ClaudeCode.Plugin, :install, ["compound-engineering@every-marketplace"]),
-         :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["compound-engineering@every-marketplace"]),
+           plugin_cmd(ClaudeCode.Plugin, :install, [
+             "compound-engineering@compound-engineering-plugin"
+           ]),
+         :ok <-
+           plugin_cmd(ClaudeCode.Plugin, :enable, [
+             "compound-engineering@compound-engineering-plugin"
+           ]),
          :ok <- plugin_cmd(ClaudeCode.Plugin, :install, ["impeccable@impeccable"]),
          :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["impeccable@impeccable"]),
          {:ok, installed} <- ClaudeCode.Plugin.list() do
