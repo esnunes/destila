@@ -8,25 +8,57 @@ date: 2026-04-01
 
 ## Overview
 
-When an error occurs in a non-interactive AI conversation phase and the user clicks "Retry", the phase status remains `:awaiting_input` instead of transitioning back to `:processing`. The retry button stays visible but does nothing.
+When an error occurs in a non-interactive AI conversation phase and the user clicks "Retry", the workflow remains classified as "Waiting for You" on the dashboard/crafting board instead of moving to "Processing". The retry button in the phase view also stays visible or reappears immediately.
 
 ## Root Cause
 
-In `AiConversationPhase.handle_event("retry_phase", ...)` (line 157-176), the handler calls `Workflows.phase_start_action(ws)` and pattern-matches on the result. When `phase_start_action` returns `:awaiting_input`, the handler does nothing (`{:noreply, socket}`), leaving the UI stuck.
+There are two bugs working together in `AiConversationPhase.handle_event("retry_phase", ...)` (`lib/destila_web/live/phases/ai_conversation_phase.ex:157-176`):
 
-The reason `phase_start_action` can return `:awaiting_input` on retry: this function uses `ws` from socket assigns, which still carries the **stale** workflow session state (with `phase_status: :awaiting_input`). For `ImplementGeneralPromptWorkflow`, the phase_start_action calls `handle_session_strategy(ws, phase_number)` before `ensure_ai_session(ws)`. The `handle_session_strategy` call for `:resume` phases is a no-op, but `ensure_ai_session` looks up the existing AI session. If the previous AI session was cleaned up by the `ClaudeSession.stop_for_workflow_session(ws.id)` call on line 163 (the line just above), then `ensure_ai_session` creates a new one and proceeds — returning `:processing`. But if there's any mismatch (e.g. the session is still there but in an error state, or the phase doesn't have a `system_prompt`), it returns `:awaiting_input`.
+### Bug 1: Phase execution status not updated (primary)
 
-However, the **primary** bug path is simpler: `phase_start_action` does return `:processing` for phases with a `system_prompt`, which re-enqueues the AI worker. But if it ever returns `:awaiting_input` (defensive edge case or a phase config issue), the handler silently swallows the retry attempt.
+When an error occurs, the Engine's `handle_awaiting_input/1` updates **both** the `phase_execution.status` (to `"awaiting_input"`) and the `workflow_session.phase_status` (to `:awaiting_input`). However, when the user clicks retry and `phase_start_action` returns `:processing`, the retry handler only updates the `workflow_session.phase_status` — it never touches the phase execution record.
 
-The fix should ensure that the `:awaiting_input` branch in the retry handler doesn't silently do nothing.
+This matters because `Workflows.classify/1` checks the phase execution status **first** and only falls back to `workflow_session.phase_status` when the phase execution has no matching status:
+
+```elixir
+# lib/destila/workflows.ex:119-133
+case Destila.Executions.get_current_phase_execution(workflow_session.id) do
+  %{status: status} when status in ["awaiting_input", "awaiting_confirmation"] ->
+    :waiting_for_user   # <-- This wins because PE status is still "awaiting_input"
+
+  %{status: "processing"} ->
+    :processing
+
+  _ ->
+    # Fallback to legacy phase_status — only reached if PE status doesn't match above
+    case workflow_session.phase_status do
+      status when status in [:awaiting_input, :advance_suggested] -> :waiting_for_user
+      :processing -> :processing
+      _ -> :processing
+    end
+end
+```
+
+So even after retry successfully updates `workflow_session.phase_status` to `:processing`, the phase execution record still has `status: "awaiting_input"`, causing the dashboard to show "Waiting for You".
+
+### Bug 2: Silent no-op on `:awaiting_input` return (secondary)
+
+The retry handler's `:awaiting_input` branch does nothing:
+
+```elixir
+:awaiting_input ->
+  {:noreply, socket}  # No-op: status stays stuck
+```
+
+For properly configured non-interactive phases (which always have a `system_prompt`), `phase_start_action` should always return `:processing`. However, if an exception occurs during `prompt_fn.(ws)` or `enqueue_ai_worker` (e.g., metadata missing after a failed setup), the LiveView process would crash and remount with stale state, making it appear stuck.
 
 ## Proposed Solution
 
-### Change 1: Handle `:awaiting_input` in retry handler
+### Change 1: Update phase execution status in retry handler
 
 **File:** `lib/destila_web/live/phases/ai_conversation_phase.ex`
 
-Replace the retry handler's `:awaiting_input` no-op with logic that still transitions status to `:processing` and re-enqueues the AI worker via the Engine, since this is a non-interactive phase that should always auto-process.
+The retry handler must update both `workflow_session.phase_status` AND the `phase_execution.status` to `"processing"` when `phase_start_action` returns `:processing`. This mirrors what the Engine does in `transition_to_phase/2` and `phase_update/3`.
 
 ```elixir
 def handle_event("retry_phase", _params, socket) do
@@ -37,21 +69,29 @@ def handle_event("retry_phase", _params, socket) do
     # Stop existing session to avoid sending duplicate prompts
     AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
-    # Reload the workflow session from DB to get fresh state
+    # Reload from DB to get fresh state after stopping the session
     ws = Workflows.get_workflow_session!(ws.id)
 
     case Workflows.phase_start_action(ws) do
       :processing ->
-        Workflows.update_workflow_session(ws, %{phase_status: :processing})
-        {:noreply, assign(socket, :workflow_session, %{ws | phase_status: :processing})}
+        # Update both workflow session AND phase execution status
+        {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :processing})
+
+        case Destila.Executions.get_current_phase_execution(ws.id) do
+          nil -> :ok
+          pe -> Destila.Executions.update_phase_execution_status(pe, "processing")
+        end
+
+        {:noreply, assign(socket, :workflow_session, ws)}
 
       :awaiting_input ->
-        # Non-interactive phases should not stay in awaiting_input on retry.
-        # This can happen if the phase has no system_prompt or the session
-        # couldn't be initialized. Keep status as-is so user sees the retry
-        # button and can try again, but log for debugging.
         require Logger
-        Logger.warning("retry_phase: phase_start_action returned :awaiting_input for non-interactive phase #{ws.current_phase} on workflow_session #{ws.id}")
+
+        Logger.warning(
+          "retry_phase: phase_start_action returned :awaiting_input " <>
+            "for non-interactive phase #{ws.current_phase} on workflow_session #{ws.id}"
+        )
+
         {:noreply, socket}
     end
   else
@@ -60,44 +100,74 @@ def handle_event("retry_phase", _params, socket) do
 end
 ```
 
-**Rationale for reloading `ws`:** The `ws` in socket assigns is stale — it still has whatever data was present when the component last updated. The `ClaudeSession.stop_for_workflow_session` call on the line above may have side effects on the session state. Reloading from DB ensures `phase_start_action` operates on current data. This is the most likely fix for the bug: `phase_start_action` with fresh `ws` data should correctly find the `system_prompt` and return `:processing`.
+Key differences from current code:
 
-### Change 2 (if needed): Verify `handle_session_strategy` + `ensure_ai_session` after stop
+1. **Reload `ws` from DB** (`Workflows.get_workflow_session!/1`) after stopping the ClaudeSession, so `phase_start_action` operates on fresh data.
+2. **Use the `{:ok, ws}` return** from `update_workflow_session` instead of manually constructing `%{ws | phase_status: :processing}` — ensures the socket gets the DB-canonical struct.
+3. **Update phase execution status** to `"processing"` so `Workflows.classify/1` correctly returns `:processing`.
+4. **Log the `:awaiting_input` fallback** instead of silently swallowing it.
 
-If the reload alone doesn't fix it, the issue is that `ClaudeSession.stop_for_workflow_session` runs asynchronously and the AI session record may not be cleaned up by the time `phase_start_action` → `ensure_ai_session` runs. In that case, `ensure_ai_session` finds the old (now-stopped) session and doesn't create a new one, causing the prompt function to succeed but the worker to fail immediately.
+### Change 2: None needed for `ensure_ai_session`
 
-**File:** `lib/destila/workflows/implement_general_prompt_workflow.ex` (and `prompt_chore_task_workflow.ex`)
-
-Ensure `ensure_ai_session` handles the case where the existing session was stopped. This would be a deeper fix if Change 1 alone is insufficient.
+After deeper analysis, `ensure_ai_session` does not need changes. The `stop_for_workflow_session` call is synchronous (blocks until the GenServer stops or is killed). The DB `ai_session` record is unaffected — it's the GenServer process that gets stopped, not the DB record. When the Oban worker runs, `ClaudeSession.for_workflow_session/2` will start a fresh GenServer using the existing DB record's `claude_session_id` for resume.
 
 ## Files to Modify
 
-1. **`lib/destila_web/live/phases/ai_conversation_phase.ex`** — `handle_event("retry_phase", ...)`: Reload `ws` from DB before calling `phase_start_action`. Add logging for the `:awaiting_input` fallback.
-2. **`lib/destila/workflows/implement_general_prompt_workflow.ex`** — (possibly) `ensure_ai_session/1`: Handle stopped sessions.
-3. **`lib/destila/workflows/prompt_chore_task_workflow.ex`** — (possibly) Same as above if the pattern is shared.
+1. **`lib/destila_web/live/phases/ai_conversation_phase.ex`** — `handle_event("retry_phase", ...)`:
+   - Reload `ws` from DB before calling `phase_start_action`
+   - Update phase execution status to `"processing"` alongside `workflow_session.phase_status`
+   - Use `{:ok, ws}` return from `update_workflow_session`
+   - Log `:awaiting_input` fallback
+
+## How the Fix Aligns with Existing Patterns
+
+The Engine (`lib/destila/executions/engine.ex`) consistently updates both statuses together:
+
+- `transition_to_phase/2` (line 176-183): Sets both `Executions.start_phase(pe, "processing")` and `Workflows.update_workflow_session(reloaded, %{phase_status: :processing})`
+- `phase_update/3` (line 90-97): When receiving `:processing`, updates both PE status and WS phase_status
+- `handle_awaiting_input/1` (line 143-156): Updates both PE to `"awaiting_input"` and WS to `:awaiting_input`
+
+The retry handler is the only place that updates one without the other.
 
 ## Testing Strategy
 
 ### Manual Testing
 
-1. Start a workflow with non-interactive phases (e.g., ImplementGeneralPrompt workflow)
-2. Cause an AI error (e.g., disconnect network during AI processing, or use an invalid API key)
-3. Wait for the phase to show "Something went wrong" message and the Retry button
-4. Click Retry
-5. Verify the phase transitions to `:processing` (typing indicator appears, cancel button replaces retry button)
-6. Verify the AI query is re-enqueued and eventually completes
+1. Start an ImplementGeneralPrompt workflow and advance to a non-interactive phase (e.g., "Generate Plan")
+2. Cause an AI error (disconnect network during AI processing, or temporarily set an invalid API key)
+3. Wait for "Something went wrong" message and the Retry button to appear
+4. Open the dashboard/crafting board in another tab — verify session shows under "Waiting for You"
+5. Click Retry
+6. Verify:
+   - Typing indicator appears (phase_status is `:processing`)
+   - Cancel button replaces retry button
+   - Dashboard moves session from "Waiting for You" to "Processing"
+   - AI query completes successfully
 
 ### Automated Tests
 
-Add a test in the AI conversation phase test file:
+Add tests in the AI conversation phase test file:
 
-- **Test: retry on non-interactive phase transitions to processing** — Mount a non-interactive AiConversationPhase with `phase_status: :awaiting_input` (simulating post-error state), click "retry_phase", assert the status transitions to `:processing`.
-- **Test: retry on non-interactive phase re-enqueues AI worker** — Same setup, but also assert an `AiQueryWorker` job is enqueued after retry.
+1. **Test: retry transitions both workflow session and phase execution to processing**
+   - Create a workflow session with `phase_status: :awaiting_input`
+   - Create a phase execution with `status: "awaiting_input"`
+   - Mount a non-interactive AiConversationPhase
+   - Click `retry_phase`
+   - Assert `workflow_session.phase_status == :processing`
+   - Assert `phase_execution.status == "processing"`
+   - Assert an `AiQueryWorker` job is enqueued
+
+2. **Test: retry shows processing UI (typing indicator, cancel button)**
+   - Same setup, click `retry_phase`
+   - Assert retry button is gone, cancel button is visible
+
+3. **Test: workflow classified as :processing after retry**
+   - Same setup, click `retry_phase`
+   - Assert `Workflows.classify(ws) == :processing`
 
 ## Implementation Steps
 
-1. Add `ws` reload from DB in the retry handler (Change 1)
-2. Run `mix precommit` to verify no compilation errors or test failures
-3. Manual test with a real workflow to confirm the fix
-4. Add automated test for the retry flow
-5. Run `mix precommit` again
+1. Apply the retry handler fix (Change 1 above)
+2. Run `mix precommit` to verify compilation and existing tests pass
+3. Add automated tests for the retry flow
+4. Run `mix precommit` again
