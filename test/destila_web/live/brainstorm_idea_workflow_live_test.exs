@@ -565,11 +565,11 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       {:ok, view, _html} = live(conn, "/sessions/#{ws.id}")
 
       # Phase 3 (< 5) should be collapsed by default, with the hook attached
-      assert has_element?(view, "details#phase-section-3[phx-hook]")
+      assert has_element?(view, "details#phase-section-3[phx-hook*='PhaseToggle']")
       refute has_element?(view, "details#phase-section-3[open]")
 
       # Phase 5 (== current) should be open by default, with the hook attached
-      assert has_element?(view, "details#phase-section-5[phx-hook]")
+      assert has_element?(view, "details#phase-section-5[phx-hook*='PhaseToggle']")
       assert has_element?(view, "details#phase-section-5[open]")
     end
 
