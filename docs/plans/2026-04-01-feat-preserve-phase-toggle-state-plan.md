@@ -29,87 +29,11 @@ Add a colocated JS hook (`.PhaseToggle`) on each `<details>` element in `ai_conv
 
 ## Implementation Steps
 
-### Step 1: Add the `.PhaseToggle` colocated hook to `ai_conversation_phase.ex`
+### Step 1: Wire the hook to `<details>` elements in the template
 
-Add a `<script :type={Phoenix.LiveView.ColocatedHook} name=".PhaseToggle">` block inside the `render/1` function, after the closing `</div>` of the main container.
+In `ai_conversation_phase.ex`, modify the `<details>` element (line 218) to add `phx-hook` and a unique `id`.
 
-The hook must:
-
-```javascript
-// Module-level map: element ID → boolean (user's desired open state)
-const userOverrides = new Map();
-
-export default {
-  mounted() {
-    // Track the server-computed default for this element
-    this._serverOpen = this.el.hasAttribute("open");
-
-    // Listen for user-initiated toggles on the <details> element
-    this.el.addEventListener("toggle", (e) => {
-      // During an `updated()` restore cycle, we programmatically set `open`.
-      // The `_restoring` flag prevents that from being treated as a user toggle.
-      if (this._restoring) return;
-
-      const isOpen = this.el.hasAttribute("open");
-
-      // Only record an override if the user toggled away from the server default
-      if (isOpen !== this._serverOpen) {
-        userOverrides.set(this.el.id, isOpen);
-      } else {
-        // User toggled back to match server — clear the override
-        userOverrides.delete(this.el.id);
-      }
-    });
-  },
-
-  updated() {
-    // After LiveView patches the DOM, capture what the server wants
-    this._serverOpen = this.el.hasAttribute("open");
-
-    // If the user has an override for this phase, restore it
-    if (userOverrides.has(this.el.id)) {
-      const desired = userOverrides.get(this.el.id);
-
-      // If the server's new default now matches the user's preference,
-      // the override is redundant — clear it
-      if (desired === this._serverOpen) {
-        userOverrides.delete(this.el.id);
-        return;
-      }
-
-      // Restore the user's preference
-      this._restoring = true;
-      if (desired) {
-        this.el.setAttribute("open", "");
-      } else {
-        this.el.removeAttribute("open");
-      }
-
-      // Use requestAnimationFrame to clear the flag after the toggle event fires
-      requestAnimationFrame(() => {
-        this._restoring = false;
-      });
-    }
-  },
-
-  destroyed() {
-    userOverrides.delete(this.el.id);
-  }
-}
-```
-
-**Critical implementation notes:**
-
-- The `_restoring` flag prevents the programmatic `open` attribute change in `updated()` from being captured as a user toggle (the native `toggle` event fires for both user and programmatic changes)
-- `_serverOpen` is captured at the start of `updated()`, **before** any restoration, so it always reflects what the server intended
-- `requestAnimationFrame` is used to clear the `_restoring` flag because the `toggle` event fires synchronously when the attribute changes, but we want to ensure it's cleared after the event handler runs
-- The `userOverrides` map is module-scoped (shared across all instances) because each `<details>` has a unique `id`, so there's no collision risk; this avoids needing instance-level state that could be lost on hook re-creation
-
-### Step 2: Wire the hook to `<details>` elements in the template
-
-In `ai_conversation_phase.ex`, modify the `<details>` element (line 218) to add `phx-hook` and a unique `id`:
-
-**Before:**
+**Current code (lines 218-221):**
 ```heex
 <details
   class={["phase-section", phase == elem(hd(@phase_groups), 0) && "first-phase"]}
@@ -117,7 +41,7 @@ In `ai_conversation_phase.ex`, modify the `<details>` element (line 218) to add 
 >
 ```
 
-**After:**
+**Replace with:**
 ```heex
 <details
   id={"phase-section-#{phase}"}
@@ -127,22 +51,98 @@ In `ai_conversation_phase.ex`, modify the `<details>` element (line 218) to add 
 >
 ```
 
+Notes:
 - `id` is required for `phx-hook` (LiveView enforces this)
 - The id format `phase-section-{phase}` is stable across re-renders since phase numbers don't change
-- `phx-update="ignore"` is NOT used here — the hook needs LiveView to continue patching the DOM so it can detect server-side changes and selectively override them
+- `phx-update="ignore"` is **NOT** used here — the hook needs LiveView to continue patching the DOM so it can detect server-side changes and selectively override them
+- The `<details>` elements are inside a `for` comprehension (`<%= for {phase, group} <- @phase_groups do %>` on line 217), so each iteration gets its own unique id
+
+### Step 2: Add the `.PhaseToggle` colocated hook `<script>` tag
+
+Place the `<script :type={Phoenix.LiveView.ColocatedHook} name=".PhaseToggle">` block inside the `~H"""..."""` sigil, just before the closing `</div>` on line 325. This follows the same pattern as `.PromptCard` in `chat_components.ex:136-217` where the script tag is placed at the end of the template, inside the sigil but outside the HTML content that uses the hook.
+
+**Important:** The `<script>` tag must be placed **outside** the `for` comprehension (which ends at line 244 with `<% end %>`). Placing it inside the loop would create duplicate script tags per phase section, which is invalid for colocated hooks.
+
+**Insert before line 325 (`</div>`):**
+
+```heex
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".PhaseToggle">
+      // Module-level map: element ID → boolean (user's desired open state).
+      // Shared across all hook instances since each <details> has a unique id.
+      const userOverrides = new Map();
+
+      export default {
+        mounted() {
+          // Snapshot what the server initially set for this element
+          this._serverOpen = this.el.hasAttribute("open");
+          this._restoring = false;
+
+          // The native "toggle" event fires when <details> open state changes,
+          // whether by user click or programmatic attribute change.
+          this.el.addEventListener("toggle", () => {
+            // Skip toggles caused by our own restoration in updated()
+            if (this._restoring) return;
+
+            const isOpen = this.el.hasAttribute("open");
+
+            if (isOpen !== this._serverOpen) {
+              // User toggled away from server default — record override
+              userOverrides.set(this.el.id, isOpen);
+            } else {
+              // User toggled back to match server — clear override
+              userOverrides.delete(this.el.id);
+            }
+          });
+        },
+
+        updated() {
+          // After LiveView patches the DOM, capture what the server wants.
+          // This MUST happen before any restoration so _serverOpen always
+          // reflects the server's intent, not our override.
+          this._serverOpen = this.el.hasAttribute("open");
+
+          if (!userOverrides.has(this.el.id)) return;
+
+          const desired = userOverrides.get(this.el.id);
+
+          // If the server's new default matches the user's preference
+          // (e.g. after phase advance), the override is redundant — clear it
+          if (desired === this._serverOpen) {
+            userOverrides.delete(this.el.id);
+            return;
+          }
+
+          // Restore the user's preference, suppressing the toggle event
+          this._restoring = true;
+          if (desired) {
+            this.el.setAttribute("open", "");
+          } else {
+            this.el.removeAttribute("open");
+          }
+          // The toggle event fires asynchronously after attribute change.
+          // Use requestAnimationFrame to clear the flag after it fires.
+          requestAnimationFrame(() => { this._restoring = false; });
+        },
+
+        destroyed() {
+          userOverrides.delete(this.el.id);
+        }
+      }
+    </script>
+```
 
 ### Step 3: Verify `ScrollBottom` hook compatibility
 
-The `ScrollBottom` hook lives on `#chat-messages` (the scrollable container wrapping all phase sections). The `.PhaseToggle` hook lives on individual `<details>` elements inside that container. They operate on different elements and don't interfere:
+The `ScrollBottom` hook (defined in `assets/js/app.js:28-31`) lives on `#chat-messages` (the scrollable container wrapping all phase sections, line 201). The `.PhaseToggle` hook lives on individual `<details>` elements inside that container. They operate on different elements and don't interfere:
 
-- `ScrollBottom` sets `scrollTop = scrollHeight` on the container
-- `.PhaseToggle` sets/removes the `open` attribute on `<details>` children
+- `ScrollBottom.updated()` sets `this.el.scrollTop = this.el.scrollHeight` on the `#chat-messages` div
+- `.PhaseToggle.updated()` sets/removes the `open` attribute on `<details>` children
 
-No changes needed to `ScrollBottom`. However, note that when `.PhaseToggle` restores a collapsed state, the content height changes, which could affect `ScrollBottom`'s auto-scroll. This is acceptable — if the user manually collapsed a phase, they're reviewing history, not watching the latest messages.
+No changes needed to `ScrollBottom`. When `.PhaseToggle` restores a collapsed state, the content height changes. The `ScrollBottom` hook will still auto-scroll on its next `updated()` call. This is acceptable — if the user manually collapsed a phase, they're reviewing history, not watching the latest messages.
 
 ### Step 4: Add Gherkin scenarios to `features/brainstorm_idea_workflow.feature`
 
-Append after the last existing scenario (line 123):
+Append after the last existing scenario ("Answer AI with a multi-question form", ending at line 123):
 
 ```gherkin
   Scenario: Manually expanded previous phase stays open during updates
@@ -164,79 +164,117 @@ Append after the last existing scenario (line 123):
 
 Add tests in `test/destila_web/live/brainstorm_idea_workflow_live_test.exs` tagged to the new scenarios.
 
-These tests verify the server-side behavior: that re-renders don't forcefully change phase section state. Since LiveViewTest doesn't execute JavaScript hooks, the tests should verify:
+Since LiveViewTest doesn't execute JavaScript hooks, the tests verify:
+1. The `<details>` elements have the correct `phx-hook=".PhaseToggle"` attribute wired
+2. The `<details>` elements have stable `id` attributes matching the expected pattern (`phase-section-{N}`)
+3. The server-side `open` attribute default logic continues to work correctly (phases >= current are open, earlier ones are closed)
+4. Re-renders preserve the server-computed defaults (the JS hook handles user overrides)
 
-1. The `<details>` elements have the correct `phx-hook=".PhaseToggle"` attribute
-2. The `<details>` elements have stable `id` attributes matching the expected pattern
-3. The server-side `open` attribute logic continues to work correctly (phases >= current are open, earlier ones are closed)
+The actual toggle-preservation behavior is JavaScript-only and requires manual browser testing to fully verify.
 
-The actual toggle-preservation behavior is JavaScript-only and would need browser-level testing (e.g., Wallaby) to fully verify. The LiveView tests ensure the hook is wired correctly and the server defaults are sound.
+**Test helper note:** The existing `create_session_in_phase/2` helper (line 39) creates messages in phases 3 and `phase` (the target phase). When creating a session in phase 5, it will have messages in phases 3 and 5, so `@phase_groups` will include entries for both phases. The helper sets `project_id: nil` by default. Since the test needs to navigate to `/sessions/:id` and the route requires a persisted session, but NOT a real project, passing `project_id: nil` from the existing helper is fine.
 
 ```elixir
 @tag feature: @feature, scenario: "Manually expanded previous phase stays open during updates"
-test "phase sections have PhaseToggle hook for toggle state preservation", %{conn: conn} do
-  project = create_project()
-  ws = create_session_in_phase(5, project_id: project.id)
+test "phase sections have PhaseToggle hook wired with correct IDs", %{conn: conn} do
+  ws = create_session_in_phase(5)
   {:ok, view, _html} = live(conn, "/sessions/#{ws.id}")
 
-  # Phase 3 (< 5) should have open=false by default, with the hook attached
-  refute has_element?(view, "details#phase-section-3[open]")
+  # Phase 3 (< 5) should be collapsed by default, with the hook attached
   assert has_element?(view, "details#phase-section-3[phx-hook='.PhaseToggle']")
+  refute has_element?(view, "details#phase-section-3[open]")
 
-  # Phase 5 (== current) should have open=true by default, with the hook attached
-  assert has_element?(view, "details#phase-section-5[open]")
+  # Phase 5 (== current) should be open by default, with the hook attached
   assert has_element?(view, "details#phase-section-5[phx-hook='.PhaseToggle']")
+  assert has_element?(view, "details#phase-section-5[open]")
 end
 
 @tag feature: @feature, scenario: "Manually collapsed current phase stays closed during updates"
-test "phase sections retain server-computed open state after re-render", %{conn: conn} do
-  project = create_project()
-  ws = create_session_in_phase(5, project_id: project.id)
+test "server re-render preserves default open states without JS hook", %{conn: conn} do
+  ws = create_session_in_phase(5)
   {:ok, view, _html} = live(conn, "/sessions/#{ws.id}")
 
-  # Verify initial state
+  # Verify initial defaults
   assert has_element?(view, "details#phase-section-5[open]")
+  refute has_element?(view, "details#phase-section-3[open]")
 
-  # Trigger a re-render (simulate PubSub update)
-  send(view.pid, {:workflow_session_updated, Destila.Workflows.get_workflow_session!(ws.id)})
+  # Simulate a PubSub-driven re-render (e.g., metadata update)
+  send(view.pid, {:metadata_updated, ws.id})
 
-  # Server should still compute the same open states
+  # Server should recompute the same open states
   assert has_element?(view, "details#phase-section-5[open]")
   refute has_element?(view, "details#phase-section-3[open]")
 end
 ```
 
+**Why `{:metadata_updated, ws.id}` instead of `{:workflow_session_updated, ws}`:** The `workflow_session_updated` handler in `WorkflowRunnerLive` (line 272) reloads the session and re-assigns shared state, which triggers the phase component's `update/2`. The `metadata_updated` handler (line 295) does the same via `assign(:metadata, ...)`. Both cause the phase component to re-render. Using `metadata_updated` is simpler because it only needs the session ID, avoiding the need to construct a full `workflow_session` struct.
+
 ### Step 6: Run `mix precommit`
 
 Verify compilation, formatting, and all tests pass.
+
+## How the `open` attribute logic works
+
+The template uses `open={phase >= @phase_number}` where:
+- `phase` is the phase number of each `<details>` section (from `@phase_groups`)
+- `@phase_number` is the current active phase
+
+This means **only the current phase is open** (where `phase == @phase_number`). Earlier phases (`phase < @phase_number`) are collapsed. There are no future phases rendered because `phase_groups/2` only includes phases that have messages or the current phase.
+
+**Example with `@phase_number = 5` and messages in phases 3, 4, 5:**
+- Phase 3: `3 >= 5` → `false` → collapsed
+- Phase 4: `4 >= 5` → `false` → collapsed
+- Phase 5: `5 >= 5` → `true` → **open**
 
 ## Edge Cases
 
 ### Phase advance (e.g., phase 5 → 6)
 
-When the current phase advances, the server's default changes: phase 5 was `open` (5 >= 5), and remains `open` (5 >= 6 is false... actually 5 < 6, so phase 5 would now be closed). Wait — re-reading the logic: `open={phase >= @phase_number}`. With `@phase_number = 5`, phases 5 and 6 are open. With `@phase_number = 6`, only phase 6 is open, and phase 5 closes.
+On phase advance from 5 → 6, the AiConversationPhase component is re-mounted (the parent `WorkflowRunnerLive` renders a new `live_component` with `id={"phase-#{current_phase}"}`, so the component ID changes from `phase-5` to `phase-6`). This means:
 
-So on phase advance from 5 → 6:
-- Phase 5 changes from open → closed (server default)
-- If user had manually collapsed phase 5 (override = closed), and now server also wants it closed → override is redundant → cleared in `updated()` ✓
-- If user had manually expanded phase 3 (override = open), and server still wants it closed (3 < 6) → override persists → phase 3 stays open ✓
+- All existing hook instances are destroyed (calling `destroyed()`, which cleans up `userOverrides`)
+- New hook instances are mounted for the new phase's `<details>` elements
+- All overrides from the previous phase are naturally cleared
+
+This is the desired behavior — when the phase advances, a fresh view is appropriate.
+
+**However**, if the component is NOT re-mounted (e.g., if the parent just updates assigns without changing the component ID), then:
+- Phase 5: server changes from `open` (5 >= 5) to `closed` (5 >= 6 = false)
+- If user had override `closed` for phase 5, it now matches server → override cleared ✓
+- If user had override `open` for phase 3, server still wants `closed` (3 >= 6 = false) → override persists ✓
 
 ### Frequent `updated()` calls during streaming
 
-When messages stream in, the phase component re-renders frequently. Each `updated()` call:
-1. Reads the `open` attribute (fast DOM read)
-2. Checks the `Map` (O(1) lookup)
-3. Optionally sets/removes `open` (single DOM write)
+When messages stream in (`{:ai_stream_chunk, chunk}` handler in `WorkflowRunnerLive`, line 303), the parent re-assigns `@streaming_chunks`, which triggers the phase component's `update/2`, which re-renders the template. This happens frequently during AI responses.
 
-This is minimal work per cycle. The `_restoring` flag prevents toggle event cascades. No flicker because the restoration happens synchronously before the browser paints.
+Each `updated()` call in the hook:
+1. Reads the `open` attribute — fast DOM property check
+2. Checks the `Map` — O(1) lookup
+3. Optionally sets/removes `open` — single DOM write
+
+This is minimal work per cycle. The `_restoring` flag prevents toggle event cascades. No visual flicker because the restoration happens synchronously before the browser paints the next frame.
+
+### The `toggle` event timing
+
+The HTML spec says the `toggle` event fires asynchronously (it is dispatched as a task, not synchronously during attribute mutation). This means:
+
+1. In `updated()`, we set `this._restoring = true`
+2. We modify the `open` attribute
+3. The `toggle` event is queued (not fired yet)
+4. We schedule `requestAnimationFrame(() => { this._restoring = false; })`
+5. The microtask/macrotask queue runs: `toggle` fires → handler checks `_restoring` → it's still `true` → skipped ✓
+6. Next animation frame: `_restoring = false`
+
+This ordering is safe because `requestAnimationFrame` callbacks run after event handlers for the same frame.
 
 ### Multiple `<details>` elements
 
-Each phase section gets its own hook instance with its own `_serverOpen` and `_restoring` state. The shared `userOverrides` map uses unique IDs (`phase-section-3`, `phase-section-5`, etc.), so there's no cross-contamination.
+Each phase section gets its own hook instance with its own `_serverOpen` and `_restoring` instance state. The shared `userOverrides` map uses unique IDs (`phase-section-3`, `phase-section-5`, etc.), so there's no cross-contamination.
 
 ## Verification
 
 1. `mix precommit` passes (compilation, formatting, tests)
 2. Manual test: navigate to a session in phase 5, expand phase 3, send a message → phase 3 stays expanded after re-render
 3. Manual test: collapse phase 5, wait for AI response → phase 5 stays collapsed
-4. Manual test: advance from phase 5 to 6 → previously set overrides for phase 5 are cleaned up if they match the new server default
+4. Manual test: advance from phase 5 to 6 → view resets cleanly with fresh toggle states
+5. Manual test: rapidly send messages while a phase is collapsed → no flicker or jank
