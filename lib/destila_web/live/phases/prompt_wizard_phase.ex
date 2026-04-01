@@ -197,7 +197,7 @@ defmodule DestilaWeb.Phases.PromptWizardPhase do
                 <.icon name="hero-document-text" class="size-10 text-base-content/20 mx-auto mb-3" />
                 <p class="text-sm text-base-content/30 mb-2">No completed prompts yet</p>
                 <p class="text-xs text-base-content/20">
-                  Complete a Chore/Task workflow first, or write a prompt manually
+                  Complete a Brainstorm Idea workflow first, or write a prompt manually
                 </p>
               </div>
             <% else %>

@@ -1,5 +1,5 @@
-Feature: Prompt for a Chore / Task Workflow
-  The "Prompt for a Chore / Task" workflow uses AI-driven conversational phases
+Feature: Brainstorm Idea Workflow
+  The "Brainstorm Idea" workflow uses AI-driven conversational phases
   to refine a coding task into an implementation prompt. It progresses through
   six phases:
   1. Project & Idea - Wizard collecting project selection and initial task description
@@ -13,7 +13,7 @@ Feature: Prompt for a Chore / Task Workflow
     Given I am logged in
 
   Scenario: Phase 1 - Wizard collects project and idea
-    When I navigate to start a new "Prompt for a Chore / Task" workflow
+    When I navigate to start a new "Brainstorm Idea" workflow
     Then I should see a form to select a project and describe my idea
     When I select a project and enter my initial idea
     And I click "Start"
@@ -21,13 +21,13 @@ Feature: Prompt for a Chore / Task Workflow
     And I should be redirected to the session detail page
 
   Scenario: Phase 1 - Wizard requires a project
-    When I navigate to start a new "Prompt for a Chore / Task" workflow
+    When I navigate to start a new "Brainstorm Idea" workflow
     And I enter an idea but do not select a project
     And I click "Start"
     Then I should see an error indicating a project is required
 
   Scenario: Phase 1 - Wizard requires an idea
-    When I navigate to start a new "Prompt for a Chore / Task" workflow
+    When I navigate to start a new "Brainstorm Idea" workflow
     And I select a project but leave the idea empty
     And I click "Start"
     Then I should see an error indicating an idea is required

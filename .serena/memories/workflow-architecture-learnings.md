@@ -1,7 +1,7 @@
 # Institutional Knowledge: Workflow Architecture & Phase Transitions
 
 **Date:** 2026-03-28  
-**Sources:** Plan docs from workflow refactoring (2026-03-25, 2026-03-27), brainstorms, and chore task workflow implementation (2026-03-20)
+**Sources:** Plan docs from workflow refactoring (2026-03-25, 2026-03-27), brainstorms, and brainstorm idea workflow implementation (2026-03-20)
 
 ## Critical Architecture Pattern: Self-Contained LiveComponent Phases
 
@@ -58,7 +58,7 @@ The refactored schema separates concerns across multiple tables:
 - `phase_status :enum` (`:setup`, `:generating`, `:conversing`, `:advance_suggested`)
 - `setup_steps :map` (tracks setup task progress as JSON, e.g., `%{"clone" => "completed", "worktree" => "in_progress"}`)
 - `title :string` (editable after session creation)
-- `workflow_type :enum` (`:prompt_chore_task`, others added later)
+- `workflow_type :enum` (`:brainstorm_idea`, others added later)
 - `column :enum` (`:distill`, `:done` — no `:request` anymore)
 - `archived_at :utc_datetime` (for soft deletes)
 - `project_id :binary_id` (FK to projects)
@@ -72,7 +72,7 @@ The refactored schema separates concerns across multiple tables:
 - `worktree_path :string` (where repo is cloned)
 - `timestamps`
 
-**Why?** The AI session is phase-specific (created in Phase 3 of chore_task). Multiple AI sessions can exist for a single workflow session if a workflow has multiple AI phases. This allows independent session management and resume capability.
+**Why?** The AI session is phase-specific (created in Phase 3 of brainstorm_idea). Multiple AI sessions can exist for a single workflow session if a workflow has multiple AI phases. This allows independent session management and resume capability.
 
 ### messages table
 - `ai_session_id :binary_id` (FK, was `workflow_session_id`)
@@ -92,7 +92,7 @@ The refactored schema separates concerns across multiple tables:
 - **State:** In-memory (LiveView assigns)
 - **Signal completion:** Synchronously send `{:phase_complete, 1, %{project_id: "...", idea: "..."}}`
 - **Parent action on completion:** Create workflow_session DB record, `push_navigate` to post-session URL
-- **Example:** `prompt_chore_task` Phase 1 collects project + idea
+- **Example:** `brainstorm_idea` Phase 1 collects project + idea
 
 ### SetupPhase
 - **Purpose:** Execute setup tasks (clone, worktree, title generation) via background workers
@@ -100,7 +100,7 @@ The refactored schema separates concerns across multiple tables:
 - **Signal completion:** Workers call `SetupCoordinator.maybe_advance_setup/1` which atomically advances `current_phase` when all steps done
 - **Component behavior:** Renders task list, subscribes to `:workflow_session_updated`, detects phase advance, signals parent
 - **Parent action on completion:** Mount next phase component
-- **Example:** `prompt_chore_task` Phase 2 runs clone, worktree, title_gen workers
+- **Example:** `brainstorm_idea` Phase 2 runs clone, worktree, title_gen workers
 
 ### AiConversationPhase
 - **Purpose:** Have a multi-turn conversation with AI for context gathering or generation
@@ -113,14 +113,14 @@ The refactored schema separates concerns across multiple tables:
 - **First AI phase (Phase 3):** Creates AI session via `AI.Session.for_workflow_session/2`
 - **Subsequent phases:** Resumes existing AI session, sends system prompt as new query
 - **Signal completion:** User clicks "Continue to Phase N" (after AI suggests) or "Mark as Done" (if final)
-- **Example:** `prompt_chore_task` Phases 3-6 are all AiConversationPhase instances with different system prompts
+- **Example:** `brainstorm_idea` Phases 3-6 are all AiConversationPhase instances with different system prompts
 
 ## Critical Workflow Definition Pattern
 
 Workflows are defined as a simple list of `{PhaseModule, opts}` tuples in a function:
 
 ```elixir
-defmodule Destila.Workflows.PromptChoreTaskWorkflow do
+defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   def phases do
     [
       {DestilaWeb.Phases.WizardPhase, name: "Project & Idea", fields: [:project, :idea]},
@@ -138,7 +138,7 @@ defmodule Destila.Workflows.PromptChoreTaskWorkflow do
   
   def total_phases, do: length(phases())
   def phase_name(phase_num), do: Enum.at(phases(), phase_num - 1) |> elem(1) |> Map.get(:name)
-  def default_title, do: "New Chore/Task"
+  def default_title, do: "New Idea"
   
   # System prompts
   defp task_prompt(workflow_session), do: "..."
@@ -220,7 +220,7 @@ send(self(), {:phase_complete, phase_num, %{}})
 ### 1. Session Creation Timing Matters
 **Gotcha:** If you create the session in the wrong phase, field references break.
 
-**Pattern:** For `prompt_chore_task`, the session is created AFTER WizardPhase completes, not before. This allows Phase 1 to be fully in-memory and avoids DB writes until the user confirms their idea. If a new workflow needs the session created at a different point, it changes where the phase data flows.
+**Pattern:** For `brainstorm_idea`, the session is created AFTER WizardPhase completes, not before. This allows Phase 1 to be fully in-memory and avoids DB writes until the user confirms their idea. If a new workflow needs the session created at a different point, it changes where the phase data flows.
 
 **Mitigation:** Document when the session is created in your workflow definition. Make it explicit in the phase list comments.
 
@@ -280,7 +280,7 @@ Old → New:
 - `test/destila_web/live/phases/wizard_phase_test.exs` — phase 1 input
 - `test/destila_web/live/phases/setup_phase_test.exs` — phase 2 workers + coordination
 - `test/destila_web/live/phases/ai_conversation_phase_test.exs` — phase 3+ AI conversation
-- Feature files: `features/chore_task_workflow.feature`, `features/setup_phase.feature`, etc.
+- Feature files: `features/brainstorm_idea_workflow.feature`, `features/setup_phase.feature`, etc.
 
 ### Key Testing Patterns
 1. **Phase completion signals** — assert `send/2` calls are made correctly

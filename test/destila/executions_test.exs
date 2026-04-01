@@ -7,7 +7,7 @@ defmodule Destila.ExecutionsTest do
     {:ok, ws} =
       Workflows.create_workflow_session(%{
         title: "Test Session",
-        workflow_type: :prompt_chore_task,
+        workflow_type: :brainstorm_idea,
         current_phase: 2,
         total_phases: 6
       })

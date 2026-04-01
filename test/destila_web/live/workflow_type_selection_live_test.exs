@@ -10,7 +10,7 @@ defmodule DestilaWeb.WorkflowTypeSelectionLiveTest do
   @feature "workflow_type_selection"
 
   # Ensure the atom exists
-  _ = :prompt_chore_task
+  _ = :brainstorm_idea
 
   setup %{conn: conn} do
     conn = post(conn, "/login", %{"email" => "test@example.com"})
@@ -23,19 +23,19 @@ defmodule DestilaWeb.WorkflowTypeSelectionLiveTest do
       {:ok, _view, html} = live(conn, ~p"/workflows")
 
       assert html =~ "What are you creating?"
-      assert html =~ "Prompt for a Chore / Task"
+      assert html =~ "Brainstorm Idea"
       assert html =~ "Straightforward coding tasks"
-      assert has_element?(live(conn, ~p"/workflows") |> elem(1), "#type-prompt_chore_task")
+      assert has_element?(live(conn, ~p"/workflows") |> elem(1), "#type-brainstorm_idea")
     end
 
     @tag feature: @feature, scenario: "Select a workflow type to start"
     test "clicking a type navigates to its wizard", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workflows")
 
-      view |> element("#type-prompt_chore_task") |> render_click()
+      view |> element("#type-brainstorm_idea") |> render_click()
 
       {path, _flash} = assert_redirect(view)
-      assert path == "/workflows/prompt_chore_task"
+      assert path == "/workflows/brainstorm_idea"
     end
   end
 end

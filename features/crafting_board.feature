@@ -63,9 +63,9 @@ Feature: Crafting Board
     Then I should not see any drag-and-drop handles on the boards
 
   Scenario: Empty workflow boards are hidden
-    Given there are only "Prompt for a Chore / Task" sessions on the crafting board
+    Given there are only "Brainstorm Idea" sessions on the crafting board
     When I toggle "Group by Workflow"
-    Then I should see only the "Chore/Task" workflow board
+    Then I should see only the "Brainstorm Idea" workflow board
     And I should not see "New Project" or "Generic Prompt" boards
 
   Scenario: Filter by project with group by workflow active

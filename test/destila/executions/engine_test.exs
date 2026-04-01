@@ -18,7 +18,7 @@ defmodule Destila.Executions.EngineTest do
   defp create_session(attrs) do
     default = %{
       title: "Test Session",
-      workflow_type: :prompt_chore_task,
+      workflow_type: :brainstorm_idea,
       current_phase: 3,
       total_phases: 6,
       phase_status: :awaiting_input

@@ -1,13 +1,13 @@
-defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
+defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
   @moduledoc """
-  LiveView tests for the Chore/Task AI-Driven Workflow.
-  Feature: features/chore_task_workflow.feature
+  LiveView tests for the Brainstorm Idea AI-Driven Workflow.
+  Feature: features/brainstorm_idea_workflow.feature
   """
   use DestilaWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
-  @feature "chore_task_workflow"
+  @feature "brainstorm_idea_workflow"
 
   setup %{conn: conn} do
     ClaudeCode.Test.set_mode_to_shared()
@@ -35,7 +35,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     project
   end
 
-  # Creates a chore_task session in the given phase with appropriate state.
+  # Creates a brainstorm_idea session in the given phase with appropriate state.
   defp create_session_in_phase(phase, opts \\ []) do
     phase_status = Keyword.get(opts, :phase_status, :awaiting_input)
     last_message_type = Keyword.get(opts, :last_message_type)
@@ -72,8 +72,8 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
     {:ok, ws} =
       Destila.Workflows.create_workflow_session(%{
-        title: "Test Chore Task",
-        workflow_type: :prompt_chore_task,
+        title: "Test Brainstorm Idea",
+        workflow_type: :brainstorm_idea,
         project_id: nil,
         current_phase: phase,
         total_phases: 6,
@@ -124,7 +124,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     test "collects project and idea, creates session, redirects", %{conn: conn} do
       project = create_project()
 
-      {:ok, view, _html} = live(conn, ~p"/workflows/prompt_chore_task")
+      {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
       # Shows wizard form
       assert has_element?(view, "#project-list")
@@ -151,7 +151,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     test "shows error when no project selected", %{conn: conn} do
       _project = create_project()
 
-      {:ok, view, _html} = live(conn, ~p"/workflows/prompt_chore_task")
+      {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
       # Submit without selecting project
       view
@@ -163,7 +163,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Phase 1 - Wizard requires an idea"
     test "shows error when idea is empty", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/workflows/prompt_chore_task")
+      {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
       view
       |> form("#wizard-idea-form", %{"initial_idea" => ""})
@@ -181,7 +181,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       {:ok, ws} =
         Destila.Workflows.create_workflow_session(%{
           title: "Test Session",
-          workflow_type: :prompt_chore_task,
+          workflow_type: :brainstorm_idea,
           current_phase: 2,
           total_phases: 6,
           phase_status: :setup,
@@ -395,7 +395,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # Title is displayed
-      assert render(view) =~ "Test Chore Task"
+      assert render(view) =~ "Test Brainstorm Idea"
 
       # Click to edit
       view |> element("button[phx-click='edit_title']") |> render_click()
@@ -424,7 +424,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
       {:ok, ws} =
         Destila.Workflows.create_workflow_session(%{
           title: "Test Session",
-          workflow_type: :prompt_chore_task,
+          workflow_type: :brainstorm_idea,
           current_phase: 2,
           total_phases: 6,
           phase_status: :setup,
@@ -562,7 +562,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     {:ok, ws} =
       Destila.Workflows.create_workflow_session(%{
         title: "Test Options",
-        workflow_type: :prompt_chore_task,
+        workflow_type: :brainstorm_idea,
         current_phase: 3,
         total_phases: 6,
         phase_status: :awaiting_input
@@ -614,7 +614,7 @@ defmodule DestilaWeb.ChoreTaskWorkflowLiveTest do
     {:ok, ws} =
       Destila.Workflows.create_workflow_session(%{
         title: "Test Questions",
-        workflow_type: :prompt_chore_task,
+        workflow_type: :brainstorm_idea,
         current_phase: 3,
         total_phases: 6,
         phase_status: :awaiting_input

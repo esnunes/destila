@@ -136,11 +136,11 @@ defmodule DestilaWeb.BoardComponents do
 
   # Helpers
 
-  def workflow_label(:prompt_chore_task), do: "Chore/Task"
+  def workflow_label(:brainstorm_idea), do: "Brainstorm Idea"
   def workflow_label(:implement_general_prompt), do: "Implementation"
   def workflow_label(_), do: "Workflow"
 
-  defp workflow_badge_class(:prompt_chore_task), do: "badge-warning"
+  defp workflow_badge_class(:brainstorm_idea), do: "badge-warning"
   defp workflow_badge_class(:implement_general_prompt), do: "badge-primary"
   defp workflow_badge_class(_), do: "badge-neutral"
 end
