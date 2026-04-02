@@ -11,7 +11,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   use DestilaWeb, :live_view
 
-  import DestilaWeb.BoardComponents, only: [workflow_badge: 1, progress_indicator: 1]
+  import DestilaWeb.BoardComponents,
+    only: [workflow_badge: 1, progress_indicator: 1, aliveness_dot: 1]
 
   alias Destila.Workflows.Session
 
@@ -37,7 +38,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      socket
      |> assign(:view, :selecting_type)
      |> assign(:workflow_metadata, Workflows.workflow_type_metadata())
-     |> assign(:page_title, "New Session")}
+     |> assign(:page_title, "New Session")
+     |> assign(:alive_session, false)
+     |> assign(:alive_session_ref, nil)}
   end
 
   defp mount_workflow(workflow_type_str, socket) do
@@ -56,17 +59,28 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:editing_title, false)
      |> assign(:metadata, %{})
      |> assign(:page_title, Workflows.default_title(workflow_type))
-     |> assign(:streaming_chunks, nil)}
+     |> assign(:streaming_chunks, nil)
+     |> assign(:alive_session, false)
+     |> assign(:alive_session_ref, nil)}
   end
 
   defp mount_session(id, socket) do
     workflow_session = Workflows.get_workflow_session(id)
 
     if workflow_session do
-      if connected?(socket) do
-        Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
-        Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.ai_stream_topic(id))
-      end
+      {alive_session, alive_session_ref} =
+        if connected?(socket) do
+          Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
+          Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.ai_stream_topic(id))
+          Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.claude_session_topic())
+
+          case GenServer.whereis({:via, Registry, {Destila.AI.SessionRegistry, id}}) do
+            nil -> {false, nil}
+            pid -> {true, Process.monitor(pid)}
+          end
+        else
+          {false, nil}
+        end
 
       workflow_type = workflow_session.workflow_type
       phases = Workflows.phases(workflow_type)
@@ -87,11 +101,15 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:editing_title, false)
        |> assign(:metadata, Workflows.get_metadata(workflow_session.id))
        |> assign(:page_title, workflow_session.title)
-       |> assign(:streaming_chunks, nil)}
+       |> assign(:streaming_chunks, nil)
+       |> assign(:alive_session, alive_session)
+       |> assign(:alive_session_ref, alive_session_ref)}
     else
       {:ok,
        socket
        |> put_flash(:error, "Session not found")
+       |> assign(:alive_session, false)
+       |> assign(:alive_session_ref, nil)
        |> push_navigate(to: ~p"/crafting")}
     end
   end
@@ -305,6 +323,31 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     {:noreply, assign(socket, :streaming_chunks, chunks ++ [chunk])}
   end
 
+  def handle_info({:claude_session_started, ws_id}, socket) do
+    if socket.assigns[:workflow_session] && ws_id == socket.assigns.workflow_session.id do
+      name = {:via, Registry, {Destila.AI.SessionRegistry, ws_id}}
+
+      case GenServer.whereis(name) do
+        nil ->
+          {:noreply, socket}
+
+        pid ->
+          ref = Process.monitor(pid)
+          {:noreply, assign(socket, alive_session: true, alive_session_ref: ref)}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
+    if ref == socket.assigns[:alive_session_ref] do
+      {:noreply, assign(socket, alive_session: false, alive_session_ref: nil)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   # --- Render: type selection ---
@@ -363,6 +406,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
               <div class="flex-1 min-w-0">
                 <%= if @workflow_session do %>
                   <div :if={!@editing_title} class="flex items-center gap-2">
+                    <.aliveness_dot session={@workflow_session} alive?={@alive_session} />
                     <h1
                       class={[
                         "text-lg font-bold truncate transition-colors",

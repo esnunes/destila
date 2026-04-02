@@ -15,4 +15,6 @@ defmodule Destila.PubSubHelper do
   def ai_stream_topic(workflow_session_id) do
     "ai_stream:#{workflow_session_id}"
   end
+
+  def claude_session_topic, do: "claude_sessions"
 end

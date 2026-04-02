@@ -35,9 +35,56 @@ defmodule DestilaWeb.BoardComponents do
     """
   end
 
+  attr :session, :map, required: true
+  attr :alive?, :boolean, required: true
+
+  def aliveness_dot(assigns) do
+    assigns = assign(assigns, :aliveness_state, aliveness_state(assigns.session, assigns.alive?))
+
+    ~H"""
+    <span
+      title={aliveness_title(@aliveness_state)}
+      class={["inline-flex size-2 shrink-0 rounded-full", aliveness_color(@aliveness_state)]}
+    />
+    """
+  end
+
+  defp aliveness_state(_session, true), do: :alive
+
+  defp aliveness_state(session, false) do
+    if should_be_alive?(session), do: :unexpected_down, else: :expected_down
+  end
+
+  @doc """
+  Returns true if the session is in a state where a ClaudeSession GenServer should be running.
+  Only AiConversationPhase phases use persistent ClaudeSession GenServers.
+  """
+  def should_be_alive?(%{phase_status: :processing} = session) do
+    ai_phase?(session)
+  end
+
+  def should_be_alive?(_session), do: false
+
+  defp ai_phase?(session) do
+    case Destila.Workflows.phases(session.workflow_type)
+         |> Enum.at(session.current_phase - 1) do
+      {DestilaWeb.Phases.AiConversationPhase, _opts} -> true
+      _ -> false
+    end
+  end
+
+  defp aliveness_color(:alive), do: "bg-success"
+  defp aliveness_color(:expected_down), do: "bg-base-content/20"
+  defp aliveness_color(:unexpected_down), do: "bg-error animate-pulse"
+
+  defp aliveness_title(:alive), do: "AI session running"
+  defp aliveness_title(:expected_down), do: "AI session idle"
+  defp aliveness_title(:unexpected_down), do: "AI session not running (unexpected)"
+
   attr :card, :map, required: true
   attr :project_filter, :string, default: nil
   attr :compact, :boolean, default: false
+  attr :alive?, :boolean, default: false
 
   def crafting_card(assigns) do
     ~H"""
@@ -60,7 +107,10 @@ defmodule DestilaWeb.BoardComponents do
               {@card.title}
             </span>
           </.link>
-          <.status_dot :if={@compact} card={@card} />
+          <div :if={@compact} class="flex items-center gap-1 shrink-0">
+            <.aliveness_dot session={@card} alive?={@alive?} />
+            <.status_dot card={@card} />
+          </div>
         </div>
 
         <%= if @compact do %>
@@ -70,6 +120,7 @@ defmodule DestilaWeb.BoardComponents do
         <% else %>
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
+              <.aliveness_dot session={@card} alive?={@alive?} />
               <.workflow_badge type={@card.workflow_type} />
               <%= if @card.project do %>
                 <.link

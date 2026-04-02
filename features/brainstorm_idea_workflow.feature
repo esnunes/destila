@@ -134,3 +134,28 @@ Feature: Brainstorm Idea Workflow
     When I collapse Phase 5 by clicking its header
     And new activity occurs in the current phase
     Then Phase 5 should remain collapsed
+
+  # --- Aliveness Indicator ---
+
+  Scenario: Workflow runner shows green indicator when Claude Code GenServer is running
+    Given I am on a session detail page
+    And the session has an active Claude Code GenServer
+    Then I should see a green aliveness indicator in the session header
+
+  Scenario: Workflow runner shows gray indicator when GenServer is not expected
+    Given I am on a session detail page
+    And the session is not in an AI-related phase or not in processing status
+    And the session's Claude Code GenServer is not running
+    Then I should see a gray aliveness indicator in the session header
+
+  Scenario: Workflow runner shows red indicator when GenServer is unexpectedly not running
+    Given I am on a session detail page
+    And the session is in an AI-related phase with processing status
+    And the session's Claude Code GenServer is not running
+    Then I should see a red aliveness indicator in the session header
+
+  Scenario: Workflow runner indicator updates in real-time when GenServer stops
+    Given I am on a session detail page
+    And the session has a running Claude Code GenServer with a green indicator
+    When the Claude Code GenServer stops
+    Then the indicator should update to reflect the current state

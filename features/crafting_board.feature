@@ -74,3 +74,28 @@ Feature: Crafting Board
     When I select "destila" from the project filter
     Then only sessions belonging to "destila" should be shown across all workflow boards
     And workflow boards with no matching sessions should be hidden
+
+  # --- Aliveness Indicator ---
+
+  Scenario: Session card shows green indicator when Claude Code GenServer is running
+    Given there is a session with an active Claude Code GenServer
+    When I navigate to the crafting board
+    Then the session card should show a green aliveness indicator
+
+  Scenario: Session card shows gray indicator when GenServer is not running and not expected
+    Given there is a session whose Claude Code GenServer is not running
+    And the session is not in an AI-related phase or not in processing status
+    When I navigate to the crafting board
+    Then the session card should show a gray aliveness indicator
+
+  Scenario: Session card shows red indicator when GenServer is unexpectedly not running
+    Given there is a session in an AI-related phase with processing status
+    And the session's Claude Code GenServer is not running
+    When I navigate to the crafting board
+    Then the session card should show a red aliveness indicator
+
+  Scenario: Session card indicator updates when GenServer stops
+    Given I am on the crafting board
+    And a session has a running Claude Code GenServer with a green indicator
+    When the Claude Code GenServer for that session stops
+    Then the session card indicator should change from green to the appropriate state
