@@ -39,7 +39,7 @@ Use PubSub for process discovery and `Process.monitor/1` for death detection. Th
 
 3. **Helper module** (`Destila.AI.ClaudeSession.Liveness`) is NOT needed — the logic is simple enough to inline. A `liveness_topic/0` function on `PubSubHelper` is sufficient.
 
-4. **Determination of "expected" vs "unexpected" down** — The check is: is the session's current phase backed by `AiConversationPhase` (or `SetupPhase` which also uses AI) AND is `phase_status == :processing`? If both, red. Otherwise gray. This logic lives in a helper function in `BoardComponents` since both LiveViews need it.
+4. **Determination of "expected" vs "unexpected" down** — The check is: is the session's current phase backed by `AiConversationPhase` AND is `phase_status == :processing`? If both, red. Otherwise gray. This logic lives in a helper function in `BoardComponents` since both LiveViews need it. **Important:** `SetupPhase` does NOT use `ClaudeSession` — it uses separate Oban workers (`SetupWorker`, `TitleGenerationWorker`) that do git operations and one-off `ClaudeCode.start_link` calls. Only `AiConversationPhase` phases create persistent `ClaudeSession` GenServers via `AiQueryWorker.for_workflow_session/2`.
 
 5. **No polling** — Real-time updates only via PubSub and OTP monitors.
 
@@ -144,11 +144,11 @@ end
 def should_be_alive?(_session), do: false
 
 defp ai_phase?(session) do
-  # Check if the session's current phase uses AiConversationPhase
+  # Only AiConversationPhase uses ClaudeSession GenServer.
+  # SetupPhase does NOT — it uses separate Oban workers (SetupWorker, TitleGenerationWorker).
   case Destila.Workflows.phases(session.workflow_type)
        |> Enum.at(session.current_phase - 1) do
     {DestilaWeb.Phases.AiConversationPhase, _opts} -> true
-    {DestilaWeb.Phases.SetupPhase, _opts} -> true
     _ -> false
   end
 end
@@ -178,34 +178,39 @@ end
 
 **4b. Add initial aliveness lookup and monitoring:**
 
-Add a helper that monitors all currently-alive GenServers for the sessions on the board. Call it after loading sessions in `handle_params`:
+Add a helper that monitors all currently-alive GenServers for the sessions on the board. Call it after loading sessions in `handle_params`. **Important:** Guard with `connected?(socket)` since `handle_params` runs on both disconnected and connected mounts — monitoring on the short-lived disconnected mount is wasteful:
 
 ```elixir
 defp monitor_alive_sessions(socket) do
-  sessions = socket.assigns.all_prompts
-  alive_map = socket.assigns[:alive_sessions] || %{}
-  monitored = socket.assigns[:monitored_refs] || %{}
-
-  Enum.reduce(sessions, {alive_map, monitored}, fn session, {alive, refs} ->
-    # Skip if already monitored
-    if Map.has_key?(alive, session.id) do
-      {alive, refs}
-    else
-      name = {:via, Registry, {Destila.AI.SessionRegistry, session.id}}
-      case GenServer.whereis(name) do
-        nil ->
-          {alive, refs}
-        pid ->
-          ref = Process.monitor(pid)
-          {Map.put(alive, session.id, true), Map.put(refs, ref, session.id)}
-      end
-    end
-  end)
-  |> then(fn {alive, refs} ->
+  # Only monitor on connected mount — the disconnected render process is short-lived
+  if not connected?(socket) do
     socket
-    |> assign(:alive_sessions, alive)
-    |> assign(:monitored_refs, refs)
-  end)
+  else
+    sessions = socket.assigns.all_prompts
+    alive_map = socket.assigns[:alive_sessions] || %{}
+    monitored = socket.assigns[:monitored_refs] || %{}
+
+    Enum.reduce(sessions, {alive_map, monitored}, fn session, {alive, refs} ->
+      # Skip if already monitored
+      if Map.has_key?(alive, session.id) do
+        {alive, refs}
+      else
+        name = {:via, Registry, {Destila.AI.SessionRegistry, session.id}}
+        case GenServer.whereis(name) do
+          nil ->
+            {alive, refs}
+          pid ->
+            ref = Process.monitor(pid)
+            {Map.put(alive, session.id, true), Map.put(refs, ref, session.id)}
+        end
+      end
+    end)
+    |> then(fn {alive, refs} ->
+      socket
+      |> assign(:alive_sessions, alive)
+      |> assign(:monitored_refs, refs)
+    end)
+  end
 end
 ```
 
@@ -222,9 +227,12 @@ Call `monitor_alive_sessions` in `handle_params` after assigning `all_prompts`, 
 |> monitor_alive_sessions()
 ```
 
-**4c. Handle :claude_session_started:**
+**4c. Handle :claude_session_started and :DOWN:**
+
+**CRITICAL: Clause ordering.** Both `CraftingBoardLive` and `WorkflowRunnerLive` have a catch-all `def handle_info(_msg, socket), do: {:noreply, socket}` at the bottom. The new `:claude_session_started` and `:DOWN` handlers MUST be placed BEFORE this catch-all, otherwise they will never match. Place them immediately before the catch-all clause.
 
 ```elixir
+# Place BEFORE the catch-all `def handle_info(_msg, socket)`
 def handle_info({:claude_session_started, ws_id}, socket) do
   name = {:via, Registry, {Destila.AI.SessionRegistry, ws_id}}
 
@@ -241,11 +249,7 @@ def handle_info({:claude_session_started, ws_id}, socket) do
        |> update(:monitored_refs, &Map.put(&1, ref, ws_id))}
   end
 end
-```
 
-**4d. Handle :DOWN:**
-
-```elixir
 def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
   case Map.get(socket.assigns.monitored_refs, ref) do
     nil ->
@@ -262,8 +266,9 @@ end
 
 **4e. Pass alive status to crafting_card:**
 
-In the template, pass `alive?` to the card:
+In the template, pass `alive?` to the card. There are two places in `crafting_board_live.ex`:
 
+1. **List view** (line ~259): Add `alive?` attr to the non-compact card:
 ```heex
 <.crafting_card
   :for={card <- @sections[section]}
@@ -273,29 +278,54 @@ In the template, pass `alive?` to the card:
 />
 ```
 
-Same for compact cards in workflow view.
+2. **Workflow view** (line ~304): Add `alive?` attr to the compact card:
+```heex
+<.crafting_card
+  :for={card <- col_prompts}
+  card={card}
+  project_filter={@project_filter}
+  compact
+  alive?={Map.get(@alive_sessions, card.id, false)}
+/>
+```
 
 **4f. Update crafting_card to render aliveness_dot:**
 
-Add `attr :alive?, :boolean, default: false` to `crafting_card`.
+In `board_components.ex`:
 
-In the compact card layout (where `.status_dot` is rendered), add `.aliveness_dot` next to it:
+1. Add attribute declaration (after `attr :compact` on line 40):
+```elixir
+attr :alive?, :boolean, default: false
+```
 
+2. **Compact card** — In the compact layout (line 63), the `.status_dot` is rendered next to the title. Wrap the status dot and aliveness dot together:
+
+**Current (line 63):**
 ```heex
-<div class="flex items-center gap-1">
+<.status_dot :if={@compact} card={@card} />
+```
+
+**Replace with:**
+```heex
+<div :if={@compact} class="flex items-center gap-1 shrink-0">
   <.aliveness_dot session={@card} alive?={@alive?} />
-  <.status_dot :if={@compact} card={@card} />
+  <.status_dot card={@card} />
 </div>
 ```
 
-In the non-compact card layout, add the aliveness dot near the workflow badge:
+3. **Non-compact card** — In the non-compact layout (line 71-90), add the aliveness dot at the start of the badge/project row.
 
+**Current (line 72):**
+```heex
+<div class="flex items-center gap-2">
+  <.workflow_badge type={@card.workflow_type} />
+```
+
+**Replace with:**
 ```heex
 <div class="flex items-center gap-2">
   <.aliveness_dot session={@card} alive?={@alive?} />
   <.workflow_badge type={@card.workflow_type} />
-  ...
-</div>
 ```
 
 ### Step 5: Update WorkflowRunnerLive
@@ -325,9 +355,14 @@ Add to assigns:
 
 For the non-session mount paths (`mount_workflow`, `mount_type_selection`), assign `:alive_session` to `false`.
 
-**5b. Handle :claude_session_started:**
+**5b. Handle :claude_session_started and :DOWN:**
+
+**CRITICAL: Clause ordering.** Same as CraftingBoardLive — place these BEFORE the catch-all `def handle_info(_msg, socket)` at the bottom of `WorkflowRunnerLive`.
+
+Use ref tracking to safely identify which `:DOWN` messages are ours (the LiveView process or test stubs may receive other `:DOWN` messages from ClaudeCode.Test stubs):
 
 ```elixir
+# Place BEFORE the catch-all `def handle_info(_msg, socket)`
 def handle_info({:claude_session_started, ws_id}, socket) do
   if socket.assigns[:workflow_session] && ws_id == socket.assigns.workflow_session.id do
     name = {:via, Registry, {Destila.AI.SessionRegistry, ws_id}}
@@ -337,42 +372,83 @@ def handle_info({:claude_session_started, ws_id}, socket) do
         {:noreply, socket}
 
       pid ->
-        Process.monitor(pid)
-        {:noreply, assign(socket, :alive_session, true)}
+        ref = Process.monitor(pid)
+        {:noreply, assign(socket, alive_session: true, alive_session_ref: ref)}
     end
+  else
+    {:noreply, socket}
+  end
+end
+
+def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
+  if ref == socket.assigns[:alive_session_ref] do
+    {:noreply, assign(socket, alive_session: false, alive_session_ref: nil)}
   else
     {:noreply, socket}
   end
 end
 ```
 
-**5c. Handle :DOWN:**
+Add `alive_session_ref` to all mount paths:
 
 ```elixir
-def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
-  {:noreply, assign(socket, :alive_session, false)}
-end
+# In mount_session, store the ref when monitoring:
+{alive_session, alive_session_ref} =
+  case GenServer.whereis({:via, Registry, {Destila.AI.SessionRegistry, id}}) do
+    nil -> {false, nil}
+    pid -> {true, Process.monitor(pid)}
+  end
 ```
 
-Note: Since WorkflowRunnerLive only monitors a single session's GenServer, any `:DOWN` message corresponds to that session. No ref tracking needed.
+```elixir
+|> assign(:alive_session, alive_session)
+|> assign(:alive_session_ref, alive_session_ref)
+```
+
+```elixir
+# In mount_workflow and mount_type_selection:
+|> assign(:alive_session, false)
+|> assign(:alive_session_ref, nil)
+```
 
 **5d. Render in header:**
 
-In the header area, add the aliveness dot next to the title. After the `<h1>` tag that shows the session title:
+In `workflow_runner_live.ex`, add the aliveness dot in the header next to the title. The indicator should only render when we have a workflow_session (not on the type selection page or pre-session phase 1).
 
+**Current template structure (line 365):**
 ```heex
 <div :if={!@editing_title} class="flex items-center gap-2">
-  <.aliveness_dot session={@workflow_session} alive?={@alive_session} />
-  <h1 ...>
+  <h1 class={[...]} phx-click={...}>
     {@workflow_session.title}
   </h1>
-  ...
+  <button ...>
+    <.icon name="hero-pencil-micro" ... />
+  </button>
 </div>
 ```
 
-Import `aliveness_dot` from `BoardComponents` — it's already imported via `import DestilaWeb.BoardComponents, only: [workflow_badge: 1, progress_indicator: 1]`. Extend the import:
+**Add aliveness dot before the `<h1>` tag:**
+```heex
+<div :if={!@editing_title} class="flex items-center gap-2">
+  <.aliveness_dot session={@workflow_session} alive?={@alive_session} />
+  <h1 class={[...]} phx-click={...}>
+    {@workflow_session.title}
+  </h1>
+  <button ...>
+    <.icon name="hero-pencil-micro" ... />
+  </button>
+</div>
+```
+
+This is inside the `<%= if @workflow_session do %>` block (line 364), so the dot only renders when a session exists.
+
+**Update the import** (line 14):
 
 ```elixir
+# Current:
+import DestilaWeb.BoardComponents, only: [workflow_badge: 1, progress_indicator: 1]
+
+# Replace with:
 import DestilaWeb.BoardComponents, only: [workflow_badge: 1, progress_indicator: 1, aliveness_dot: 1]
 ```
 
@@ -436,23 +512,183 @@ import DestilaWeb.BoardComponents, only: [workflow_badge: 1, progress_indicator:
 
 ### Step 7: Add tests
 
-**7a. CraftingBoardLive tests** — Add tests that verify the aliveness dot is rendered with appropriate state classes based on session state. Since we can't easily start a real ClaudeCode GenServer in tests, test the component rendering:
+**Strategy:** Use `Agent.start_link/2` registered in `Destila.AI.SessionRegistry` to simulate a running ClaudeSession GenServer. This is lightweight, doesn't require real ClaudeCode, and the LiveView discovers it via the same Registry lookup used in production. Use `start_supervised!/1` for cleanup.
 
-- Test that `aliveness_dot` renders with `bg-base-content/20` (gray) when no GenServer is running and session is not in AI phase with processing status
-- Test that `aliveness_dot` renders with `bg-error` (red) when no GenServer running but session is in AI phase with processing status
-- Test that the crafting card passes through the `alive?` attribute
-
-For the green state, we can use a simple GenServer in the test:
+**7a. CraftingBoardLive tests** — Add a new describe block in `test/destila_web/live/crafting_board_live_test.exs`:
 
 ```elixir
-# Start a dummy GenServer registered in the SessionRegistry
-{:ok, pid} = Agent.start_link(fn -> nil end,
-  name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}})
+describe "aliveness indicator" do
+  @tag feature: @feature,
+       scenario: "Session card shows gray indicator when GenServer is not running and not expected"
+  test "shows gray dot when GenServer is not running and not expected", %{
+    conn: conn,
+    project_a: project
+  } do
+    # Session in awaiting_input (not processing) — gray is expected
+    ws = create_prompt(%{title: "Idle Session", project_id: project.id, phase_status: :awaiting_input})
+
+    {:ok, view, _html} = live(conn, ~p"/crafting")
+
+    # Aliveness dot should be gray (bg-base-content/20)
+    assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session idle']")
+  end
+
+  @tag feature: @feature,
+       scenario: "Session card shows red indicator when GenServer is unexpectedly not running"
+  test "shows red dot when GenServer should be running but is not", %{
+    conn: conn,
+    project_a: project
+  } do
+    # Session in phase 3 (AiConversationPhase) with processing status — red expected
+    ws =
+      create_prompt(%{
+        title: "Stuck Session",
+        project_id: project.id,
+        current_phase: 3,
+        phase_status: :processing,
+        workflow_type: :brainstorm_idea
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/crafting")
+
+    # Aliveness dot should be red (bg-error)
+    assert has_element?(
+             view,
+             "#crafting-card-#{ws.id} span[title='AI session not running (unexpected)']"
+           )
+  end
+
+  @tag feature: @feature,
+       scenario: "Session card shows green indicator when Claude Code GenServer is running"
+  test "shows green dot when GenServer is running", %{conn: conn, project_a: project} do
+    ws =
+      create_prompt(%{
+        title: "Active Session",
+        project_id: project.id,
+        current_phase: 3,
+        phase_status: :processing,
+        workflow_type: :brainstorm_idea
+      })
+
+    # Register a dummy Agent in the SessionRegistry to simulate a running GenServer
+    start_supervised!(
+      {Agent,
+       fn -> nil end
+       |> then(fn f ->
+         %{
+           id: {:test_agent, ws.id},
+           start:
+             {Agent, :start_link, [f, [name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}]]}
+         }
+       end)}
+    )
+
+    {:ok, view, _html} = live(conn, ~p"/crafting")
+
+    # Aliveness dot should be green (bg-success)
+    assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session running']")
+  end
+
+  @tag feature: @feature, scenario: "Session card indicator updates when GenServer stops"
+  test "updates from green to red when GenServer stops", %{conn: conn, project_a: project} do
+    ws =
+      create_prompt(%{
+        title: "Active Session",
+        project_id: project.id,
+        current_phase: 3,
+        phase_status: :processing,
+        workflow_type: :brainstorm_idea
+      })
+
+    # Start a dummy Agent registered as the session's GenServer
+    {:ok, pid} =
+      Agent.start_link(fn -> nil end,
+        name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
+      )
+
+    {:ok, view, _html} = live(conn, ~p"/crafting")
+
+    # Should be green initially
+    assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session running']")
+
+    # Stop the agent — triggers :DOWN in the LiveView
+    Agent.stop(pid)
+
+    # Wait for the :DOWN message to be processed
+    _ = render(view)
+
+    # Should now be red (processing + AiConversationPhase but no GenServer)
+    assert has_element?(
+             view,
+             "#crafting-card-#{ws.id} span[title='AI session not running (unexpected)']"
+           )
+  end
+end
 ```
 
-This lets the LiveView discover it via Registry and monitor it. Then stopping the agent tests the `:DOWN` transition.
+**7b. WorkflowRunnerLive tests** — Add to `test/destila_web/live/brainstorm_idea_workflow_live_test.exs`:
 
-**7b. WorkflowRunnerLive tests** — Similar approach: verify the aliveness dot renders in the header with appropriate classes.
+```elixir
+describe "aliveness indicator" do
+  @tag feature: @feature,
+       scenario: "Workflow runner shows gray indicator when GenServer is not expected"
+  test "shows gray dot when GenServer is not running and not expected", %{conn: conn} do
+    ws = create_session_in_phase(3, phase_status: :awaiting_input)
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "span[title='AI session idle']")
+  end
+
+  @tag feature: @feature,
+       scenario: "Workflow runner shows red indicator when GenServer is unexpectedly not running"
+  test "shows red dot when GenServer should be running but is not", %{conn: conn} do
+    ws = create_session_in_phase(3, phase_status: :processing)
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "span[title='AI session not running (unexpected)']")
+  end
+
+  @tag feature: @feature,
+       scenario: "Workflow runner shows green indicator when Claude Code GenServer is running"
+  test "shows green dot when GenServer is running", %{conn: conn} do
+    ws = create_session_in_phase(3, phase_status: :processing)
+
+    {:ok, _pid} =
+      Agent.start_link(fn -> nil end,
+        name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
+      )
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "span[title='AI session running']")
+  end
+
+  @tag feature: @feature,
+       scenario: "Workflow runner indicator updates in real-time when GenServer stops"
+  test "updates from green to red when GenServer stops", %{conn: conn} do
+    ws = create_session_in_phase(3, phase_status: :processing)
+
+    {:ok, pid} =
+      Agent.start_link(fn -> nil end,
+        name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
+      )
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "span[title='AI session running']")
+
+    # Stop the agent — triggers :DOWN
+    Agent.stop(pid)
+    _ = render(view)
+
+    assert has_element?(view, "span[title='AI session not running (unexpected)']")
+  end
+end
+```
+
+**Note on `start_supervised!` vs manual `Agent.start_link`:** For the green → red transition test, we use manual `Agent.start_link` (not `start_supervised!`) because we need to explicitly stop the agent mid-test to trigger the `:DOWN` message. `start_supervised!` stops agents only after the test ends, which is too late. The agent will be cleaned up by the test process exit anyway.
 
 ### Step 8: Run `mix precommit`
 
@@ -483,6 +719,22 @@ The broadcast only fires when `workflow_session_id` is non-nil (i.e., when start
 ### Crafting board page refresh while GenServer is running
 
 On mount, the LiveView does a fresh Registry lookup for all sessions. It finds and monitors any running GenServers. The indicator immediately shows green.
+
+## Corrections from deepening review
+
+The following issues were identified and corrected during the plan deepening pass:
+
+1. **SetupPhase incorrectly included in `ai_phase?`** — SetupPhase does NOT use `ClaudeSession`. It uses separate Oban workers (`SetupWorker` for git ops, `TitleGenerationWorker` for one-off `ClaudeCode.start_link` calls). Only `AiConversationPhase` creates persistent `ClaudeSession` GenServers. Removed SetupPhase from `ai_phase?`.
+
+2. **`handle_info` clause ordering** — Both LiveViews have a catch-all `def handle_info(_msg, socket)` that would silently swallow the new `:claude_session_started` and `:DOWN` messages if the new handlers were placed after it. Added explicit ordering requirement.
+
+3. **`monitor_alive_sessions` on disconnected mount** — `handle_params` runs on both disconnected and connected mounts. Monitoring on the short-lived disconnected render is wasteful. Added `connected?(socket)` guard.
+
+4. **WorkflowRunnerLive `:DOWN` safety** — The original plan assumed any `:DOWN` corresponds to the session's GenServer, but test stubs or other monitored processes could send spurious `:DOWN` messages. Added ref tracking (`alive_session_ref`) to match only our monitors.
+
+5. **Missing concrete test code** — Replaced bullet-point test descriptions with complete ExUnit test implementations including `@tag` annotations, Agent-based GenServer simulation, and green→red transition tests.
+
+6. **Template placement specifics** — Added exact line numbers and before/after code for where to insert the aliveness dot in both `board_components.ex` and `workflow_runner_live.ex` templates.
 
 ## Verification
 
