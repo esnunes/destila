@@ -81,7 +81,7 @@ defmodule DestilaWeb.DashboardLive do
                   :for={ws <- @crafting_prompts |> Enum.take(3)}
                   class="flex items-center justify-between py-2"
                 >
-                  <span class="text-sm truncate mr-2">{ws.title}</span>
+                  <span class="text-sm truncate mr-2 min-w-0">{ws.title}</span>
                   <.workflow_badge type={ws.workflow_type} />
                 </div>
               </div>

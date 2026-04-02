@@ -8,7 +8,7 @@ defmodule DestilaWeb.BoardComponents do
   def workflow_badge(assigns) do
     ~H"""
     <span class={[
-      "badge badge-sm font-medium",
+      "badge badge-sm font-medium whitespace-nowrap",
       workflow_badge_class(@type)
     ]}>
       {workflow_label(@type)}
