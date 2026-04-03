@@ -37,11 +37,13 @@ defmodule Destila.AI do
   end
 
   def list_ai_sessions_for_workflow(workflow_session_id) do
+    messages_query = from(m in Message, order_by: m.inserted_at)
+
     Repo.all(
       from(s in Session,
         where: s.workflow_session_id == ^workflow_session_id,
         order_by: s.inserted_at,
-        preload: :messages
+        preload: [messages: ^messages_query]
       )
     )
   end
