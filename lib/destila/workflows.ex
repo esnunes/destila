@@ -219,6 +219,15 @@ defmodule Destila.Workflows do
     end
   end
 
+  def list_metadata_records(workflow_session_id) do
+    from(m in SessionMetadata,
+      where: m.workflow_session_id == ^workflow_session_id,
+      order_by: [m.phase_name, m.key]
+    )
+    |> Repo.all()
+    |> Enum.group_by(& &1.phase_name)
+  end
+
   def get_metadata(workflow_session_id) do
     from(m in SessionMetadata,
       where: m.workflow_session_id == ^workflow_session_id,
