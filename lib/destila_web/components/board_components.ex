@@ -94,6 +94,7 @@ defmodule DestilaWeb.BoardComponents do
     >
       <div class={["card-body gap-2", if(@compact, do: "p-3", else: "p-4")]}>
         <div class={["flex gap-2", if(@compact, do: "items-start", else: "items-center")]}>
+          <.aliveness_dot session={@card} alive?={@alive?} />
           <.link
             navigate={"/sessions/#{@card.id}"}
             class={[
@@ -108,7 +109,6 @@ defmodule DestilaWeb.BoardComponents do
             </span>
           </.link>
           <div :if={@compact} class="flex items-center gap-1 shrink-0">
-            <.aliveness_dot session={@card} alive?={@alive?} />
             <.status_dot card={@card} />
           </div>
         </div>
@@ -120,7 +120,6 @@ defmodule DestilaWeb.BoardComponents do
         <% else %>
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-              <.aliveness_dot session={@card} alive?={@alive?} />
               <.workflow_badge type={@card.workflow_type} />
               <%= if @card.project do %>
                 <.link
