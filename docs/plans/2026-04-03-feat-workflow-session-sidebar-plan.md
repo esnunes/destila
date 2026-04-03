@@ -8,7 +8,7 @@ date: 2026-04-03
 
 ## Overview
 
-Add a collapsible right sidebar to `WorkflowRunnerLive` that shows session info, project info, exported metadata (grouped by phase), and AI sessions with token usage. The sidebar appears only on active sessions (not the type selection view), is open by default, and persists its collapsed/expanded state in localStorage via a colocated JS hook.
+Add a collapsible right sidebar to `WorkflowRunnerLive` that shows session info, project info, exported metadata (grouped by phase), and AI sessions with token usage. The sidebar appears only on active sessions (not the type selection view or pre-session Phase 1), is open by default, and persists its collapsed/expanded state in localStorage via a colocated JS hook.
 
 ## Solution
 
@@ -18,13 +18,17 @@ The sidebar is rendered inline within the `render(%{view: :running})` function o
 
 **Key design decisions:**
 
-1. **No new LiveComponent** — The sidebar is a simple function component defined in `WorkflowRunnerLive` or a new `sidebar_components.ex` module. It receives assigns directly from the parent. This avoids the overhead of a LiveComponent lifecycle for what is a pure rendering concern.
+1. **No new LiveComponent** — The sidebar is a private function component defined in `WorkflowRunnerLive`. It receives assigns directly from the parent. This avoids the overhead of a LiveComponent lifecycle for what is a pure rendering concern.
 
 2. **Data loading** — Sidebar data (metadata records, AI sessions, phase executions) is loaded in `mount_session/2` and refreshed on PubSub events. The existing `:metadata_updated` handler already refreshes metadata; we add a new `list_metadata_records/1` query that returns the raw `SessionMetadata` structs (grouped by `phase_name`) instead of the flat key→value map used by phases.
 
-3. **Collapsed state via colocated JS hook** — A `.SidebarToggle` colocated hook reads/writes `localStorage["sidebar_collapsed"]` and toggles a CSS class on the sidebar container. The hook element has `phx-update="ignore"` so LiveView doesn't clobber the DOM state managed by JS.
+3. **Collapsed state via colocated JS hook** — A `.SidebarToggle` colocated hook reads/writes `localStorage["sidebar_collapsed"]` and toggles a `data-sidebar-state` attribute on the outer sidebar wrapper. The hook element has `phx-update="ignore"` so LiveView doesn't clobber the DOM state managed by JS.
+
+   **Critical: `phx-update="ignore"` scope.** The hook container with `phx-update="ignore"` wraps ONLY the toggle button — NOT the sidebar content. The sidebar content div is a sibling that LiveView CAN update (for PubSub-driven metadata refreshes). CSS uses the data attribute on the hook element combined with a general-sibling selector (`~`) to control sidebar visibility.
 
 4. **Token extraction** — A helper function parses `raw_response` maps on AI messages, extracting `usage.input_tokens` and `usage.output_tokens` (or string-keyed equivalents). Returns `nil` gracefully when data is absent.
+
+5. **AI session link** — Each AI session card includes a link that navigates to the workflow session page. Since conversations are viewed within the workflow runner, the link points to `/sessions/:id` (the current page). In the future this could deep-link to a specific AI session view.
 
 ### Layout structure
 
@@ -46,14 +50,33 @@ The sidebar is rendered inline within the `render(%{view: :running})` function o
 
 When collapsed, the sidebar width transitions to 0 and the toggle button remains visible at the right edge.
 
+### Hook + LiveView update strategy
+
+```
+<div class="sidebar-wrapper relative flex">
+  <%!-- Hook container: phx-update="ignore" — only manages toggle state --%>
+  <div id="session-sidebar-toggle" phx-hook=".SidebarToggle" phx-update="ignore"
+       data-sidebar-state="open">
+    <button data-toggle-sidebar ...>toggle</button>
+  </div>
+
+  <%!-- Content: NO phx-update="ignore" — LiveView CAN patch this --%>
+  <div id="session-sidebar-content" class="sidebar-panel ...">
+    ...sidebar sections...
+  </div>
+</div>
+```
+
+CSS uses `[data-sidebar-state="collapsed"] ~ .sidebar-panel` to hide the content panel when collapsed. This lets the hook manage toggle state in isolation while LiveView patches sidebar data on PubSub events.
+
 ## Files to Modify
 
-1. **`lib/destila_web/live/workflow_runner_live.ex`** — Add sidebar rendering, new assigns for sidebar data, update layout structure
+1. **`lib/destila_web/live/workflow_runner_live.ex`** — Add sidebar rendering, new assigns for sidebar data, update layout structure, add helper functions
 2. **`lib/destila/workflows.ex`** — Add `list_metadata_records/1` query returning structs grouped by phase_name
-3. **`lib/destila/ai.ex`** — Add `list_ai_sessions_for_workflow/1` query with preloaded messages; add `extract_token_usage/1` helper
+3. **`lib/destila/ai.ex`** — Add `list_ai_sessions_for_workflow/1` query with preloaded messages; add `extract_token_usage/1` and `aggregate_token_usage/1` helpers
 4. **`lib/destila/executions.ex`** — (already has `list_phase_executions/1` — no changes needed)
-5. **`assets/css/app.css`** — Add sidebar transition styles if needed (prefer Tailwind utilities)
-6. **`features/workflow_session_sidebar.feature`** — New Gherkin feature file
+5. **`assets/css/app.css`** — Add sidebar transition CSS rules
+6. **`features/workflow_session_sidebar.feature`** — Already created (verify matches prompt spec)
 7. **`test/destila_web/live/workflow_session_sidebar_test.exs`** — New test file
 
 ## Implementation Steps
@@ -126,7 +149,9 @@ def aggregate_token_usage(messages) when is_list(messages) do
   |> Enum.map(&extract_token_usage/1)
   |> Enum.reject(&is_nil/1)
   |> case do
-    [] -> nil
+    [] ->
+      nil
+
     usages ->
       %{
         input: usages |> Enum.map(& &1.input) |> Enum.reject(&is_nil/1) |> Enum.sum(),
@@ -152,7 +177,7 @@ phase_executions = Destila.Executions.list_phase_executions(id)
 |> assign(:sidebar_phase_executions, phase_executions)
 ```
 
-In `mount_workflow/2` and `mount_type_selection/1`, assign empty defaults:
+In `mount_workflow/2` and `mount_type_selection/1`, assign empty defaults so the assigns exist even when the sidebar is not rendered:
 
 ```elixir
 |> assign(:sidebar_metadata, %{})
@@ -187,18 +212,9 @@ end
 
 ### Step 4: Add the colocated JS hook for sidebar toggle
 
-In the `render(%{view: :running})` function, add a colocated hook script. The hook reads the initial state from `localStorage` and toggles a data attribute on the sidebar container.
+The hook is placed inside the `render_sidebar/1` function component. **Critical:** The hook element wraps ONLY the toggle button (with `phx-update="ignore"`). The sidebar content panel is a sibling element that LiveView CAN patch.
 
 ```heex
-<div
-  id="session-sidebar-toggle"
-  phx-hook=".SidebarToggle"
-  phx-update="ignore"
-  data-sidebar-state="open"
->
-  <!-- sidebar toggle button + sidebar content rendered here -->
-</div>
-
 <script :type={Phoenix.LiveView.ColocatedHook} name=".SidebarToggle">
   export default {
     mounted() {
@@ -220,8 +236,6 @@ In the `render(%{view: :running})` function, add a colocated hook script. The ho
   }
 </script>
 ```
-
-**CSS approach:** Use Tailwind's group/data attribute selectors. The sidebar container uses `data-[sidebar-state=collapsed]` to hide content and shrink width. Use `transition-all duration-300` for smooth animation.
 
 ### Step 5: Update the render layout
 
@@ -248,7 +262,7 @@ New layout — wrap the phase content + sidebar in a flex row:
       {render_phase(assigns)}
     </div>
 
-    <%!-- Sidebar --%>
+    <%!-- Sidebar — only when we have a persisted workflow session --%>
     <%= if @workflow_session do %>
       {render_sidebar(assigns)}
     <% end %>
@@ -259,7 +273,11 @@ New layout — wrap the phase content + sidebar in a flex row:
 </div>
 ```
 
-The sidebar only renders when `@workflow_session` is set (not on pre-session Phase 1 or type selection).
+The sidebar only renders when `@workflow_session` is set. This is `nil` in two cases:
+- **Type selection** (`/workflows`) — `@view == :selecting_type`, so this render branch isn't reached
+- **Pre-session Phase 1** (`/workflows/:workflow_type`) — `@view == :running` but `@workflow_session == nil`
+
+Both cases correctly skip the sidebar.
 
 ### Step 6: Implement the sidebar rendering function
 
@@ -268,28 +286,40 @@ Define `render_sidebar/1` as a private function in `WorkflowRunnerLive`:
 ```elixir
 defp render_sidebar(assigns) do
   ~H"""
-  <div
-    id="session-sidebar-toggle"
-    phx-hook=".SidebarToggle"
-    phx-update="ignore"
-    data-sidebar-state="open"
-    class="relative flex"
-  >
-    <%!-- Toggle button --%>
-    <button
-      data-toggle-sidebar
-      class="absolute -left-3 top-4 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-base-200 border border-base-300 hover:bg-base-300 transition-colors shadow-sm"
-      id="sidebar-toggle-btn"
+  <div class="sidebar-wrapper relative flex" id="session-sidebar">
+    <%!-- Hook container: manages toggle state only. phx-update="ignore" prevents
+         LiveView from resetting the data-sidebar-state attribute on patches. --%>
+    <div
+      id="session-sidebar-toggle"
+      phx-hook=".SidebarToggle"
+      phx-update="ignore"
+      data-sidebar-state="open"
+      class="relative z-10"
     >
-      <span class="toggle-icon-open"><.icon name="hero-chevron-right-micro" class="size-3.5" /></span>
-      <span class="toggle-icon-collapsed"><.icon name="hero-chevron-left-micro" class="size-3.5" /></span>
-    </button>
+      <button
+        data-toggle-sidebar
+        class={[
+          "absolute -left-3 top-4 flex items-center justify-center",
+          "w-6 h-6 rounded-full bg-base-200 border border-base-300",
+          "hover:bg-base-300 transition-colors shadow-sm cursor-pointer"
+        ]}
+        id="sidebar-toggle-btn"
+      >
+        <span class="toggle-icon-open">
+          <.icon name="hero-chevron-right-micro" class="size-3.5" />
+        </span>
+        <span class="toggle-icon-collapsed">
+          <.icon name="hero-chevron-left-micro" class="size-3.5" />
+        </span>
+      </button>
+    </div>
 
-    <%!-- Sidebar panel --%>
-    <div class="sidebar-panel border-l border-base-300 bg-base-50 overflow-y-auto">
+    <%!-- Sidebar content panel: LiveView CAN patch this (no phx-update="ignore").
+         CSS hides/shows it based on the hook's data-sidebar-state attribute. --%>
+    <div id="session-sidebar-content" class="sidebar-panel border-l border-base-300 bg-base-100 overflow-y-auto">
       <div class="p-4 space-y-6">
         <%!-- Session Info --%>
-        <section>
+        <section id="sidebar-session-info">
           <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">
             Session Info
           </h3>
@@ -307,7 +337,7 @@ defp render_sidebar(assigns) do
               <dd>{format_duration(@workflow_session.inserted_at)}</dd>
             </div>
             <%= if @workflow_session.done_at do %>
-              <div class="flex justify-between">
+              <div class="flex justify-between" id="sidebar-completed-date">
                 <dt class="text-base-content/50">Completed</dt>
                 <dd class="text-success">{format_datetime(@workflow_session.done_at)}</dd>
               </div>
@@ -322,13 +352,17 @@ defp render_sidebar(assigns) do
 
         <%!-- Project Info --%>
         <%= if @project do %>
-          <section>
+          <section id="sidebar-project-info">
             <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">
               Project
             </h3>
             <div class="text-sm space-y-1">
-              <p class="font-medium">{@project.name}</p>
-              <p :if={@project.git_repo_url} class="text-xs text-base-content/40 truncate">
+              <p class="font-medium" id="sidebar-project-name">{@project.name}</p>
+              <p
+                :if={@project.git_repo_url}
+                class="text-xs text-base-content/40 truncate"
+                id="sidebar-project-repo"
+              >
                 {@project.git_repo_url}
               </p>
             </div>
@@ -336,16 +370,18 @@ defp render_sidebar(assigns) do
         <% end %>
 
         <%!-- Exported Metadata --%>
-        <section>
+        <section id="sidebar-metadata">
           <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">
             Exported Metadata
           </h3>
           <%= if @sidebar_metadata == %{} do %>
-            <p class="text-sm text-base-content/30 italic">No metadata exported yet</p>
+            <p class="text-sm text-base-content/30 italic" id="sidebar-metadata-empty">
+              No metadata exported yet
+            </p>
           <% else %>
             <div class="space-y-4">
               <%= for {phase_name, records} <- @sidebar_metadata do %>
-                <div>
+                <div id={"sidebar-metadata-#{phase_name}"}>
                   <h4 class="text-xs font-medium text-base-content/60 mb-2 capitalize">
                     {phase_name}
                   </h4>
@@ -366,16 +402,21 @@ defp render_sidebar(assigns) do
         </section>
 
         <%!-- AI Sessions --%>
-        <section>
+        <section id="sidebar-ai-sessions">
           <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">
             AI Sessions
           </h3>
           <%= if @sidebar_ai_sessions == [] do %>
-            <p class="text-sm text-base-content/30 italic">No AI sessions yet</p>
+            <p class="text-sm text-base-content/30 italic" id="sidebar-ai-sessions-empty">
+              No AI sessions yet
+            </p>
           <% else %>
             <div class="space-y-3">
               <%= for ai_session <- @sidebar_ai_sessions do %>
-                <div class="p-2.5 rounded-lg bg-base-200/50 text-xs space-y-1.5">
+                <div
+                  class="p-2.5 rounded-lg bg-base-200/50 text-xs space-y-1.5"
+                  id={"sidebar-ai-session-#{ai_session.id}"}
+                >
                   <div class="flex items-center justify-between">
                     <span class="font-medium">
                       {ai_session_phase_label(ai_session, @workflow_session)}
@@ -389,6 +430,13 @@ defp render_sidebar(assigns) do
                   </div>
                   <%!-- Token usage --%>
                   <.sidebar_token_usage ai_session={ai_session} />
+                  <%!-- View conversation link --%>
+                  <.link
+                    navigate={~p"/sessions/#{@workflow_session.id}"}
+                    class="text-primary/70 hover:text-primary transition-colors text-[11px]"
+                  >
+                    View conversation
+                  </.link>
                 </div>
               <% end %>
             </div>
@@ -428,6 +476,7 @@ Add private helpers to `WorkflowRunnerLive`:
 
 ```elixir
 defp format_datetime(nil), do: "—"
+
 defp format_datetime(dt) do
   Calendar.strftime(dt, "%b %d, %Y %H:%M")
 end
@@ -445,11 +494,12 @@ end
 defp format_metadata_value(%{"text" => text}) when is_binary(text) do
   if String.length(text) > 40, do: String.slice(text, 0, 40) <> "…", else: text
 end
+
 defp format_metadata_value(value) when is_map(value), do: Jason.encode!(value)
 defp format_metadata_value(value), do: inspect(value)
 
 defp ai_session_phase_label(ai_session, workflow_session) do
-  # Determine which phase this AI session is for from its messages
+  # Determine which phase this AI session is for from its messages' phase field
   phase_number =
     case ai_session.messages do
       [first | _] -> first.phase
@@ -525,54 +575,242 @@ defp format_tokens(n), do: "#{n}"
 
 ### Step 8: Add CSS for sidebar transitions
 
-In `assets/css/app.css`, add rules for the sidebar toggle animation. Since the hook uses `data-sidebar-state`, we target it with Tailwind arbitrary data attributes where possible, and custom CSS for transition states:
+In `assets/css/app.css`, add rules for the sidebar toggle animation. The CSS uses a general-sibling combinator to control the sidebar panel based on the hook element's data attribute:
 
 ```css
-/* Sidebar toggle transitions */
-[data-sidebar-state] .sidebar-panel {
+/* Right sidebar toggle transitions */
+.sidebar-wrapper .sidebar-panel {
   width: 20rem; /* w-80 */
-  transition: width 0.3s ease, opacity 0.2s ease;
+  min-width: 20rem;
+  transition: width 0.3s ease, min-width 0.3s ease, opacity 0.2s ease;
   opacity: 1;
 }
 
-[data-sidebar-state="collapsed"] .sidebar-panel {
+[data-sidebar-state="collapsed"] ~ .sidebar-panel {
   width: 0;
+  min-width: 0;
   opacity: 0;
   overflow: hidden;
 }
 
-[data-sidebar-state] .toggle-icon-open { display: inline; }
-[data-sidebar-state] .toggle-icon-collapsed { display: none; }
+/* Toggle icon rotation */
+.sidebar-wrapper .toggle-icon-open { display: inline; }
+.sidebar-wrapper .toggle-icon-collapsed { display: none; }
 [data-sidebar-state="collapsed"] .toggle-icon-open { display: none; }
 [data-sidebar-state="collapsed"] .toggle-icon-collapsed { display: inline; }
 ```
 
-### Step 9: Create Gherkin feature file
+### Step 9: Verify Gherkin feature file
 
-Create `features/workflow_session_sidebar.feature` with the scenarios from the prompt.
+The feature file `features/workflow_session_sidebar.feature` already exists with the correct scenarios from the prompt. Verify it matches the spec and all scenarios are present.
 
 ### Step 10: Create tests
 
-Create `test/destila_web/live/workflow_session_sidebar_test.exs` with tests for each Gherkin scenario. Tests should:
+Create `test/destila_web/live/workflow_session_sidebar_test.exs`:
 
-- Use the standard `@tag feature: "workflow_session_sidebar", scenario: "..."` linking
-- Create workflow sessions with projects, metadata, and AI sessions as fixtures
-- Assert sidebar presence/absence based on view state
-- Assert content of each sidebar section
-- Test real-time metadata updates via PubSub broadcast
-- Test empty states
+```elixir
+defmodule DestilaWeb.WorkflowSessionSidebarTest do
+  @moduledoc """
+  LiveView tests for the workflow session sidebar.
+  Feature: features/workflow_session_sidebar.feature
+  """
+  use DestilaWeb.ConnCase, async: false
 
-**Test strategy for each scenario:**
+  import Phoenix.LiveViewTest
 
-1. **Sidebar visible by default** — Navigate to `/sessions/:id`, assert `#session-sidebar-toggle` exists
-2. **Not shown on type selection** — Navigate to `/workflows`, assert `#session-sidebar-toggle` does not exist
-3. **Collapse/expand** — This is client-side JS behavior; test that the toggle button exists and has `data-toggle-sidebar` attribute. Full toggle behavior is a JS concern
-4. **Session info** — Create session, navigate, assert creation date, updated date, duration text are present
-5. **Done status** — Create session with `done_at`, assert completion date shows
-6. **Project info** — Create session with project, assert project name and repo URL present
-7. **Metadata grouped by phase** — Insert metadata with different `phase_name` values, assert both phase headings and key-value pairs appear
-8. **Real-time metadata update** — Mount LiveView, then broadcast `:metadata_updated`, assert new content appears
-9. **AI sessions** — Create AI session with messages, assert it appears in the list with correct phase label
+  @feature "workflow_session_sidebar"
+
+  setup %{conn: conn} do
+    ClaudeCode.Test.set_mode_to_shared()
+
+    ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+      [
+        ClaudeCode.Test.text("AI response"),
+        ClaudeCode.Test.result("AI response")
+      ]
+    end)
+
+    conn = post(conn, "/login", %{"email" => "test@example.com"})
+    {:ok, conn: conn}
+  end
+
+  # --- Helpers ---
+
+  defp create_project do
+    {:ok, project} =
+      Destila.Projects.create_project(%{
+        name: "Test Project",
+        git_repo_url: "https://github.com/test/repo"
+      })
+
+    project
+  end
+
+  defp create_session(attrs \\ %{}) do
+    defaults = %{
+      title: "Test Session",
+      workflow_type: :brainstorm_idea,
+      current_phase: 3,
+      total_phases: 6,
+      phase_status: :awaiting_input
+    }
+
+    {:ok, ws} = Destila.Workflows.create_workflow_session(Map.merge(defaults, attrs))
+    ws
+  end
+
+  defp create_ai_session_with_messages(ws) do
+    {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
+
+    {:ok, _} =
+      Destila.AI.create_message(ai_session.id, %{
+        role: :system,
+        content: "Let's work on this.",
+        phase: 3,
+        raw_response: %{
+          "text" => "Let's work on this.",
+          "usage" => %{"input_tokens" => 1500, "output_tokens" => 300}
+        }
+      })
+
+    {:ok, _} =
+      Destila.AI.create_message(ai_session.id, %{
+        role: :user,
+        content: "Fix the login bug",
+        phase: 3
+      })
+
+    ai_session
+  end
+
+  # --- Tests ---
+
+  @tag feature: @feature, scenario: "Sidebar is visible by default on an active session"
+  test "sidebar is visible on session detail page", %{conn: conn} do
+    ws = create_session()
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#session-sidebar")
+    assert has_element?(view, "#session-sidebar-content")
+    assert has_element?(view, "#sidebar-session-info")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar is not shown on workflow type selection"
+  test "sidebar is not rendered on type selection page", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/workflows")
+
+    refute has_element?(view, "#session-sidebar")
+  end
+
+  @tag feature: @feature, scenario: "Collapse and expand the sidebar"
+  test "toggle button exists with data-toggle-sidebar attribute", %{conn: conn} do
+    ws = create_session()
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#sidebar-toggle-btn[data-toggle-sidebar]")
+    assert has_element?(view, "#session-sidebar-toggle[phx-hook='.SidebarToggle']")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar shows session info"
+  test "sidebar shows session creation date and duration", %{conn: conn} do
+    ws = create_session()
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#sidebar-session-info")
+    # Verify session info section has the expected structure (dt/dd pairs)
+    assert has_element?(view, "#sidebar-session-info dt")
+    assert has_element?(view, "#sidebar-session-info dd")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar shows done status for completed session"
+  test "sidebar shows completion date when session is done", %{conn: conn} do
+    ws = create_session(%{done_at: DateTime.utc_now()})
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#sidebar-completed-date")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar shows project info"
+  test "sidebar shows project name and repository URL", %{conn: conn} do
+    project = create_project()
+    ws = create_session(%{project_id: project.id})
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#sidebar-project-info")
+    assert has_element?(view, "#sidebar-project-name")
+    assert has_element?(view, "#sidebar-project-repo")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar shows exported metadata grouped by phase"
+  test "sidebar shows metadata grouped by phase name", %{conn: conn} do
+    ws = create_session()
+
+    Destila.Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => "My idea"})
+    Destila.Workflows.upsert_metadata(ws.id, "wizard", "prompt", %{"text" => "A prompt"})
+    Destila.Workflows.upsert_metadata(ws.id, "setup", "repo_cloned", %{"text" => "true"})
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#sidebar-metadata-wizard")
+    assert has_element?(view, "#sidebar-metadata-setup")
+    refute has_element?(view, "#sidebar-metadata-empty")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar updates when new metadata is exported"
+  test "sidebar updates in real-time when new metadata is broadcast", %{conn: conn} do
+    ws = create_session()
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    # Initially no metadata
+    assert has_element?(view, "#sidebar-metadata-empty")
+
+    # Add metadata (this triggers PubSub broadcast)
+    Destila.Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => "New idea"})
+
+    # Wait for the PubSub message to arrive and be processed
+    _ = render(view)
+
+    assert has_element?(view, "#sidebar-metadata-wizard")
+    refute has_element?(view, "#sidebar-metadata-empty")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar shows AI sessions"
+  test "sidebar shows AI sessions with status", %{conn: conn} do
+    ws = create_session()
+    ai_session = create_ai_session_with_messages(ws)
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#sidebar-ai-sessions")
+    assert has_element?(view, "#sidebar-ai-session-#{ai_session.id}")
+    refute has_element?(view, "#sidebar-ai-sessions-empty")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar shows AI sessions"
+  test "sidebar shows empty state when no AI sessions", %{conn: conn} do
+    ws = create_session()
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#sidebar-ai-sessions-empty")
+  end
+
+  @tag feature: @feature, scenario: "Sidebar shows exported metadata grouped by phase"
+  test "sidebar shows empty state when no metadata", %{conn: conn} do
+    ws = create_session()
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+    assert has_element?(view, "#sidebar-metadata-empty")
+  end
+end
+```
 
 ### Step 11: Run `mix precommit`
 
@@ -582,7 +820,7 @@ Verify compilation, formatting, and all tests pass.
 
 ### No workflow session (pre-session Phase 1)
 
-When navigating to `/workflows/:workflow_type`, `@workflow_session` is nil. The sidebar is not rendered. This is already handled by the `<%= if @workflow_session do %>` guard.
+When navigating to `/workflows/:workflow_type`, `@workflow_session` is nil. The sidebar is not rendered. This is already handled by the `<%= if @workflow_session do %>` guard in the template.
 
 ### No metadata yet
 
@@ -606,21 +844,40 @@ This can happen with the `:new` session strategy. Each AI session is listed sepa
 
 ### Sidebar state persistence across navigation
 
-The colocated JS hook reads from `localStorage` on `mounted()`, so navigating away and back preserves the collapsed state. Since the hook element has `phx-update="ignore"`, LiveView won't reset the DOM state during patches.
+The colocated JS hook reads from `localStorage` on `mounted()`, so navigating away and back preserves the collapsed state. Since the hook element has `phx-update="ignore"`, LiveView won't reset the data attribute during patches.
 
 ### Long metadata values or keys
 
 Values and keys use `truncate` CSS class to prevent layout breakage. Values are capped at 120px max width.
+
+### `phx-update="ignore"` vs sidebar content updates
+
+The `phx-update="ignore"` is scoped to only the toggle button container (which holds the `data-sidebar-state` attribute). The sidebar content panel is a separate sibling element that LiveView patches normally. CSS uses the `[data-sidebar-state="collapsed"] ~ .sidebar-panel` sibling selector to toggle visibility based on the hook's state. This ensures:
+- Toggle state survives LiveView patches
+- Sidebar content (metadata, AI sessions) updates in real-time via PubSub
+
+## Corrections from deepening review
+
+1. **`phx-update="ignore"` scope issue** — The original plan wrapped the ENTIRE sidebar (toggle + content) in `phx-update="ignore"`. This would prevent LiveView from updating sidebar content when PubSub events fire (metadata updates, session changes). Fixed by scoping `phx-update="ignore"` to only the toggle button container, leaving sidebar content patchable by LiveView. CSS sibling selectors bridge the two elements.
+
+2. **Missing "View conversation" link** — The prompt requires a clickable link on each AI session to view the full conversation. Added a `<.link navigate={...}>View conversation</.link>` to each AI session card.
+
+3. **Missing concrete test code** — Replaced bullet-point test strategy with complete ExUnit test implementations including `@tag` annotations, fixture helpers, and assertions using DOM element IDs.
+
+4. **DOM IDs for test targeting** — Added unique DOM IDs to all sidebar sections and key elements (`#sidebar-session-info`, `#sidebar-project-info`, `#sidebar-metadata-wizard`, `#sidebar-ai-session-#{id}`, etc.) to enable reliable LiveViewTest assertions using `has_element?/2`.
+
+5. **Empty default assigns** — Ensured `mount_workflow/2` and `mount_type_selection/1` assign empty defaults for all sidebar assigns (`sidebar_metadata`, `sidebar_ai_sessions`, `sidebar_phase_executions`) even though the sidebar isn't rendered in those cases, to prevent potential undefined assign errors.
 
 ## Verification
 
 1. `mix precommit` passes
 2. Navigate to `/sessions/:id` — sidebar is visible and open
 3. Navigate to `/workflows` — no sidebar
-4. Click toggle — sidebar collapses with smooth animation
-5. Refresh page — sidebar state persists (collapsed stays collapsed)
-6. Check Session Info section shows correct dates and duration
-7. Check Project Info shows name and repo URL
-8. Trigger metadata export (via running a workflow) — sidebar updates in real-time
-9. Check AI Sessions section shows status and token usage
-10. Check empty states when no metadata or AI sessions exist
+4. Navigate to `/workflows/:workflow_type` — no sidebar (pre-session Phase 1)
+5. Click toggle — sidebar collapses with smooth animation
+6. Refresh page — sidebar state persists (collapsed stays collapsed)
+7. Check Session Info section shows correct dates and duration
+8. Check Project Info shows name and repo URL
+9. Trigger metadata export (via running a workflow) — sidebar updates in real-time
+10. Check AI Sessions section shows status, token usage, and conversation link
+11. Check empty states when no metadata or AI sessions exist
