@@ -71,6 +71,8 @@ defmodule Destila.AI.ClaudeSession do
 
     case GenServer.whereis(name) do
       nil ->
+        opts = Keyword.put(opts, :workflow_session_id, workflow_session_id)
+
         case start_link(Keyword.put(opts, :name, name)) do
           {:ok, pid} ->
             {:ok, pid}
@@ -224,6 +226,7 @@ defmodule Destila.AI.ClaudeSession do
   @impl true
   def init(opts) do
     {timeout_ms, claude_opts} = Keyword.pop(opts, :timeout_ms, @default_timeout_ms)
+    {workflow_session_id, claude_opts} = Keyword.pop(claude_opts, :workflow_session_id)
     claude_opts = Keyword.put_new(claude_opts, :allowed_tools, @default_allowed_tools)
 
     claude_opts =
@@ -261,11 +264,20 @@ defmodule Destila.AI.ClaudeSession do
         {:ok, claude_session} ->
           timer_ref = schedule_timeout(timeout_ms)
 
+          if workflow_session_id do
+            Phoenix.PubSub.broadcast(
+              Destila.PubSub,
+              Destila.PubSubHelper.claude_session_topic(),
+              {:claude_session_started, workflow_session_id}
+            )
+          end
+
           {:ok,
            %{
              claude_session: claude_session,
              timeout_ms: timeout_ms,
-             timer_ref: timer_ref
+             timer_ref: timer_ref,
+             workflow_session_id: workflow_session_id
            }}
 
         {:error, reason} ->

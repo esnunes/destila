@@ -702,4 +702,65 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
     ws
   end
+
+  # --- Aliveness Indicator ---
+
+  describe "aliveness indicator" do
+    @tag feature: @feature,
+         scenario: "Workflow runner shows gray indicator when GenServer is not expected"
+    test "shows gray dot when GenServer is not running and not expected", %{conn: conn} do
+      ws = create_session_in_phase(3, phase_status: :awaiting_input)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "span[title='AI session idle']")
+    end
+
+    @tag feature: @feature,
+         scenario:
+           "Workflow runner shows red indicator when GenServer is unexpectedly not running"
+    test "shows red dot when GenServer should be running but is not", %{conn: conn} do
+      ws = create_session_in_phase(3, phase_status: :processing)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "span[title='AI session not running (unexpected)']")
+    end
+
+    @tag feature: @feature,
+         scenario: "Workflow runner shows green indicator when Claude Code GenServer is running"
+    test "shows green dot when GenServer is running", %{conn: conn} do
+      ws = create_session_in_phase(3, phase_status: :processing)
+
+      {:ok, _pid} =
+        Agent.start_link(fn -> nil end,
+          name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "span[title='AI session running']")
+    end
+
+    @tag feature: @feature,
+         scenario: "Workflow runner indicator updates in real-time when GenServer stops"
+    test "updates from green to red when GenServer stops", %{conn: conn} do
+      ws = create_session_in_phase(3, phase_status: :processing)
+
+      {:ok, pid} =
+        Agent.start_link(fn -> nil end,
+          name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "span[title='AI session running']")
+
+      # Stop the agent — triggers :DOWN
+      Agent.stop(pid)
+      _ = render(view)
+
+      assert has_element?(view, "span[title='AI session not running (unexpected)']")
+    end
+  end
 end

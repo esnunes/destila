@@ -433,4 +433,104 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       assert has_element?(view, "#crafting-card-#{prompt.id}")
     end
   end
+
+  # --- Aliveness Indicator ---
+
+  describe "aliveness indicator" do
+    @tag feature: @feature,
+         scenario:
+           "Session card shows gray indicator when GenServer is not running and not expected"
+    test "shows gray dot when GenServer is not running and not expected", %{
+      conn: conn,
+      project_a: project
+    } do
+      ws =
+        create_prompt(%{
+          title: "Idle Session",
+          project_id: project.id,
+          phase_status: :awaiting_input
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/crafting")
+
+      assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session idle']")
+    end
+
+    @tag feature: @feature,
+         scenario: "Session card shows red indicator when GenServer is unexpectedly not running"
+    test "shows red dot when GenServer should be running but is not", %{
+      conn: conn,
+      project_a: project
+    } do
+      ws =
+        create_prompt(%{
+          title: "Stuck Session",
+          project_id: project.id,
+          current_phase: 3,
+          phase_status: :processing,
+          workflow_type: :brainstorm_idea
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/crafting")
+
+      assert has_element?(
+               view,
+               "#crafting-card-#{ws.id} span[title='AI session not running (unexpected)']"
+             )
+    end
+
+    @tag feature: @feature,
+         scenario: "Session card shows green indicator when Claude Code GenServer is running"
+    test "shows green dot when GenServer is running", %{conn: conn, project_a: project} do
+      ws =
+        create_prompt(%{
+          title: "Active Session",
+          project_id: project.id,
+          current_phase: 3,
+          phase_status: :processing,
+          workflow_type: :brainstorm_idea
+        })
+
+      start_supervised!(%{
+        id: {:test_agent, ws.id},
+        start:
+          {Agent, :start_link,
+           [fn -> nil end, [name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}]]}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/crafting")
+
+      assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session running']")
+    end
+
+    @tag feature: @feature, scenario: "Session card indicator updates when GenServer stops"
+    test "updates from green to red when GenServer stops", %{conn: conn, project_a: project} do
+      ws =
+        create_prompt(%{
+          title: "Active Session",
+          project_id: project.id,
+          current_phase: 3,
+          phase_status: :processing,
+          workflow_type: :brainstorm_idea
+        })
+
+      {:ok, pid} =
+        Agent.start_link(fn -> nil end,
+          name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/crafting")
+
+      assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session running']")
+
+      # Stop the agent — triggers :DOWN in the LiveView
+      Agent.stop(pid)
+      _ = render(view)
+
+      assert has_element?(
+               view,
+               "#crafting-card-#{ws.id} span[title='AI session not running (unexpected)']"
+             )
+    end
+  end
 end
