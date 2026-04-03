@@ -156,9 +156,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   def handle_event("retry_phase", _params, socket) do
     ws = socket.assigns.workflow_session
-    opts = socket.assigns.opts
 
-    if Keyword.get(opts, :non_interactive, false) && ws.phase_status != :processing do
+    if ws.phase_status != :processing do
       Destila.Executions.Engine.phase_retry(ws)
       ws = Workflows.get_workflow_session!(ws.id)
       {:noreply, assign(socket, :workflow_session, ws)}
@@ -169,9 +168,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
 
   def handle_event("cancel_phase", _params, socket) do
     ws = socket.assigns.workflow_session
-    opts = socket.assigns.opts
 
-    if Keyword.get(opts, :non_interactive, false) && ws.phase_status == :processing do
+    if ws.phase_status == :processing do
       AI.ClaudeSession.stop_for_workflow_session(ws.id)
       {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :awaiting_input})
       {:noreply, assign(socket, :workflow_session, ws)}
@@ -310,7 +308,7 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
         </div>
       </div>
 
-      <%!-- Interactive-only: text input --%>
+      <%!-- Interactive: text input with inline cancel/retry --%>
       <div
         :if={
           !@non_interactive &&
@@ -321,6 +319,8 @@ defmodule DestilaWeb.Phases.AiConversationPhase do
       >
         <.text_input
           disabled={@workflow_session.phase_status == :processing}
+          show_cancel={@workflow_session.phase_status == :processing}
+          show_retry={@workflow_session.phase_status == :awaiting_input && length(@messages) > 0}
           target={@myself}
         />
       </div>

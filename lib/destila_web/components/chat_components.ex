@@ -432,6 +432,8 @@ defmodule DestilaWeb.ChatComponents do
 
   attr :disabled, :boolean, default: false
   attr :target, :any, default: nil
+  attr :show_cancel, :boolean, default: false
+  attr :show_retry, :boolean, default: false
 
   def text_input(assigns) do
     ~H"""
@@ -450,6 +452,26 @@ defmodule DestilaWeb.ChatComponents do
       />
       <button type="submit" class="btn btn-primary" disabled={@disabled}>
         Send
+      </button>
+      <button
+        :if={@show_cancel}
+        type="button"
+        phx-click="cancel_phase"
+        phx-target={@target}
+        id="cancel-phase-btn"
+        class="btn btn-outline btn-error"
+      >
+        <.icon name="hero-stop-micro" class="size-4" /> Cancel
+      </button>
+      <button
+        :if={@show_retry}
+        type="button"
+        phx-click="retry_phase"
+        phx-target={@target}
+        id="retry-phase-btn"
+        class="btn btn-outline"
+      >
+        <.icon name="hero-arrow-path-micro" class="size-4" /> Retry
       </button>
     </form>
     <p :if={!@disabled} class="text-xs text-base-content/30 mt-2">Press Enter to send</p>
