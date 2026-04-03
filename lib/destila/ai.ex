@@ -36,6 +36,18 @@ defmodule Destila.AI do
     end
   end
 
+  def list_ai_sessions_for_workflow(workflow_session_id) do
+    messages_query = from(m in Message, order_by: m.inserted_at)
+
+    Repo.all(
+      from(s in Session,
+        where: s.workflow_session_id == ^workflow_session_id,
+        order_by: s.inserted_at,
+        preload: [messages: ^messages_query]
+      )
+    )
+  end
+
   def create_ai_session(attrs) do
     %Session{}
     |> Session.changeset(attrs)
@@ -248,6 +260,39 @@ defmodule Destila.AI do
   defp workflow_type_label(:brainstorm_idea), do: "brainstorm idea"
   defp workflow_type_label(:implement_general_prompt), do: "prompt implementation"
   defp workflow_type_label(other), do: to_string(other)
+
+  # --- Token usage ---
+
+  def extract_token_usage(%Message{raw_response: raw}) when is_map(raw) do
+    usage = raw["usage"] || raw[:usage]
+
+    if is_map(usage) do
+      input = usage["input_tokens"] || usage[:input_tokens]
+      output = usage["output_tokens"] || usage[:output_tokens]
+
+      if input || output do
+        %{input: input, output: output}
+      end
+    end
+  end
+
+  def extract_token_usage(_), do: nil
+
+  def aggregate_token_usage(messages) when is_list(messages) do
+    messages
+    |> Enum.map(&extract_token_usage/1)
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] ->
+        nil
+
+      usages ->
+        %{
+          input: usages |> Enum.map(& &1.input) |> Enum.reject(&is_nil/1) |> Enum.sum(),
+          output: usages |> Enum.map(& &1.output) |> Enum.reject(&is_nil/1) |> Enum.sum()
+        }
+    end
+  end
 
   # --- Private helpers ---
 

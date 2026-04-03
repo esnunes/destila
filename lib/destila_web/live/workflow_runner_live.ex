@@ -40,7 +40,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:workflow_metadata, Workflows.workflow_type_metadata())
      |> assign(:page_title, "New Session")
      |> assign(:alive_session, false)
-     |> assign(:alive_session_ref, nil)}
+     |> assign(:alive_session_ref, nil)
+     |> assign(:sidebar_metadata, %{})
+     |> assign(:sidebar_ai_sessions, [])
+     |> assign(:sidebar_phase_executions, [])}
   end
 
   defp mount_workflow(workflow_type_str, socket) do
@@ -61,7 +64,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:page_title, Workflows.default_title(workflow_type))
      |> assign(:streaming_chunks, nil)
      |> assign(:alive_session, false)
-     |> assign(:alive_session_ref, nil)}
+     |> assign(:alive_session_ref, nil)
+     |> assign(:sidebar_metadata, %{})
+     |> assign(:sidebar_ai_sessions, [])
+     |> assign(:sidebar_phase_executions, [])}
   end
 
   defp mount_session(id, socket) do
@@ -103,7 +109,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:page_title, workflow_session.title)
        |> assign(:streaming_chunks, nil)
        |> assign(:alive_session, alive_session)
-       |> assign(:alive_session_ref, alive_session_ref)}
+       |> assign(:alive_session_ref, alive_session_ref)
+       |> assign(:sidebar_metadata, Workflows.list_metadata_records(id))
+       |> assign(:sidebar_ai_sessions, Destila.AI.list_ai_sessions_for_workflow(id))
+       |> assign(:sidebar_phase_executions, Destila.Executions.list_phase_executions(id))}
     else
       {:ok,
        socket
@@ -303,7 +312,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
            do: socket.assigns[:streaming_chunks],
            else: nil
          )
-       )}
+       )
+       |> assign(:sidebar_ai_sessions, Destila.AI.list_ai_sessions_for_workflow(ws.id))
+       |> assign(:sidebar_phase_executions, Destila.Executions.list_phase_executions(ws.id))}
     else
       {:noreply, socket}
     end
@@ -312,7 +323,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   # PubSub: metadata changed — refresh metadata assign for active phase component
   def handle_info({:metadata_updated, ws_id}, socket) do
     if socket.assigns[:workflow_session] && ws_id == socket.assigns.workflow_session.id do
-      {:noreply, assign(socket, :metadata, Workflows.get_metadata(ws_id))}
+      {:noreply,
+       socket
+       |> assign(:metadata, Workflows.get_metadata(ws_id))
+       |> assign(:sidebar_metadata, Workflows.list_metadata_records(ws_id))}
     else
       {:noreply, socket}
     end
@@ -528,9 +542,17 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           </div>
         </div>
 
-        <%!-- Phase content — full remaining height, phase manages its own layout --%>
-        <div class="flex-1 min-h-0">
-          {render_phase(assigns)}
+        <%!-- Main content area: phase + sidebar --%>
+        <div class="flex flex-1 min-h-0">
+          <%!-- Phase content --%>
+          <div class="flex-1 min-w-0">
+            {render_phase(assigns)}
+          </div>
+
+          <%!-- Sidebar — only when we have a persisted workflow session --%>
+          <%= if @workflow_session do %>
+            {render_sidebar(assigns)}
+          <% end %>
         </div>
 
         <%!-- Workflow complete banner --%>
@@ -575,6 +597,290 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           Phase {@current_phase}
         </div>
         """
+    end
+  end
+
+  # --- Sidebar ---
+
+  defp render_sidebar(assigns) do
+    ~H"""
+    <div class="sidebar-wrapper relative flex" id="session-sidebar">
+      <%!-- Hook container: manages toggle state only. phx-update="ignore" prevents
+           LiveView from resetting the data-sidebar-state attribute on patches. --%>
+      <div
+        id="session-sidebar-toggle"
+        phx-hook=".SidebarToggle"
+        phx-update="ignore"
+        data-sidebar-state="open"
+        class="relative z-10"
+      >
+        <button
+          data-toggle-sidebar
+          class={[
+            "absolute -left-3 top-4 flex items-center justify-center",
+            "w-6 h-6 rounded-full bg-base-200 border border-base-300",
+            "hover:bg-base-300 transition-colors shadow-sm cursor-pointer"
+          ]}
+          id="sidebar-toggle-btn"
+        >
+          <span class="toggle-icon-open">
+            <.icon name="hero-chevron-right-micro" class="size-3.5" />
+          </span>
+          <span class="toggle-icon-collapsed">
+            <.icon name="hero-chevron-left-micro" class="size-3.5" />
+          </span>
+        </button>
+      </div>
+
+      <%!-- Sidebar content panel: LiveView CAN patch this (no phx-update="ignore").
+           CSS hides/shows it based on the hook's data-sidebar-state attribute. --%>
+      <div
+        id="session-sidebar-content"
+        class="sidebar-panel border-l border-base-300 bg-base-100 overflow-y-auto"
+      >
+        <div class="p-4 space-y-6">
+          <%!-- Session Info --%>
+          <section id="sidebar-session-info">
+            <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">
+              Session Info
+            </h3>
+            <dl class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <dt class="text-base-content/50">Created</dt>
+                <dd>{format_datetime(@workflow_session.inserted_at)}</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="text-base-content/50">Updated</dt>
+                <dd>{format_datetime(@workflow_session.updated_at)}</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="text-base-content/50">Duration</dt>
+                <dd>{format_duration(@workflow_session.inserted_at)}</dd>
+              </div>
+              <%= if @workflow_session.done_at do %>
+                <div class="flex justify-between" id="sidebar-completed-date">
+                  <dt class="text-base-content/50">Completed</dt>
+                  <dd class="text-success">{format_datetime(@workflow_session.done_at)}</dd>
+                </div>
+              <% else %>
+                <div class="flex justify-between">
+                  <dt class="text-base-content/50">Status</dt>
+                  <dd>In progress</dd>
+                </div>
+              <% end %>
+            </dl>
+          </section>
+
+          <%!-- Project Info --%>
+          <%= if @project do %>
+            <section id="sidebar-project-info">
+              <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">
+                Project
+              </h3>
+              <div class="text-sm space-y-1">
+                <p class="font-medium" id="sidebar-project-name">{@project.name}</p>
+                <p
+                  :if={@project.git_repo_url}
+                  class="text-xs text-base-content/40 truncate"
+                  id="sidebar-project-repo"
+                >
+                  {@project.git_repo_url}
+                </p>
+              </div>
+            </section>
+          <% end %>
+
+          <%!-- Exported Metadata --%>
+          <section id="sidebar-metadata">
+            <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">
+              Exported Metadata
+            </h3>
+            <%= if @sidebar_metadata == %{} do %>
+              <p class="text-sm text-base-content/30 italic" id="sidebar-metadata-empty">
+                No metadata exported yet
+              </p>
+            <% else %>
+              <div class="space-y-4">
+                <%= for {phase_name, records} <- @sidebar_metadata do %>
+                  <div id={"sidebar-metadata-#{phase_name}"}>
+                    <h4 class="text-xs font-medium text-base-content/60 mb-2 capitalize">
+                      {phase_name}
+                    </h4>
+                    <dl class="space-y-1.5">
+                      <%= for record <- records do %>
+                        <div class="flex justify-between gap-2 text-xs">
+                          <dt class="text-base-content/50 truncate">{record.key}</dt>
+                          <dd class="text-right font-mono truncate max-w-[120px]">
+                            {format_metadata_value(record.value)}
+                          </dd>
+                        </div>
+                      <% end %>
+                    </dl>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </section>
+
+          <%!-- AI Sessions --%>
+          <section id="sidebar-ai-sessions">
+            <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3">
+              AI Sessions
+            </h3>
+            <%= if @sidebar_ai_sessions == [] do %>
+              <p class="text-sm text-base-content/30 italic" id="sidebar-ai-sessions-empty">
+                No AI sessions yet
+              </p>
+            <% else %>
+              <div class="space-y-3">
+                <%= for ai_session <- @sidebar_ai_sessions do %>
+                  <div
+                    class="p-2.5 rounded-lg bg-base-200/50 text-xs space-y-1.5"
+                    id={"sidebar-ai-session-#{ai_session.id}"}
+                  >
+                    <div class="flex items-center justify-between">
+                      <span class="font-medium">
+                        {ai_session_phase_label(ai_session, @workflow_session)}
+                      </span>
+                      <span class={[
+                        "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                        ai_session_status_class(ai_session, @sidebar_phase_executions)
+                      ]}>
+                        {ai_session_status(ai_session, @sidebar_phase_executions)}
+                      </span>
+                    </div>
+                    <%!-- Token usage --%>
+                    <.sidebar_token_usage ai_session={ai_session} />
+                    <%!-- View conversation link --%>
+                    <.link
+                      navigate={~p"/sessions/#{@workflow_session.id}"}
+                      class="text-primary/70 hover:text-primary transition-colors text-[11px]"
+                    >
+                      View conversation
+                    </.link>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".SidebarToggle">
+      export default {
+        mounted() {
+          const stored = localStorage.getItem("sidebar_collapsed")
+          if (stored === "true") {
+            this.el.dataset.sidebarState = "collapsed"
+          }
+
+          this.el.addEventListener("click", (e) => {
+            const btn = e.target.closest("[data-toggle-sidebar]")
+            if (!btn) return
+
+            const current = this.el.dataset.sidebarState
+            const next = current === "collapsed" ? "open" : "collapsed"
+            this.el.dataset.sidebarState = next
+            localStorage.setItem("sidebar_collapsed", next === "collapsed")
+          })
+        }
+      }
+    </script>
+    """
+  end
+
+  defp sidebar_token_usage(assigns) do
+    usage = Destila.AI.aggregate_token_usage(assigns.ai_session.messages)
+    assigns = assign(assigns, :usage, usage)
+
+    ~H"""
+    <div :if={@usage} class="flex items-center gap-3 text-base-content/40">
+      <span>
+        <.icon name="hero-arrow-down-tray-micro" class="size-3 inline" />
+        {format_tokens(@usage.input)} in
+      </span>
+      <span>
+        <.icon name="hero-arrow-up-tray-micro" class="size-3 inline" />
+        {format_tokens(@usage.output)} out
+      </span>
+    </div>
+    """
+  end
+
+  # --- Sidebar helpers ---
+
+  defp format_datetime(nil), do: "—"
+
+  defp format_datetime(dt) do
+    Calendar.strftime(dt, "%b %d, %Y %H:%M")
+  end
+
+  defp format_duration(start_time) do
+    diff = DateTime.diff(DateTime.utc_now(), start_time, :second)
+
+    cond do
+      diff < 60 -> "#{diff}s"
+      diff < 3600 -> "#{div(diff, 60)}m"
+      true -> "#{div(diff, 3600)}h #{div(rem(diff, 3600), 60)}m"
+    end
+  end
+
+  defp format_metadata_value(%{"text" => text}) when is_binary(text) do
+    if String.length(text) > 40, do: String.slice(text, 0, 40) <> "…", else: text
+  end
+
+  defp format_metadata_value(value) when is_map(value), do: Jason.encode!(value)
+  defp format_metadata_value(value), do: inspect(value)
+
+  defp format_tokens(nil), do: "—"
+  defp format_tokens(n) when n >= 1_000_000, do: "#{Float.round(n / 1_000_000, 1)}M"
+  defp format_tokens(n) when n >= 1_000, do: "#{Float.round(n / 1_000, 1)}K"
+  defp format_tokens(n), do: "#{n}"
+
+  defp ai_session_phase_label(ai_session, workflow_session) do
+    phase_number =
+      case ai_session.messages do
+        [first | _] -> first.phase
+        [] -> nil
+      end
+
+    if phase_number do
+      name = Workflows.phase_name(workflow_session.workflow_type, phase_number)
+      name || "Phase #{phase_number}"
+    else
+      "AI Session"
+    end
+  end
+
+  defp ai_session_status(ai_session, phase_executions) do
+    phase_number =
+      case ai_session.messages do
+        [first | _] -> first.phase
+        [] -> nil
+      end
+
+    pe = Enum.find(phase_executions, &(&1.phase_number == phase_number))
+
+    cond do
+      pe && pe.status == "completed" -> "Completed"
+      pe && pe.status == "processing" -> "Processing"
+      pe && pe.status == "awaiting_input" -> "Waiting"
+      pe && pe.status == "awaiting_confirmation" -> "Review"
+      pe -> String.capitalize(pe.status)
+      true -> "Unknown"
+    end
+  end
+
+  defp ai_session_status_class(ai_session, phase_executions) do
+    status = ai_session_status(ai_session, phase_executions)
+
+    case status do
+      "Completed" -> "bg-success/20 text-success"
+      "Processing" -> "bg-primary/20 text-primary"
+      "Waiting" -> "bg-warning/20 text-warning"
+      "Review" -> "bg-info/20 text-info"
+      _ -> "bg-base-300 text-base-content/60"
     end
   end
 

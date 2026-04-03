@@ -201,6 +201,27 @@ a, button, .card, .btn, input {
 .phase-section.first-phase > summary { margin-top: 0; }
 .phase-section:not([open]) > summary { margin-bottom: 0; }
 
+/* Right sidebar toggle transitions */
+.sidebar-wrapper .sidebar-panel {
+  width: 20rem;
+  min-width: 20rem;
+  transition: width 0.3s ease, min-width 0.3s ease, opacity 0.2s ease;
+  opacity: 1;
+}
+
+[data-sidebar-state="collapsed"] ~ .sidebar-panel {
+  width: 0;
+  min-width: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* Toggle icon rotation */
+.sidebar-wrapper .toggle-icon-open { display: inline; }
+.sidebar-wrapper .toggle-icon-collapsed { display: none; }
+[data-sidebar-state="collapsed"] .toggle-icon-open { display: none; }
+[data-sidebar-state="collapsed"] .toggle-icon-collapsed { display: inline; }
+
 /* SortableJS ghost styling */
 .sortable-ghost {
   opacity: 0.4;
