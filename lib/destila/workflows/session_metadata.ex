@@ -8,6 +8,7 @@ defmodule Destila.Workflows.SessionMetadata do
     field(:phase_name, :string)
     field(:key, :string)
     field(:value, :map)
+    field(:exported, :boolean, default: false)
 
     belongs_to(:workflow_session, Destila.Workflows.Session)
 
@@ -16,7 +17,7 @@ defmodule Destila.Workflows.SessionMetadata do
 
   def changeset(metadata, attrs) do
     metadata
-    |> cast(attrs, [:workflow_session_id, :phase_name, :key, :value])
+    |> cast(attrs, [:workflow_session_id, :phase_name, :key, :value, :exported])
     |> validate_required([:workflow_session_id, :phase_name, :key, :value])
   end
 end

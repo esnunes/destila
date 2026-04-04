@@ -86,6 +86,105 @@ defmodule Destila.WorkflowsMetadataTest do
     end
   end
 
+  describe "upsert_metadata/5 with exported flag" do
+    @tag feature: "exported_metadata", scenario: "Metadata is private by default"
+    test "defaults exported to false" do
+      ws = create_session()
+
+      {:ok, metadata} =
+        Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{"status" => "done"})
+
+      assert metadata.exported == false
+    end
+
+    @tag feature: "exported_metadata", scenario: "Generated prompt is marked as exported"
+    test "sets exported to true when passed" do
+      ws = create_session()
+
+      {:ok, metadata} =
+        Workflows.upsert_metadata(ws.id, "phase6", "prompt_generated", %{"text" => "Do X"},
+          exported: true
+        )
+
+      assert metadata.exported == true
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Only exported metadata is returned when querying for external use"
+    test "upsert replaces exported flag on conflict" do
+      ws = create_session()
+      {:ok, _} = Workflows.upsert_metadata(ws.id, "phase6", "prompt_generated", %{"text" => "v1"})
+
+      {:ok, updated} =
+        Workflows.upsert_metadata(ws.id, "phase6", "prompt_generated", %{"text" => "v2"},
+          exported: true
+        )
+
+      assert updated.exported == true
+      assert updated.value == %{"text" => "v2"}
+    end
+  end
+
+  describe "get_exported_metadata/1" do
+    @tag feature: "exported_metadata",
+         scenario: "Only exported metadata is returned when querying for external use"
+    test "returns empty list when no metadata exists" do
+      ws = create_session()
+      assert Workflows.get_exported_metadata(ws.id) == []
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Only exported metadata is returned when querying for external use"
+    test "returns empty list when no metadata is exported" do
+      ws = create_session()
+      {:ok, _} = Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{"status" => "done"})
+      {:ok, _} = Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => "my idea"})
+      assert Workflows.get_exported_metadata(ws.id) == []
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Only exported metadata is returned when querying for external use"
+    test "returns only exported entries as full structs" do
+      ws = create_session()
+      {:ok, _} = Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{"status" => "done"})
+
+      {:ok, _} =
+        Workflows.upsert_metadata(ws.id, "phase6", "prompt_generated", %{"text" => "prompt"},
+          exported: true
+        )
+
+      exported = Workflows.get_exported_metadata(ws.id)
+      assert length(exported) == 1
+
+      [entry] = exported
+      assert %Destila.Workflows.SessionMetadata{} = entry
+      assert entry.phase_name == "phase6"
+      assert entry.key == "prompt_generated"
+      assert entry.value == %{"text" => "prompt"}
+      assert entry.exported == true
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Only exported metadata is returned when querying for external use"
+    test "returns entries ordered by phase_name then key" do
+      ws = create_session()
+
+      {:ok, _} =
+        Workflows.upsert_metadata(ws.id, "z_phase", "alpha", %{"v" => "1"}, exported: true)
+
+      {:ok, _} =
+        Workflows.upsert_metadata(ws.id, "a_phase", "beta", %{"v" => "2"}, exported: true)
+
+      {:ok, _} =
+        Workflows.upsert_metadata(ws.id, "a_phase", "alpha", %{"v" => "3"}, exported: true)
+
+      exported = Workflows.get_exported_metadata(ws.id)
+      assert length(exported) == 3
+      assert Enum.map(exported, & &1.phase_name) == ["a_phase", "a_phase", "z_phase"]
+      assert Enum.map(exported, & &1.key) == ["alpha", "beta", "alpha"]
+    end
+  end
+
   describe "get_metadata/1" do
     test "returns empty map when no metadata exists" do
       ws = create_session()

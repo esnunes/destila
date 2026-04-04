@@ -147,9 +147,13 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
         if Keyword.get(opts, :message_type) == :generated_prompt do
           phase_name = phase_name(phase_number)
 
-          Destila.Workflows.upsert_metadata(ws.id, phase_name, "prompt_generated", %{
-            "text" => String.trim(response_text)
-          })
+          Destila.Workflows.upsert_metadata(
+            ws.id,
+            phase_name,
+            "prompt_generated",
+            %{"text" => String.trim(response_text)},
+            exported: true
+          )
         end
 
       _ ->
