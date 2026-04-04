@@ -1,7 +1,7 @@
 defmodule DestilaWeb.ProjectComponents do
   @moduledoc """
   Shared function components for project selection and creation.
-  Used by WizardPhase and PromptWizardPhase.
+  Used by CreateSessionLive.
   """
 
   use Phoenix.Component

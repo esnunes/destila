@@ -398,7 +398,8 @@ defmodule DestilaWeb.CreateSessionLive do
 
         input_text == "" ->
           label = String.downcase(assigns.input_label)
-          Map.put(errors, :input, "Please select or write a #{label}")
+          article = if String.starts_with?(label, ~w(a e i o u)), do: "an", else: "a"
+          Map.put(errors, :input, "Please select or write #{article} #{label}")
 
         true ->
           errors

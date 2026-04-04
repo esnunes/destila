@@ -1,7 +1,8 @@
 defmodule DestilaWeb.Phases.SetupPhase do
   @moduledoc """
-  LiveComponent for Phase 2 — displays setup progress (title generation,
-  repo sync, worktree creation) and auto-advances when all steps complete.
+  LiveComponent for setup status — displays setup progress (title generation,
+  repo sync, worktree creation). Rendered by WorkflowRunnerLive when
+  `phase_status` is `:setup`.
 
   Receives metadata from the parent LiveView via the `metadata` assign.
   """

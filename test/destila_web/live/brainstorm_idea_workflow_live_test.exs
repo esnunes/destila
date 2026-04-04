@@ -167,7 +167,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       view |> element("#project-#{project.id}") |> render_click()
       view |> element("#start-workflow-btn") |> render_click()
 
-      assert render(view) =~ "Please select or write a idea"
+      assert render(view) =~ "Please select or write an idea"
     end
   end
 
