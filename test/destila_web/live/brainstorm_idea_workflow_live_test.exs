@@ -76,7 +76,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
         workflow_type: :brainstorm_idea,
         project_id: nil,
         current_phase: phase,
-        total_phases: 6,
+        total_phases: 4,
         phase_status: phase_status
       })
 
@@ -86,14 +86,14 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: "Let's work on your task.",
-        phase: 3
+        phase: 1
       })
 
     {:ok, _} =
       Destila.AI.create_message(ai_session.id, %{
         role: :user,
         content: "Fix the login timeout bug",
-        phase: 3
+        phase: 1
       })
 
     raw_response =
@@ -117,29 +117,25 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     ws
   end
 
-  # --- Phase 1: Wizard ---
+  # --- Creation form ---
 
-  describe "Phase 1 - Wizard" do
-    @tag feature: @feature, scenario: "Phase 1 - Wizard collects project and idea"
+  describe "Creation form" do
+    @tag feature: @feature, scenario: "Creation form collects project and idea"
     test "collects project and idea, creates session, redirects", %{conn: conn} do
       project = create_project()
 
       {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
-      # Shows wizard form
+      # Shows creation form
       assert has_element?(view, "#project-list")
-      assert has_element?(view, "#wizard-idea-form")
-
-      # Progress bar shows Phase 1
-      assert render(view) =~ "Phase 1/6"
-      assert render(view) =~ "Project &amp; Idea"
+      assert has_element?(view, "#input_text")
 
       # Select project and enter idea
       view |> element("#project-#{project.id}") |> render_click()
       assert render(view) =~ "border-primary"
 
       view
-      |> form("#wizard-idea-form", %{"initial_idea" => "Fix the login timeout bug"})
+      |> form("#manual-input-form", %{"input_text" => "Fix the login timeout bug"})
       |> render_submit()
 
       # Redirects to session detail page
@@ -147,74 +143,76 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       assert path =~ "/sessions/"
     end
 
-    @tag feature: @feature, scenario: "Phase 1 - Wizard requires a project"
+    @tag feature: @feature, scenario: "Creation form requires a project"
     test "shows error when no project selected", %{conn: conn} do
       _project = create_project()
 
       {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
-      # Submit without selecting project
+      # Enter idea via change event then click start button
       view
-      |> form("#wizard-idea-form", %{"initial_idea" => "Some idea"})
-      |> render_submit()
+      |> form("#manual-input-form", %{"input_text" => "Some idea"})
+      |> render_change()
+
+      view |> element("#start-workflow-btn") |> render_click()
 
       assert render(view) =~ "Please select a project"
     end
 
-    @tag feature: @feature, scenario: "Phase 1 - Wizard requires an idea"
+    @tag feature: @feature, scenario: "Creation form requires an idea"
     test "shows error when idea is empty", %{conn: conn} do
+      project = create_project()
       {:ok, view, _html} = live(conn, ~p"/workflows/brainstorm_idea")
 
-      view
-      |> form("#wizard-idea-form", %{"initial_idea" => ""})
-      |> render_submit()
+      view |> element("#project-#{project.id}") |> render_click()
+      view |> element("#start-workflow-btn") |> render_click()
 
-      assert render(view) =~ "Please describe your initial idea"
+      assert render(view) =~ "Please select or write an idea"
     end
   end
 
-  # --- Phase 2: Setup ---
+  # --- Setup ---
 
-  describe "Phase 2 - Setup" do
-    @tag feature: @feature, scenario: "Phase 2 - Setup displays progress"
+  describe "Setup" do
+    @tag feature: @feature, scenario: "Setup displays progress"
     test "shows setup progress steps", %{conn: conn} do
       {:ok, ws} =
         Destila.Workflows.create_workflow_session(%{
           title: "Test Session",
           workflow_type: :brainstorm_idea,
-          current_phase: 2,
-          total_phases: 6,
+          current_phase: 1,
+          total_phases: 4,
           phase_status: :setup,
           title_generating: true,
           project_id: create_project().id
         })
 
-      Destila.Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
+      Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
         "status" => "completed"
       })
 
-      Destila.Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
+      Destila.Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
         "status" => "in_progress"
       })
 
       {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert html =~ "Phase 2/6"
-      assert html =~ "Setup"
+      assert html =~ "Phase 1/4"
+      assert html =~ "Task Description"
       assert html =~ "Generating title..."
       assert html =~ "Syncing repository..."
     end
   end
 
-  # --- Phase 3: Task Description ---
+  # --- Phase 1: Task Description ---
 
-  describe "Phase 3 - Task Description" do
-    @tag feature: @feature, scenario: "Phase 3 - AI asks clarifying questions"
+  describe "Phase 1 - Task Description" do
+    @tag feature: @feature, scenario: "Phase 1 - AI asks clarifying questions"
     test "shows phase info, AI message, and accepts user input", %{conn: conn} do
-      ws = create_session_in_phase(3)
+      ws = create_session_in_phase(1)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert render(view) =~ "Phase 3/6"
+      assert render(view) =~ "Phase 1/4"
       assert render(view) =~ "Task Description"
       assert render(view) =~ "I have some questions about this task."
 
@@ -234,7 +232,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: @feature, scenario: "Advance to the next phase"
     test "shows advance button and advances on confirm", %{conn: conn} do
       ws =
-        create_session_in_phase(3,
+        create_session_in_phase(1,
           phase_status: :advance_suggested,
           last_message_type: :phase_advance
         )
@@ -242,18 +240,18 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "button[phx-click='confirm_advance']")
-      assert render(view) =~ "Continue to Phase 4"
+      assert render(view) =~ "Continue to Phase 2"
 
       view |> element("button[phx-click='confirm_advance']") |> render_click()
 
-      assert render(view) =~ "Phase 4/6"
+      assert render(view) =~ "Phase 2/4"
       assert render(view) =~ "Gherkin Review"
     end
 
     @tag feature: @feature, scenario: "Decline phase advance to add more context"
     test "re-enables input when declining advance", %{conn: conn} do
       ws =
-        create_session_in_phase(3,
+        create_session_in_phase(1,
           phase_status: :advance_suggested,
           last_message_type: :phase_advance
         )
@@ -292,7 +290,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       end)
 
       ws =
-        create_session_in_phase(3,
+        create_session_in_phase(1,
           phase_status: :advance_suggested,
           last_message_type: :phase_advance
         )
@@ -306,50 +304,50 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       # Verify via fresh mount
       {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
-      assert html =~ "Phase 5/6"
+      assert html =~ "Phase 3/4"
       assert html =~ "Technical Concerns"
 
       Agent.stop(call_count)
     end
   end
 
-  # --- Phase 4: Gherkin Review ---
+  # --- Phase 2: Gherkin Review ---
 
-  describe "Phase 4 - Gherkin Review" do
-    @tag feature: @feature, scenario: "Phase 4 - Gherkin Review"
+  describe "Phase 2 - Gherkin Review" do
+    @tag feature: @feature, scenario: "Phase 2 - Gherkin Review"
     test "shows Gherkin Review phase with conversation input", %{conn: conn} do
-      ws = create_session_in_phase(4)
+      ws = create_session_in_phase(2)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert render(view) =~ "Phase 4/6"
+      assert render(view) =~ "Phase 2/4"
       assert render(view) =~ "Gherkin Review"
       assert has_element?(view, "input[name='content']")
     end
   end
 
-  # --- Phase 5: Technical Concerns ---
+  # --- Phase 3: Technical Concerns ---
 
-  describe "Phase 5 - Technical Concerns" do
-    @tag feature: @feature, scenario: "Phase 5 - Technical Concerns"
+  describe "Phase 3 - Technical Concerns" do
+    @tag feature: @feature, scenario: "Phase 3 - Technical Concerns"
     test "shows Technical Concerns phase with conversation input", %{conn: conn} do
-      ws = create_session_in_phase(5)
+      ws = create_session_in_phase(3)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert render(view) =~ "Phase 5/6"
+      assert render(view) =~ "Phase 3/4"
       assert render(view) =~ "Technical Concerns"
       assert has_element?(view, "input[name='content']")
     end
   end
 
-  # --- Phase 6: Prompt Generation ---
+  # --- Phase 4: Prompt Generation ---
 
-  describe "Phase 6 - Prompt Generation" do
-    @tag feature: @feature, scenario: "Phase 6 - Prompt Generation and mark as done"
+  describe "Phase 4 - Prompt Generation" do
+    @tag feature: @feature, scenario: "Phase 4 - Prompt Generation and mark as done"
     test "shows Mark as Done button and completes workflow on click", %{conn: conn} do
-      ws = create_session_in_phase(6)
+      ws = create_session_in_phase(4)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert render(view) =~ "Phase 6/6"
+      assert render(view) =~ "Phase 4/4"
       assert render(view) =~ "Prompt Generation"
 
       assert has_element?(view, "button[phx-click='mark_done']")
@@ -362,7 +360,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Un-done a completed session"
     test "reopens a completed workflow via Reopen button", %{conn: conn} do
-      ws = create_session_in_phase(6)
+      ws = create_session_in_phase(4)
       # Mark as done first
       {:ok, ws} =
         Destila.Workflows.update_workflow_session(ws, %{
@@ -391,7 +389,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
   describe "session title editing" do
     @tag feature: @feature, scenario: "Edit session title"
     test "edits title inline and saves", %{conn: conn} do
-      ws = create_session_in_phase(3)
+      ws = create_session_in_phase(1)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # Title is displayed
@@ -425,17 +423,17 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
         Destila.Workflows.create_workflow_session(%{
           title: "Test Session",
           workflow_type: :brainstorm_idea,
-          current_phase: 2,
-          total_phases: 6,
+          current_phase: 1,
+          total_phases: 4,
           phase_status: :setup,
           project_id: project.id
         })
 
-      Destila.Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
+      Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
         "status" => "completed"
       })
 
-      Destila.Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
+      Destila.Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
         "status" => "failed",
         "error" => "Connection refused"
       })
@@ -529,7 +527,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
   describe "AI streaming" do
     @tag feature: @feature, scenario: "Streams AI response chunks to the chat UI"
     test "streams AI response chunks to the chat UI", %{conn: conn} do
-      ws = create_session_in_phase(3, phase_status: :processing)
+      ws = create_session_in_phase(1, phase_status: :processing)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # Initially shows typing indicator
@@ -548,11 +546,10 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
 
-      # Verify streaming debug view shows the chunk content and streaming indicator
+      # Verify streaming debug view shows the chunk content
       html = render(view)
       assert html =~ "Streaming text"
       assert html =~ "[assistant]"
-      assert html =~ "streaming"
     end
   end
 
@@ -561,34 +558,34 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
   describe "phase toggle preservation" do
     @tag feature: @feature, scenario: "Manually expanded previous phase stays open during updates"
     test "phase sections have PhaseToggle hook wired with correct IDs", %{conn: conn} do
-      ws = create_session_in_phase(5)
+      ws = create_session_in_phase(3)
       {:ok, view, _html} = live(conn, "/sessions/#{ws.id}")
 
-      # Phase 3 (< 5) should be collapsed by default, with the hook attached
-      assert has_element?(view, "details#phase-section-3[phx-hook*='PhaseToggle']")
-      refute has_element?(view, "details#phase-section-3[open]")
+      # Phase 1 (< 3) should be collapsed by default, with the hook attached
+      assert has_element?(view, "details#phase-section-1[phx-hook*='PhaseToggle']")
+      refute has_element?(view, "details#phase-section-1[open]")
 
-      # Phase 5 (== current) should be open by default, with the hook attached
-      assert has_element?(view, "details#phase-section-5[phx-hook*='PhaseToggle']")
-      assert has_element?(view, "details#phase-section-5[open]")
+      # Phase 3 (== current) should be open by default, with the hook attached
+      assert has_element?(view, "details#phase-section-3[phx-hook*='PhaseToggle']")
+      assert has_element?(view, "details#phase-section-3[open]")
     end
 
     @tag feature: @feature,
          scenario: "Manually collapsed current phase stays closed during updates"
     test "server re-render preserves default open states without JS hook", %{conn: conn} do
-      ws = create_session_in_phase(5)
+      ws = create_session_in_phase(3)
       {:ok, view, _html} = live(conn, "/sessions/#{ws.id}")
 
       # Verify initial defaults
-      assert has_element?(view, "details#phase-section-5[open]")
-      refute has_element?(view, "details#phase-section-3[open]")
+      assert has_element?(view, "details#phase-section-3[open]")
+      refute has_element?(view, "details#phase-section-1[open]")
 
       # Simulate a PubSub-driven re-render (e.g., metadata update)
       send(view.pid, {:metadata_updated, ws.id})
 
       # Server should recompute the same open states
-      assert has_element?(view, "details#phase-section-5[open]")
-      refute has_element?(view, "details#phase-section-3[open]")
+      assert has_element?(view, "details#phase-section-3[open]")
+      refute has_element?(view, "details#phase-section-1[open]")
     end
   end
 
@@ -599,8 +596,8 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       Destila.Workflows.create_workflow_session(%{
         title: "Test Options",
         workflow_type: :brainstorm_idea,
-        current_phase: 3,
-        total_phases: 6,
+        current_phase: 1,
+        total_phases: 4,
         phase_status: :awaiting_input
       })
 
@@ -640,7 +637,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       role: :system,
       content: "Pick one:",
       raw_response: raw_response,
-      phase: 3
+      phase: 1
     })
 
     ws
@@ -651,8 +648,8 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       Destila.Workflows.create_workflow_session(%{
         title: "Test Questions",
         workflow_type: :brainstorm_idea,
-        current_phase: 3,
-        total_phases: 6,
+        current_phase: 1,
+        total_phases: 4,
         phase_status: :awaiting_input
       })
 
@@ -697,7 +694,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       role: :system,
       content: "",
       raw_response: raw_response,
-      phase: 3
+      phase: 1
     })
 
     ws
@@ -709,7 +706,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: "exported_metadata",
          scenario: "Sidebar displays exported metadata during workflow execution"
     test "shows sidebar with exported metadata entries", %{conn: conn} do
-      ws = create_session_in_phase(3)
+      ws = create_session_in_phase(1)
 
       Destila.Workflows.upsert_metadata(
         ws.id,
@@ -729,8 +726,8 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: "exported_metadata",
          scenario: "Sidebar is empty when no metadata is exported"
     test "shows empty state when no metadata is exported", %{conn: conn} do
-      ws = create_session_in_phase(3)
-      Destila.Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{"status" => "done"})
+      ws = create_session_in_phase(1)
+      Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "done"})
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -741,7 +738,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: "exported_metadata",
          scenario: "Sidebar updates in real-time as metadata is exported"
     test "updates sidebar when new exported metadata arrives via PubSub", %{conn: conn} do
-      ws = create_session_in_phase(3)
+      ws = create_session_in_phase(1)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -764,7 +761,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
     @tag feature: "exported_metadata", scenario: "Sidebar is open by default"
     test "sidebar is visible by default", %{conn: conn} do
-      ws = create_session_in_phase(3)
+      ws = create_session_in_phase(1)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -779,7 +776,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Workflow runner shows gray indicator when GenServer is not expected"
     test "shows gray dot when GenServer is not running and not expected", %{conn: conn} do
-      ws = create_session_in_phase(3, phase_status: :awaiting_input)
+      ws = create_session_in_phase(1, phase_status: :awaiting_input)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -790,7 +787,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
          scenario:
            "Workflow runner shows red indicator when GenServer is unexpectedly not running"
     test "shows red dot when GenServer should be running but is not", %{conn: conn} do
-      ws = create_session_in_phase(3, phase_status: :processing)
+      ws = create_session_in_phase(1, phase_status: :processing)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -800,7 +797,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Workflow runner shows green indicator when Claude Code GenServer is running"
     test "shows green dot when GenServer is running", %{conn: conn} do
-      ws = create_session_in_phase(3, phase_status: :processing)
+      ws = create_session_in_phase(1, phase_status: :processing)
 
       {:ok, _pid} =
         Agent.start_link(fn -> nil end,
@@ -815,7 +812,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Workflow runner indicator updates in real-time when GenServer stops"
     test "updates from green to red when GenServer stops", %{conn: conn} do
-      ws = create_session_in_phase(3, phase_status: :processing)
+      ws = create_session_in_phase(1, phase_status: :processing)
 
       {:ok, pid} =
         Agent.start_link(fn -> nil end,

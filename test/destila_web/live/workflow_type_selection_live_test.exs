@@ -1,6 +1,6 @@
 defmodule DestilaWeb.WorkflowTypeSelectionLiveTest do
   @moduledoc """
-  LiveView tests for the workflow type selection page.
+  LiveView tests for the workflow type selection page (CreateSessionLive).
   Feature: features/workflow_type_selection.feature
   """
   use DestilaWeb.ConnCase
@@ -29,7 +29,7 @@ defmodule DestilaWeb.WorkflowTypeSelectionLiveTest do
     end
 
     @tag feature: @feature, scenario: "Select a workflow type to start"
-    test "clicking a type navigates to its wizard", %{conn: conn} do
+    test "clicking a type navigates to its creation form", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workflows")
 
       view |> element("#type-brainstorm_idea") |> render_click()

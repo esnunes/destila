@@ -4,20 +4,19 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   that clarifies a coding task and produces an implementation prompt.
 
   Phases:
-  1. Project & Idea — Wizard collecting project selection and initial task description
-  2. Setup — Prepares the project environment (repo sync, worktree, title gen)
-  3. Task Description — AI asks clarifying questions about the task
-  4. Gherkin Review — AI reviews or proposes BDD feature scenarios (skippable)
-  5. Technical Concerns — AI explores technical approach and trade-offs
-  6. Prompt Generation — AI generates the final implementation prompt
+  1. Task Description — AI asks clarifying questions about the task
+  2. Gherkin Review — AI reviews or proposes BDD feature scenarios (skippable)
+  3. Technical Concerns — AI explores technical approach and trade-offs
+  4. Prompt Generation — AI generates the final implementation prompt
+
+  Session creation and setup are handled by CreateSessionLive before the session
+  reaches WorkflowRunnerLive.
   """
 
   use Destila.Workflow
 
   def phases do
     [
-      {DestilaWeb.Phases.WizardPhase, name: "Project & Idea", fields: [:project, :idea]},
-      {DestilaWeb.Phases.SetupPhase, name: "Setup"},
       {DestilaWeb.Phases.AiConversationPhase,
        name: "Task Description", system_prompt: &task_description_prompt/1},
       {DestilaWeb.Phases.AiConversationPhase,
@@ -31,6 +30,8 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
        message_type: :generated_prompt}
     ]
   end
+
+  def creation_config, do: {nil, "Idea", "idea"}
 
   def default_title, do: "New Idea"
 
@@ -47,9 +48,6 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
 
   def phase_start_action(ws, phase_number) do
     case Enum.at(phases(), phase_number - 1) do
-      {DestilaWeb.Phases.SetupPhase, _opts} ->
-        Destila.Workflows.Setup.start(ws)
-
       {_mod, opts} ->
         case Keyword.get(opts, :system_prompt) do
           nil ->
@@ -65,10 +63,6 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
       nil ->
         :awaiting_input
     end
-  end
-
-  def phase_update_action(ws, _phase_number, %{setup_step_completed: _} = params) do
-    Destila.Workflows.Setup.update(ws, params)
   end
 
   def phase_update_action(ws, phase_number, %{message: message}) do

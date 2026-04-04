@@ -3,10 +3,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   Generic workflow runner LiveView. Orchestrates phase transitions by mounting
   each phase's LiveComponent. Does not contain any workflow-specific logic.
 
-  Three mount paths:
-  - `/workflows` — workflow type selection
-  - `/workflows/:workflow_type` — pre-session (Phase 1, in-memory)
-  - `/sessions/:id` — post-session (Phase 2+, DB-driven)
+  Single mount path:
+  - `/sessions/:id` — running session with phase rendering
+
+  Session creation is handled by `CreateSessionLive`.
   """
 
   use DestilaWeb, :live_view
@@ -18,52 +18,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   alias Destila.Workflows
 
-  def mount(params, session, socket) do
+  def mount(%{"id" => id}, session, socket) do
     socket = assign(socket, :current_user, session["current_user"])
-
-    cond do
-      Map.has_key?(params, "id") ->
-        mount_session(params["id"], socket)
-
-      Map.has_key?(params, "workflow_type") ->
-        mount_workflow(params["workflow_type"], socket)
-
-      true ->
-        mount_type_selection(socket)
-    end
-  end
-
-  defp mount_type_selection(socket) do
-    {:ok,
-     socket
-     |> assign(:view, :selecting_type)
-     |> assign(:workflow_metadata, Workflows.workflow_type_metadata())
-     |> assign(:page_title, "New Session")
-     |> assign(:exported_metadata, [])
-     |> assign(:alive_session, false)
-     |> assign(:alive_session_ref, nil)}
-  end
-
-  defp mount_workflow(workflow_type_str, socket) do
-    workflow_type = String.to_existing_atom(workflow_type_str)
-    phases = Workflows.phases(workflow_type)
-
-    {:ok,
-     socket
-     |> assign(:view, :running)
-     |> assign(:workflow_type, workflow_type)
-     |> assign(:workflow_session, nil)
-     |> assign(:project, nil)
-     |> assign(:phases, phases)
-     |> assign(:current_phase, 1)
-     |> assign(:total_phases, length(phases))
-     |> assign(:editing_title, false)
-     |> assign(:metadata, %{})
-     |> assign(:page_title, Workflows.default_title(workflow_type))
-     |> assign(:streaming_chunks, nil)
-     |> assign(:exported_metadata, [])
-     |> assign(:alive_session, false)
-     |> assign(:alive_session_ref, nil)}
+    mount_session(id, socket)
   end
 
   defp mount_session(id, socket) do
@@ -218,51 +175,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # --- Phase signals from LiveComponents ---
 
-  # Phase complete with session creation request
-  def handle_info({:phase_complete, phase, %{action: :session_create} = data}, socket) do
-    workflow_type = socket.assigns.workflow_type
-
-    # If a source session was selected, reuse its title
-    title =
-      if data[:selected_session_id] do
-        source = Workflows.get_workflow_session(data[:selected_session_id])
-        if source, do: source.title, else: Workflows.default_title(workflow_type)
-      else
-        Workflows.default_title(workflow_type)
-      end
-
-    session_attrs =
-      %{
-        title: title,
-        workflow_type: workflow_type,
-        current_phase: phase + 1,
-        total_phases: Workflows.total_phases(workflow_type)
-      }
-      |> maybe_put(:project_id, data[:project_id])
-      |> maybe_put(:title_generating, data[:title_generating])
-
-    {:ok, ws} = Workflows.create_workflow_session(session_attrs)
-
-    # Store wizard metadata based on what was provided
-    if data[:idea] do
-      Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => data[:idea]})
-    end
-
-    if data[:prompt] do
-      Workflows.upsert_metadata(ws.id, "wizard", "prompt", %{"text" => data[:prompt]})
-    end
-
-    if data[:selected_session_id] do
-      Workflows.upsert_metadata(ws.id, "wizard", "source_session", %{
-        "id" => data[:selected_session_id]
-      })
-    end
-
-    Destila.Executions.Engine.start_session(ws)
-
-    {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
-  end
-
   # Phase complete — advance to next phase (guard: phase must match current)
   def handle_info({:phase_complete, phase, _data}, socket)
       when phase == socket.assigns.current_phase do
@@ -352,48 +264,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   def handle_info(_msg, socket), do: {:noreply, socket}
 
-  # --- Render: type selection ---
-
-  def render(%{view: :selecting_type} = assigns) do
-    ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
-      <div class="flex items-center justify-center min-h-screen">
-        <div class="w-full max-w-lg px-6">
-          <div class="text-center mb-8">
-            <h2 class="text-xl font-bold">What are you creating?</h2>
-            <p class="text-sm text-base-content/50 mt-1">Choose a workflow type to get started</p>
-          </div>
-
-          <div class="grid gap-4">
-            <.link
-              :for={wf <- @workflow_metadata}
-              navigate={~p"/workflows/#{wf.type}"}
-              class="card bg-base-100 border-2 border-base-300 hover:border-primary transition-colors cursor-pointer text-left"
-              id={"type-#{wf.type}"}
-            >
-              <div class="card-body p-5">
-                <.icon name={wf.icon} class={["size-8 mb-2", wf.icon_class]} />
-                <h3 class="font-semibold">{wf.label}</h3>
-                <p class="text-xs text-base-content/50">{wf.description}</p>
-              </div>
-            </.link>
-          </div>
-
-          <.link
-            navigate={~p"/crafting"}
-            class="btn btn-ghost btn-sm w-full mt-6 text-base-content/40"
-          >
-            &larr; Back to crafting board
-          </.link>
-        </div>
-      </div>
-    </Layouts.app>
-    """
-  end
-
   # --- Render: running workflow ---
 
-  def render(%{view: :running} = assigns) do
+  def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
       <div class="flex flex-col h-screen">
@@ -674,6 +547,19 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # --- Generic phase rendering ---
 
+  defp render_phase(%{workflow_session: %{phase_status: :setup}} = assigns) do
+    ~H"""
+    <.live_component
+      module={DestilaWeb.Phases.SetupPhase}
+      id="setup"
+      workflow_session={@workflow_session}
+      metadata={@metadata}
+      phase_number={0}
+      opts={[]}
+    />
+    """
+  end
+
   defp render_phase(%{phases: phases, current_phase: current_phase} = assigns) do
     case Enum.at(phases, current_phase - 1) do
       {module, opts} ->
@@ -709,9 +595,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     |> assign(:metadata, Enum.reduce(all, %{}, fn m, acc -> Map.put(acc, m.key, m.value) end))
     |> assign(:exported_metadata, Enum.filter(all, & &1.exported))
   end
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp metadata_value_block(assigns) do
     escaped =

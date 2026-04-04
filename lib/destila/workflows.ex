@@ -32,6 +32,7 @@ defmodule Destila.Workflows do
     end)
   end
 
+  def creation_config(workflow_type), do: workflow_module(workflow_type).creation_config()
   def phases(workflow_type), do: workflow_module(workflow_type).phases()
   def total_phases(workflow_type), do: workflow_module(workflow_type).total_phases()
   def phase_name(workflow_type, phase), do: workflow_module(workflow_type).phase_name(phase)
@@ -136,13 +137,13 @@ defmodule Destila.Workflows do
   end
 
   @doc """
-  Lists completed, non-archived workflow sessions that have a `prompt_generated` metadata entry.
-  Returns `{session, prompt_text}` tuples, ordered by most recently done.
+  Lists completed, non-archived sessions that have an exported metadata entry
+  with the given key. Returns `{session, text}` tuples, ordered by most recent.
   """
-  def list_sessions_with_generated_prompts do
+  def list_sessions_with_exported_metadata(metadata_key) do
     from(ws in Session,
       join: m in SessionMetadata,
-      on: m.workflow_session_id == ws.id and m.key == "prompt_generated",
+      on: m.workflow_session_id == ws.id and m.key == ^metadata_key and m.exported == true,
       where: not is_nil(ws.done_at) and is_nil(ws.archived_at),
       preload: [:project],
       order_by: [desc: ws.done_at],

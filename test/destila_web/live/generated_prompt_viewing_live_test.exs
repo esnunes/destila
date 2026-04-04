@@ -48,8 +48,8 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
         workflow_type: :brainstorm_idea,
         project_id: nil,
         done_at: DateTime.utc_now(),
-        current_phase: 6,
-        total_phases: 6,
+        current_phase: 4,
+        total_phases: 4,
         phase_status: nil
       })
 
@@ -65,7 +65,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
           "mcp_tool_uses" => [],
           "is_error" => false
         },
-        phase: 6
+        phase: 4
       })
 
     workflow_session

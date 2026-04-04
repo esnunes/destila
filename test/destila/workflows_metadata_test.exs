@@ -8,8 +8,8 @@ defmodule Destila.WorkflowsMetadataTest do
       Workflows.create_workflow_session(%{
         title: "Test Session",
         workflow_type: :brainstorm_idea,
-        current_phase: 2,
-        total_phases: 6
+        current_phase: 1,
+        total_phases: 4
       })
 
     ws
@@ -20,12 +20,12 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       assert {:ok, metadata} =
-               Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
+               Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
                  "status" => "completed"
                })
 
       assert metadata.workflow_session_id == ws.id
-      assert metadata.phase_name == "setup"
+      assert metadata.phase_name == "creation"
       assert metadata.key == "title_gen"
       assert metadata.value == %{"status" => "completed"}
     end
@@ -34,12 +34,12 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
           "status" => "in_progress"
         })
 
       {:ok, updated} =
-        Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
           "status" => "completed"
         })
 
@@ -54,12 +54,12 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
+        Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
           "status" => "completed"
         })
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "setup", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
           "status" => "in_progress"
         })
 
@@ -75,14 +75,14 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => "first"})
+        Workflows.upsert_metadata(ws.id, "creation", "idea", %{"text" => "first"})
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "setup", "idea", %{"text" => "second"})
+        Workflows.upsert_metadata(ws.id, "phase1", "idea", %{"text" => "second"})
 
-      # Flat merge — last phase wins alphabetically (setup < wizard)
+      # Flat merge — last phase wins alphabetically (creation < phase1)
       metadata = Workflows.get_metadata(ws.id)
-      assert metadata["idea"] == %{"text" => "first"}
+      assert metadata["idea"] == %{"text" => "second"}
     end
   end
 
@@ -92,7 +92,7 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, metadata} =
-        Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{"status" => "done"})
+        Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "done"})
 
       assert metadata.exported == false
     end
@@ -137,8 +137,8 @@ defmodule Destila.WorkflowsMetadataTest do
          scenario: "Only exported metadata is returned when querying for external use"
     test "returns empty list when no metadata is exported" do
       ws = create_session()
-      {:ok, _} = Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{"status" => "done"})
-      {:ok, _} = Workflows.upsert_metadata(ws.id, "wizard", "idea", %{"text" => "my idea"})
+      {:ok, _} = Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "done"})
+      {:ok, _} = Workflows.upsert_metadata(ws.id, "creation", "idea", %{"text" => "my idea"})
       assert Workflows.get_exported_metadata(ws.id) == []
     end
 
@@ -146,7 +146,7 @@ defmodule Destila.WorkflowsMetadataTest do
          scenario: "Only exported metadata is returned when querying for external use"
     test "returns only exported entries as full structs" do
       ws = create_session()
-      {:ok, _} = Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{"status" => "done"})
+      {:ok, _} = Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "done"})
 
       {:ok, _} =
         Workflows.upsert_metadata(ws.id, "phase6", "prompt_generated", %{"text" => "prompt"},
@@ -185,6 +185,100 @@ defmodule Destila.WorkflowsMetadataTest do
     end
   end
 
+  describe "list_sessions_with_exported_metadata/1" do
+    test "returns empty list when no sessions have the given key" do
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "returns completed sessions with matching exported metadata" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "Do the thing"},
+        exported: true
+      )
+
+      result = Workflows.list_sessions_with_exported_metadata("prompt_generated")
+      assert [{session, text}] = result
+      assert session.id == ws.id
+      assert text == "Do the thing"
+    end
+
+    test "excludes sessions that are not done" do
+      ws = create_session()
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "Not done yet"},
+        exported: true
+      )
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "excludes archived sessions" do
+      ws = create_session()
+
+      {:ok, _} =
+        Workflows.update_workflow_session(ws, %{
+          done_at: DateTime.utc_now(),
+          archived_at: DateTime.utc_now()
+        })
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "Archived"},
+        exported: true
+      )
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "excludes non-exported metadata" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(ws.id, "creation", "prompt_generated", %{"text" => "Private"})
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "excludes entries with nil or empty text" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(ws.id, "Prompt Generation", "prompt_generated", %{"text" => ""},
+        exported: true
+      )
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "filters by metadata key" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "A prompt"},
+        exported: true
+      )
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") != []
+      assert Workflows.list_sessions_with_exported_metadata("other_key") == []
+    end
+  end
+
   describe "get_metadata/1" do
     test "returns empty map when no metadata exists" do
       ws = create_session()
@@ -195,17 +289,17 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "wizard", "idea", %{
+        Workflows.upsert_metadata(ws.id, "creation", "idea", %{
           "text" => "Fix the login bug"
         })
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
+        Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
           "status" => "completed"
         })
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "setup", "worktree", %{
+        Workflows.upsert_metadata(ws.id, "creation", "worktree", %{
           "status" => "completed",
           "worktree_path" => "/tmp/wt"
         })
