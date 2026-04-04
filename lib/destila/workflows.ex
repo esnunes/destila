@@ -194,7 +194,8 @@ defmodule Destila.Workflows do
 
   # --- Metadata ---
 
-  def upsert_metadata(workflow_session_id, phase_name, key, value) do
+  def upsert_metadata(workflow_session_id, phase_name, key, value, opts \\ []) do
+    exported = Keyword.get(opts, :exported, false)
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     %SessionMetadata{}
@@ -202,10 +203,11 @@ defmodule Destila.Workflows do
       workflow_session_id: workflow_session_id,
       phase_name: phase_name,
       key: key,
-      value: value
+      value: value,
+      exported: exported
     })
     |> Repo.insert(
-      on_conflict: {:replace, [:value, :updated_at]},
+      on_conflict: {:replace, [:value, :exported, :updated_at]},
       conflict_target: [:workflow_session_id, :phase_name, :key],
       set: [updated_at: now]
     )
@@ -220,12 +222,23 @@ defmodule Destila.Workflows do
   end
 
   def get_metadata(workflow_session_id) do
+    workflow_session_id
+    |> get_all_metadata()
+    |> Enum.reduce(%{}, fn m, acc -> Map.put(acc, m.key, m.value) end)
+  end
+
+  def get_exported_metadata(workflow_session_id) do
+    workflow_session_id
+    |> get_all_metadata()
+    |> Enum.filter(& &1.exported)
+  end
+
+  def get_all_metadata(workflow_session_id) do
     from(m in SessionMetadata,
       where: m.workflow_session_id == ^workflow_session_id,
-      order_by: m.phase_name
+      order_by: [m.phase_name, m.key]
     )
     |> Repo.all()
-    |> Enum.reduce(%{}, fn m, acc -> Map.put(acc, m.key, m.value) end)
   end
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper

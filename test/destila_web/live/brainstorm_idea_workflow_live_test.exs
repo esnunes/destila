@@ -703,6 +703,76 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     ws
   end
 
+  # --- Exported Metadata Sidebar ---
+
+  describe "exported metadata sidebar" do
+    @tag feature: "exported_metadata",
+         scenario: "Sidebar displays exported metadata during workflow execution"
+    test "shows sidebar with exported metadata entries", %{conn: conn} do
+      ws = create_session_in_phase(3)
+
+      Destila.Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "Do the thing"},
+        exported: true
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "#metadata-sidebar")
+      assert has_element?(view, "#metadata-sidebar-content")
+      assert render(view) =~ "Prompt generated"
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Sidebar is empty when no metadata is exported"
+    test "shows empty state when no metadata is exported", %{conn: conn} do
+      ws = create_session_in_phase(3)
+      Destila.Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{"status" => "done"})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "#metadata-sidebar")
+      assert render(view) =~ "No metadata exported yet"
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Sidebar updates in real-time as metadata is exported"
+    test "updates sidebar when new exported metadata arrives via PubSub", %{conn: conn} do
+      ws = create_session_in_phase(3)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert render(view) =~ "No metadata exported yet"
+
+      Destila.Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "New prompt"},
+        exported: true
+      )
+
+      # Wait for PubSub update to propagate
+      _ = render(view)
+
+      refute render(view) =~ "No metadata exported yet"
+      assert render(view) =~ "Prompt generated"
+    end
+
+    @tag feature: "exported_metadata", scenario: "Sidebar is open by default"
+    test "sidebar is visible by default", %{conn: conn} do
+      ws = create_session_in_phase(3)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "#metadata-sidebar")
+      assert has_element?(view, "#metadata-sidebar-content")
+    end
+  end
+
   # --- Aliveness Indicator ---
 
   describe "aliveness indicator" do
