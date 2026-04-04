@@ -29,22 +29,13 @@ defmodule DestilaWeb.CreateSessionLive do
 
   defp mount_form(workflow_type_str, socket) do
     workflow_type = String.to_existing_atom(workflow_type_str)
-    {source_key, label, dest_key} = Workflows.creation_config(workflow_type)
-
-    source_sessions =
-      if source_key do
-        Workflows.list_sessions_with_exported_metadata(source_key)
-      else
-        []
-      end
+    source_sessions = Workflows.list_source_sessions(workflow_type)
 
     {:ok,
      socket
      |> assign(:view, :form)
      |> assign(:workflow_type, workflow_type)
-     |> assign(:source_metadata_key, source_key)
-     |> assign(:input_label, label)
-     |> assign(:dest_metadata_key, dest_key)
+     |> assign(:input_label, Workflows.creation_label(workflow_type))
      |> assign(:source_sessions, source_sessions)
      |> assign(:selected_session_id, nil)
      |> assign(:selected_text, nil)
@@ -171,7 +162,6 @@ defmodule DestilaWeb.CreateSessionLive do
     if errors == %{} do
       %{
         workflow_type: workflow_type,
-        dest_metadata_key: dest_key,
         input_text: input_text,
         selected_session_id: selected_session_id,
         project_id: project_id
@@ -181,7 +171,6 @@ defmodule DestilaWeb.CreateSessionLive do
         Workflows.create_workflow_session(%{
           workflow_type: workflow_type,
           input_text: input_text,
-          dest_metadata_key: dest_key,
           selected_session_id: selected_session_id,
           project_id: project_id
         })

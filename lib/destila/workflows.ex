@@ -33,6 +33,22 @@ defmodule Destila.Workflows do
   end
 
   def creation_config(workflow_type), do: workflow_module(workflow_type).creation_config()
+
+  def list_source_sessions(workflow_type) do
+    {source_key, _label, _dest_key} = creation_config(workflow_type)
+
+    if source_key do
+      list_sessions_with_exported_metadata(source_key)
+    else
+      []
+    end
+  end
+
+  def creation_label(workflow_type) do
+    {_source_key, label, _dest_key} = creation_config(workflow_type)
+    label
+  end
+
   def phases(workflow_type), do: workflow_module(workflow_type).phases()
   def total_phases(workflow_type), do: workflow_module(workflow_type).total_phases()
   def phase_name(workflow_type, phase), do: workflow_module(workflow_type).phase_name(phase)
@@ -94,12 +110,12 @@ defmodule Destila.Workflows do
   def create_workflow_session(params) do
     %{
       workflow_type: workflow_type,
-      input_text: input_text,
-      dest_metadata_key: dest_key
+      input_text: input_text
     } = params
 
     selected_session_id = Map.get(params, :selected_session_id)
     project_id = Map.get(params, :project_id)
+    {_source_key, _label, dest_key} = creation_config(workflow_type)
 
     title =
       if selected_session_id do
