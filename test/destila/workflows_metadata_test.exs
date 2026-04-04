@@ -185,6 +185,100 @@ defmodule Destila.WorkflowsMetadataTest do
     end
   end
 
+  describe "list_sessions_with_exported_metadata/1" do
+    test "returns empty list when no sessions have the given key" do
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "returns completed sessions with matching exported metadata" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "Do the thing"},
+        exported: true
+      )
+
+      result = Workflows.list_sessions_with_exported_metadata("prompt_generated")
+      assert [{session, text}] = result
+      assert session.id == ws.id
+      assert text == "Do the thing"
+    end
+
+    test "excludes sessions that are not done" do
+      ws = create_session()
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "Not done yet"},
+        exported: true
+      )
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "excludes archived sessions" do
+      ws = create_session()
+
+      {:ok, _} =
+        Workflows.update_workflow_session(ws, %{
+          done_at: DateTime.utc_now(),
+          archived_at: DateTime.utc_now()
+        })
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "Archived"},
+        exported: true
+      )
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "excludes non-exported metadata" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(ws.id, "creation", "prompt_generated", %{"text" => "Private"})
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "excludes entries with nil or empty text" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(ws.id, "Prompt Generation", "prompt_generated", %{"text" => ""},
+        exported: true
+      )
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") == []
+    end
+
+    test "filters by metadata key" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"text" => "A prompt"},
+        exported: true
+      )
+
+      assert Workflows.list_sessions_with_exported_metadata("prompt_generated") != []
+      assert Workflows.list_sessions_with_exported_metadata("other_key") == []
+    end
+  end
+
   describe "get_metadata/1" do
     test "returns empty map when no metadata exists" do
       ws = create_session()

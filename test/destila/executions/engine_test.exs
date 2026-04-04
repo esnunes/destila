@@ -170,6 +170,49 @@ defmodule Destila.Executions.EngineTest do
     end
   end
 
+  describe "phase_update/3 with setup_step_completed" do
+    test "transitions from setup to phase 1 when all setup steps complete" do
+      ws = create_session_with_ai(%{phase_status: :setup})
+
+      Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
+      Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "completed"})
+      Workflows.upsert_metadata(ws.id, "creation", "worktree", %{"status" => "completed"})
+
+      Engine.phase_update(ws.id, 1, %{setup_step_completed: true})
+
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert updated_ws.current_phase == 1
+      assert updated_ws.phase_status == :processing
+      refute updated_ws.phase_status == :setup
+    end
+
+    test "stays in setup when not all steps complete" do
+      ws = create_session(%{phase_status: :setup})
+
+      Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
+      Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "in_progress"})
+
+      Engine.phase_update(ws.id, 1, %{setup_step_completed: true})
+
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert updated_ws.phase_status == :setup
+    end
+
+    test "creates phase execution for phase 1 after setup completes" do
+      ws = create_session_with_ai(%{phase_status: :setup})
+
+      Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
+      Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "completed"})
+      Workflows.upsert_metadata(ws.id, "creation", "worktree", %{"status" => "completed"})
+
+      Engine.phase_update(ws.id, 1, %{setup_step_completed: true})
+
+      pe = Executions.get_phase_execution_by_number(ws.id, 1)
+      assert pe != nil
+      assert pe.phase_name == "Task Description"
+    end
+  end
+
   describe "advance_to_next/1" do
     test "completes workflow when on last phase" do
       ws = create_session(%{current_phase: 4, total_phases: 4})
