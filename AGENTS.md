@@ -221,7 +221,7 @@ custom classes must fully style the input
 ## Phoenix LiveView guidelines
 
 - **Never** use the deprecated `live_redirect` and `live_patch` functions, instead **always** use the `<.link navigate={href}>` and  `<.link patch={href}>` in templates, and `push_navigate` and `push_patch` functions LiveViews
-- **Use LiveComponents for workflow phases** — each phase (WizardPhase, SetupPhase, AiConversationPhase) is a LiveComponent that subscribes to PubSub via `handle_info/2` and signals completion to the parent LiveView via `send(self(), {:phase_complete, phase, data})`
+- **Use LiveComponents for workflow phases** — each phase (WizardPhase, AiConversationPhase) is a LiveComponent that subscribes to PubSub via `handle_info/2` and signals completion to the parent LiveView via `send(self(), {:phase_complete, phase, data})`. Setup status is rendered via `DestilaWeb.SetupComponents.setup/1`, a function component in `components/setup_components.ex`.
 - LiveViews should be named like `AppWeb.WeatherLive`, with a `Live` suffix. When you go to add LiveView routes to the router, the default `:browser` scope is **already aliased** with the `AppWeb` module, so you can just do `live "/weather", WeatherLive`
 
 ### LiveView streams

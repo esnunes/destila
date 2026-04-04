@@ -1,38 +1,30 @@
-defmodule DestilaWeb.Phases.SetupPhase do
+defmodule DestilaWeb.SetupComponents do
   @moduledoc """
-  LiveComponent for setup status — displays setup progress (title generation,
+  Function component for setup status — displays setup progress (title generation,
   repo sync, worktree creation). Rendered by WorkflowRunnerLive when
   `phase_status` is `:setup`.
-
-  Receives metadata from the parent LiveView via the `metadata` assign.
   """
 
-  use DestilaWeb, :live_component
+  use DestilaWeb, :html
 
-  def update(assigns, socket) do
+  attr :workflow_session, :map, required: true
+  attr :metadata, :map, required: true
+
+  def setup(assigns) do
     ws = assigns.workflow_session
-    metadata = assigns[:metadata] || %{}
+    metadata = assigns.metadata
     steps = build_steps(ws, metadata)
 
-    {:ok,
-     socket
-     |> assign(:workflow_session, ws)
-     |> assign(:phase_number, assigns.phase_number)
-     |> assign(:steps, steps)
-     |> assign(:all_done, all_completed?(steps))
-     |> assign(:has_failure, has_failure?(steps))}
-  end
+    assigns =
+      assigns
+      |> assign(:steps, steps)
+      |> assign(:all_done, all_completed?(steps))
+      |> assign(:has_failure, has_failure?(steps))
 
-  def handle_event("retry_setup", _params, socket) do
-    Destila.Workflows.prepare_workflow_session(socket.assigns.workflow_session)
-    {:noreply, socket}
-  end
-
-  def render(assigns) do
     ~H"""
     <div class="overflow-y-auto h-full px-6 py-6">
       <div class="max-w-2xl mx-auto space-y-2">
-        <.step_item :for={step <- @steps} step={step} myself={@myself} />
+        <.step_item :for={step <- @steps} step={step} />
       </div>
     </div>
     """
@@ -63,7 +55,6 @@ defmodule DestilaWeb.Phases.SetupPhase do
       <button
         :if={@step.status == "failed"}
         phx-click="retry_setup"
-        phx-target={@myself}
         class="btn btn-xs btn-outline btn-error"
       >
         Retry
@@ -90,17 +81,10 @@ defmodule DestilaWeb.Phases.SetupPhase do
 
     repo_steps =
       if ws.project_id do
-        project = Destila.Projects.get_project(ws.project_id)
-
-        repo_label =
-          if project && project.local_folder && project.local_folder != "",
-            do: "Pulling latest changes...",
-            else: "Syncing repository..."
-
         [
           %{
             key: "repo_sync",
-            label: repo_label,
+            label: "Syncing repository...",
             status: get_step_status(metadata, "repo_sync"),
             error: get_step_error(metadata, "repo_sync")
           },

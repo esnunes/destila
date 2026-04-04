@@ -173,6 +173,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     {:noreply, assign(socket, :workflow_session, ws)}
   end
 
+  def handle_event("retry_setup", _params, socket) do
+    Workflows.prepare_workflow_session(socket.assigns.workflow_session)
+    {:noreply, socket}
+  end
+
   # --- Phase signals from LiveComponents ---
 
   # Phase complete — advance to next phase (guard: phase must match current)
@@ -549,13 +554,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   defp render_phase(%{workflow_session: %{phase_status: :setup}} = assigns) do
     ~H"""
-    <.live_component
-      module={DestilaWeb.Phases.SetupPhase}
-      id="setup"
+    <DestilaWeb.SetupComponents.setup
       workflow_session={@workflow_session}
       metadata={@metadata}
-      phase_number={0}
-      opts={[]}
     />
     """
   end
