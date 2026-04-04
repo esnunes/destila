@@ -39,8 +39,8 @@ defmodule DestilaWeb.Router do
     live "/", DashboardLive
     live "/crafting", CraftingBoardLive
     live "/projects", ProjectsLive
-    live "/workflows", WorkflowRunnerLive
-    live "/workflows/:workflow_type", WorkflowRunnerLive
+    live "/workflows", CreateSessionLive
+    live "/workflows/:workflow_type", CreateSessionLive
     live "/sessions/archived", ArchivedSessionsLive
     live "/sessions/:id", WorkflowRunnerLive
   end

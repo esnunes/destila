@@ -101,6 +101,19 @@ defmodule Destila.Executions.Engine do
   when the user sends a message. The workflow's `phase_update_action/3`
   processes the params and returns a status the Engine uses to update state.
   """
+  def phase_update(workflow_session_id, _phase, %{setup_step_completed: _} = params) do
+    ws = Workflows.get_workflow_session!(workflow_session_id)
+
+    case Destila.Workflows.Setup.update(ws, params) do
+      :setup_complete ->
+        {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: nil})
+        start_session(ws)
+
+      :processing ->
+        Workflows.update_workflow_session(ws, %{phase_status: :setup})
+    end
+  end
+
   def phase_update(workflow_session_id, phase, params) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
 

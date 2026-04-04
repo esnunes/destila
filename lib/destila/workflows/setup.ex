@@ -30,8 +30,8 @@ defmodule Destila.Workflows.Setup do
   end
 
   @doc """
-  Called by workflow `phase_update_action` when a setup step completes.
-  Returns `:phase_complete` if all steps are done, `:processing` otherwise.
+  Called by Engine when a setup step completes.
+  Returns `:setup_complete` if all steps are done, `:processing` otherwise.
   """
   def update(workflow_session, _params) do
     metadata = Destila.Workflows.get_metadata(workflow_session.id)
@@ -43,7 +43,7 @@ defmodule Destila.Workflows.Setup do
 
     if setup_keys != [] &&
          Enum.all?(setup_keys, &(get_in(metadata, [&1, "status"]) == "completed")) do
-      :phase_complete
+      :setup_complete
     else
       :processing
     end

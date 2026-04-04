@@ -8,8 +8,8 @@ defmodule Destila.ExecutionsTest do
       Workflows.create_workflow_session(%{
         title: "Test Session",
         workflow_type: :brainstorm_idea,
-        current_phase: 2,
-        total_phases: 6
+        current_phase: 1,
+        total_phases: 4
       })
 
     ws
@@ -18,10 +18,10 @@ defmodule Destila.ExecutionsTest do
   describe "create_phase_execution/3" do
     test "creates a phase execution with default status" do
       ws = create_session()
-      {:ok, pe} = Executions.create_phase_execution(ws, 3)
+      {:ok, pe} = Executions.create_phase_execution(ws, 1)
 
       assert pe.workflow_session_id == ws.id
-      assert pe.phase_number == 3
+      assert pe.phase_number == 1
       assert pe.phase_name == "Task Description"
       assert pe.status == "pending"
       assert is_nil(pe.started_at)

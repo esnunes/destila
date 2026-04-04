@@ -26,7 +26,7 @@ defmodule DestilaWeb.ArchivedSessionsLiveTest do
       title: "Test Session",
       workflow_type: :brainstorm_idea,
       current_phase: 1,
-      total_phases: 6,
+      total_phases: 4,
       position: System.unique_integer([:positive])
     }
 

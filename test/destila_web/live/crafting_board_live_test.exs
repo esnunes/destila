@@ -32,7 +32,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       title: "Test Prompt",
       workflow_type: :brainstorm_idea,
       current_phase: 1,
-      total_phases: 6,
+      total_phases: 4,
       position: System.unique_integer([:positive])
     }
 
@@ -129,7 +129,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       create_prompt(%{
         title: "Fix login bug",
         project_id: project.id,
-        current_phase: 3,
+        current_phase: 1,
         workflow_type: :brainstorm_idea
       })
 
@@ -262,14 +262,14 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       create_prompt(%{
         title: "Chore Prompt",
         workflow_type: :brainstorm_idea,
-        current_phase: 3,
+        current_phase: 1,
         project_id: project.id
       })
 
       create_prompt(%{
         title: "Another Chore",
         workflow_type: :brainstorm_idea,
-        current_phase: 4,
+        current_phase: 2,
         project_id: project.id
       })
 
@@ -466,7 +466,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         create_prompt(%{
           title: "Stuck Session",
           project_id: project.id,
-          current_phase: 3,
+          current_phase: 1,
           phase_status: :processing,
           workflow_type: :brainstorm_idea
         })
@@ -486,7 +486,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         create_prompt(%{
           title: "Active Session",
           project_id: project.id,
-          current_phase: 3,
+          current_phase: 1,
           phase_status: :processing,
           workflow_type: :brainstorm_idea
         })
@@ -509,7 +509,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         create_prompt(%{
           title: "Active Session",
           project_id: project.id,
-          current_phase: 3,
+          current_phase: 1,
           phase_status: :processing,
           workflow_type: :brainstorm_idea
         })

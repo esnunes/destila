@@ -5,15 +5,16 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
   testing, and video recording.
 
   Phases:
-  1. Prompt & Project — Wizard collecting prompt selection/entry and project
-  2. Setup — Prepares the project environment (repo sync, worktree, title gen)
-  3. Generate Plan — AI creates an implementation plan (non-interactive)
-  4. Deepen Plan — AI evaluates and optionally deepens the plan (non-interactive)
-  5. Work — AI implements the plan (non-interactive)
-  6. Review — AI reviews and fixes P1/P2 issues (non-interactive)
-  7. Browser Tests — AI runs tests if applicable (non-interactive, optional)
-  8. Feature Video — AI records a feature video (non-interactive, optional)
-  9. Adjustments — User reviews the PR and requests changes (interactive)
+  1. Generate Plan — AI creates an implementation plan (non-interactive)
+  2. Deepen Plan — AI evaluates and optionally deepens the plan (non-interactive)
+  3. Work — AI implements the plan (non-interactive)
+  4. Review — AI reviews and fixes P1/P2 issues (non-interactive)
+  5. Browser Tests — AI runs tests if applicable (non-interactive, optional)
+  6. Feature Video — AI records a feature video (non-interactive, optional)
+  7. Adjustments — User reviews the PR and requests changes (interactive)
+
+  Session creation and setup are handled by CreateSessionLive before the session
+  reaches WorkflowRunnerLive.
   """
 
   @implementation_tools [
@@ -43,8 +44,6 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   def phases do
     [
-      {DestilaWeb.Phases.PromptWizardPhase, name: "Prompt & Project"},
-      {DestilaWeb.Phases.SetupPhase, name: "Setup"},
       {DestilaWeb.Phases.AiConversationPhase,
        name: "Generate Plan",
        system_prompt: &plan_prompt/1,
@@ -86,6 +85,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     ]
   end
 
+  def creation_config, do: {"prompt_generated", "Prompt", "prompt"}
+
   def default_title, do: "New Implementation"
 
   def label, do: "Implement a Prompt"
@@ -100,19 +101,16 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     "Implementation complete! Plan executed, code reviewed, tests run, and feature recorded."
   end
 
-  # Phases 1-4: resume (single AI session for planning)
-  # Phase 5: new (fresh AI session for implementation)
-  # Phases 6-9: resume (reuse implementation AI session)
-  def session_strategy(5), do: :new
+  # Phases 1-2: resume (single AI session for planning)
+  # Phase 3: new (fresh AI session for implementation)
+  # Phases 4-7: resume (reuse implementation AI session)
+  def session_strategy(3), do: :new
   def session_strategy(_phase), do: :resume
 
   # --- Phase actions ---
 
   def phase_start_action(ws, phase_number) do
     case Enum.at(phases(), phase_number - 1) do
-      {DestilaWeb.Phases.SetupPhase, _opts} ->
-        Destila.Workflows.Setup.start(ws)
-
       {_mod, opts} ->
         case Keyword.get(opts, :system_prompt) do
           nil ->
@@ -129,10 +127,6 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
       nil ->
         :awaiting_input
     end
-  end
-
-  def phase_update_action(ws, _phase_number, %{setup_step_completed: _} = params) do
-    Destila.Workflows.Setup.update(ws, params)
   end
 
   def phase_update_action(ws, phase_number, %{message: message}) do

@@ -7,8 +7,8 @@ defmodule Destila.WorkflowsClassifyTest do
     default = %{
       title: "Test Session",
       workflow_type: :brainstorm_idea,
-      current_phase: 3,
-      total_phases: 6,
+      current_phase: 1,
+      total_phases: 4,
       phase_status: :awaiting_input
     }
 
@@ -29,19 +29,19 @@ defmodule Destila.WorkflowsClassifyTest do
 
     test "returns :waiting_for_user when phase execution is awaiting_input" do
       ws = create_session(%{phase_status: nil})
-      Executions.create_phase_execution(ws, 3, %{status: "awaiting_input"})
+      Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
       assert Workflows.classify(ws) == :waiting_for_user
     end
 
     test "returns :waiting_for_user when phase execution is awaiting_confirmation" do
       ws = create_session(%{phase_status: nil})
-      Executions.create_phase_execution(ws, 3, %{status: "awaiting_confirmation"})
+      Executions.create_phase_execution(ws, 1, %{status: "awaiting_confirmation"})
       assert Workflows.classify(ws) == :waiting_for_user
     end
 
     test "returns :processing when phase execution is processing" do
       ws = create_session(%{phase_status: nil})
-      Executions.create_phase_execution(ws, 3, %{status: "processing"})
+      Executions.create_phase_execution(ws, 1, %{status: "processing"})
       assert Workflows.classify(ws) == :processing
     end
 

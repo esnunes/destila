@@ -43,8 +43,8 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         title: "Completed Brainstorm Idea",
         workflow_type: :brainstorm_idea,
         project_id: project.id,
-        current_phase: 6,
-        total_phases: 6,
+        current_phase: 4,
+        total_phases: 4,
         done_at: DateTime.utc_now()
       })
 
@@ -52,7 +52,8 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
       ws.id,
       "Prompt Generation",
       "prompt_generated",
-      %{"text" => "This is the generated implementation prompt for the task."}
+      %{"text" => "This is the generated implementation prompt for the task."},
+      exported: true
     )
 
     {ws, project}
@@ -68,12 +69,12 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         workflow_type: :implement_general_prompt,
         project_id: project_id,
         current_phase: phase,
-        total_phases: 9,
+        total_phases: 7,
         phase_status: phase_status,
         title_generating: Keyword.get(opts, :title_generating, true)
       })
 
-    Destila.Workflows.upsert_metadata(ws.id, "wizard", "prompt", %{
+    Destila.Workflows.upsert_metadata(ws.id, "creation", "prompt", %{
       "text" => "Implement the login feature"
     })
 
@@ -90,25 +91,19 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     assert html =~ "Take a prompt through planning, coding, review, testing, and recording"
   end
 
-  # --- Phase 1: Prompt & Project Wizard ---
+  # --- Creation form ---
 
-  describe "Phase 1 - Prompt & Project Wizard" do
+  describe "Creation form" do
     @tag feature: @feature,
-         scenario: "Phase 1 - Wizard with manual prompt and project selection"
+         scenario: "Creation form with manual prompt and project selection"
     test "collects manual prompt and project, creates session", %{conn: conn} do
       project = create_project()
       {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
 
-      assert has_element?(view, "#tab-select-prompt")
-      assert has_element?(view, "#tab-manual-prompt")
-
-      # Switch to manual mode
-      view |> element("#tab-manual-prompt") |> render_click()
-
-      # Enter prompt
+      # Enter prompt (manual textarea shown directly when no source sessions)
       view
-      |> element("#manual-prompt-form")
-      |> render_change(%{"manual_prompt" => "Implement user authentication"})
+      |> element("#manual-input-form")
+      |> render_change(%{"input_text" => "Implement user authentication"})
 
       # Select project
       view |> element("#project-#{project.id}") |> render_click()
@@ -122,7 +117,18 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     end
 
     @tag feature: @feature,
-         scenario: "Phase 1 - Wizard with existing session prompt selection"
+         scenario: "Creation form shows tabs when source sessions exist"
+    test "shows tabs when completed brainstorm sessions exist", %{conn: conn} do
+      _project = create_project()
+      {_ws, _project} = create_completed_brainstorm_idea_session()
+      {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
+
+      assert has_element?(view, "#tab-select-source")
+      assert has_element?(view, "#tab-manual-input")
+    end
+
+    @tag feature: @feature,
+         scenario: "Creation form with existing session prompt selection"
     test "shows completed brainstorm idea sessions for selection", %{conn: conn} do
       {ws, _project} = create_completed_brainstorm_idea_session()
       {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
@@ -131,7 +137,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     end
 
     @tag feature: @feature,
-         scenario: "Phase 1 - Wizard with existing session prompt selection"
+         scenario: "Creation form with existing session prompt selection"
     test "pre-selects project when existing session chosen", %{conn: conn} do
       {ws, project} = create_completed_brainstorm_idea_session()
       {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
@@ -143,7 +149,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
       assert has_element?(view, "#project-#{project.id}.border-primary")
     end
 
-    @tag feature: @feature, scenario: "Phase 1 - Wizard requires a prompt"
+    @tag feature: @feature, scenario: "Creation form requires a prompt"
     test "shows error when prompt is missing", %{conn: conn} do
       project = create_project()
       {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
@@ -155,16 +161,14 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
       assert render(view) =~ "Please select or write a prompt"
     end
 
-    @tag feature: @feature, scenario: "Phase 1 - Wizard requires a project"
+    @tag feature: @feature, scenario: "Creation form requires a project"
     test "shows error when project is missing", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
 
-      # Switch to manual and enter prompt but no project
-      view |> element("#tab-manual-prompt") |> render_click()
-
+      # Enter prompt but no project (manual textarea shown directly when no source sessions)
       view
-      |> element("#manual-prompt-form")
-      |> render_change(%{"manual_prompt" => "Implement something"})
+      |> element("#manual-input-form")
+      |> render_change(%{"input_text" => "Implement something"})
 
       view |> element("#start-workflow-btn") |> render_click()
 
@@ -172,23 +176,28 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     end
   end
 
-  # --- Phase 2: Setup ---
+  # --- Setup ---
 
-  describe "Phase 2 - Setup" do
+  describe "Setup" do
     @tag feature: @feature,
-         scenario: "Phase 2 - Setup skips title generation for source session"
+         scenario: "Setup skips title generation for source session"
     test "skips title generation when source session selected", %{conn: conn} do
-      ws = create_implement_session(2, title_generating: false)
+      ws = create_implement_session(1, phase_status: :setup, title_generating: false)
 
       {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
       refute html =~ "Generating title..."
     end
 
-    @tag feature: @feature, scenario: "Phase 2 - Setup generates title for manual prompt"
+    @tag feature: @feature, scenario: "Setup generates title for manual prompt"
     test "shows title generation for manual prompt", %{conn: conn} do
-      ws = create_implement_session(2, title_generating: true, project_id: create_project().id)
+      ws =
+        create_implement_session(1,
+          phase_status: :setup,
+          title_generating: true,
+          project_id: create_project().id
+        )
 
-      Destila.Workflows.upsert_metadata(ws.id, "setup", "title_gen", %{
+      Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
         "status" => "in_progress"
       })
 
@@ -200,9 +209,9 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
   # --- Non-interactive phases ---
 
   describe "Non-interactive AI phases" do
-    @tag feature: @feature, scenario: "Phase 3 - Non-interactive AI generates plan"
+    @tag feature: @feature, scenario: "Phase 1 - Non-interactive AI generates plan"
     test "non-interactive phase hides text input", %{conn: conn} do
-      ws = create_implement_session(3, phase_status: :processing)
+      ws = create_implement_session(1, phase_status: :processing)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -210,7 +219,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Planning the implementation...",
-          phase: 3
+          phase: 1
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -223,7 +232,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Non-interactive phase shows retry on error"
     test "non-interactive phase shows retry when conversing (error state)", %{conn: conn} do
-      ws = create_implement_session(3, phase_status: :awaiting_input)
+      ws = create_implement_session(1, phase_status: :awaiting_input)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -231,7 +240,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Something went wrong.",
-          phase: 3
+          phase: 1
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -244,10 +253,10 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     test "retry transitions both workflow session and phase execution to processing", %{
       conn: conn
     } do
-      ws = create_implement_session(3, phase_status: :awaiting_input)
+      ws = create_implement_session(1, phase_status: :awaiting_input)
 
       {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 3, %{status: "awaiting_input"})
+        Destila.Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -255,7 +264,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Something went wrong.",
-          phase: 3
+          phase: 1
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -275,10 +284,10 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Non-interactive phase shows retry on error"
     test "retry shows processing UI (typing indicator, cancel button)", %{conn: conn} do
-      ws = create_implement_session(3, phase_status: :awaiting_input)
+      ws = create_implement_session(1, phase_status: :awaiting_input)
 
       {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 3, %{status: "awaiting_input"})
+        Destila.Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -286,7 +295,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Something went wrong.",
-          phase: 3
+          phase: 1
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -300,10 +309,10 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Non-interactive phase shows retry on error"
     test "workflow classified as :processing after retry", %{conn: conn} do
-      ws = create_implement_session(3, phase_status: :awaiting_input)
+      ws = create_implement_session(1, phase_status: :awaiting_input)
 
       {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 3, %{status: "awaiting_input"})
+        Destila.Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -311,7 +320,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Something went wrong.",
-          phase: 3
+          phase: 1
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -327,15 +336,15 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
   describe "Session strategy" do
     @tag feature: @feature,
-         scenario: "Phase 5 - AI starts a new session for implementation"
-    test "session strategy returns :new for phase 5" do
-      assert Destila.Workflows.session_strategy(:implement_general_prompt, 5) == {:new, []}
+         scenario: "Phase 3 - AI starts a new session for implementation"
+    test "session strategy returns :new for phase 3" do
+      assert Destila.Workflows.session_strategy(:implement_general_prompt, 3) == {:new, []}
     end
 
     @tag feature: @feature,
-         scenario: "Phase 5 - AI starts a new session for implementation"
+         scenario: "Phase 3 - AI starts a new session for implementation"
     test "session strategy returns :resume for other phases" do
-      for phase <- [1, 2, 3, 4, 6, 7, 8, 9] do
+      for phase <- [1, 2, 4, 5, 6, 7] do
         assert Destila.Workflows.session_strategy(:implement_general_prompt, phase) ==
                  {:resume, []}
       end
@@ -347,7 +356,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
   describe "Crafting board" do
     @tag feature: @feature, scenario: "Crafting board shows implementation workflow"
     test "shows implementation badge on crafting board", %{conn: conn} do
-      _ws = create_implement_session(3, phase_status: :processing)
+      _ws = create_implement_session(1, phase_status: :processing)
 
       {:ok, _view, html} = live(conn, ~p"/crafting")
       assert html =~ "Implementation"
