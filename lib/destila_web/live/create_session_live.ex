@@ -166,52 +166,25 @@ defmodule DestilaWeb.CreateSessionLive do
         _ -> socket
       end
 
-    %{
-      workflow_type: workflow_type,
-      dest_metadata_key: dest_key,
-      input_text: input_text,
-      selected_session_id: selected_session_id,
-      project_id: project_id
-    } = socket.assigns
-
     errors = validate(socket.assigns)
 
     if errors == %{} do
-      # Determine title
-      title =
-        if selected_session_id do
-          source = Workflows.get_workflow_session(selected_session_id)
-          if source, do: source.title, else: Workflows.default_title(workflow_type)
-        else
-          Workflows.default_title(workflow_type)
-        end
+      %{
+        workflow_type: workflow_type,
+        dest_metadata_key: dest_key,
+        input_text: input_text,
+        selected_session_id: selected_session_id,
+        project_id: project_id
+      } = socket.assigns
 
-      title_generating = is_nil(selected_session_id)
-
-      session_attrs =
-        %{
-          title: title,
+      {:ok, ws} =
+        Workflows.create_workflow_session(%{
           workflow_type: workflow_type,
-          current_phase: 1,
-          total_phases: Workflows.total_phases(workflow_type),
-          phase_status: :setup,
-          title_generating: title_generating
-        }
-        |> maybe_put(:project_id, project_id)
-
-      {:ok, ws} = Workflows.create_workflow_session(session_attrs)
-
-      # Store creation metadata
-      Workflows.upsert_metadata(ws.id, "creation", dest_key, %{"text" => input_text})
-
-      if selected_session_id do
-        Workflows.upsert_metadata(ws.id, "creation", "source_session", %{
-          "id" => selected_session_id
+          input_text: input_text,
+          dest_metadata_key: dest_key,
+          selected_session_id: selected_session_id,
+          project_id: project_id
         })
-      end
-
-      # Start setup (title gen, repo sync, worktree)
-      Workflows.Setup.start(ws)
 
       {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
     else
@@ -414,9 +387,6 @@ defmodule DestilaWeb.CreateSessionLive do
 
     errors
   end
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp non_blank(nil), do: nil
   defp non_blank(""), do: nil

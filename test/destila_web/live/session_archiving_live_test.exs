@@ -32,7 +32,7 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
       position: System.unique_integer([:positive])
     }
 
-    {:ok, session} = Destila.Workflows.create_workflow_session(Map.merge(defaults, attrs))
+    {:ok, session} = Destila.Workflows.insert_workflow_session(Map.merge(defaults, attrs))
     session
   end
 

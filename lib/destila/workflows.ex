@@ -91,13 +91,65 @@ defmodule Destila.Workflows do
     Repo.get!(Session, id)
   end
 
-  def create_workflow_session(attrs) do
+  def create_workflow_session(params) do
+    %{
+      workflow_type: workflow_type,
+      input_text: input_text,
+      dest_metadata_key: dest_key
+    } = params
+
+    selected_session_id = Map.get(params, :selected_session_id)
+    project_id = Map.get(params, :project_id)
+
+    title =
+      if selected_session_id do
+        source = get_workflow_session(selected_session_id)
+        if source, do: source.title, else: default_title(workflow_type)
+      else
+        default_title(workflow_type)
+      end
+
+    title_generating = is_nil(selected_session_id)
+
+    session_attrs =
+      %{
+        title: title,
+        workflow_type: workflow_type,
+        current_phase: 1,
+        total_phases: total_phases(workflow_type),
+        phase_status: :setup,
+        title_generating: title_generating
+      }
+      |> maybe_put(:project_id, project_id)
+
+    with {:ok, ws} <- insert_workflow_session(session_attrs) do
+      upsert_metadata(ws.id, "creation", dest_key, %{"text" => input_text})
+
+      if selected_session_id do
+        upsert_metadata(ws.id, "creation", "source_session", %{"id" => selected_session_id})
+      end
+
+      prepare_workflow_session(ws)
+
+      {:ok, ws}
+    end
+  end
+
+  @doc false
+  def insert_workflow_session(attrs) do
     attrs = Map.put_new_lazy(attrs, :position, fn -> System.unique_integer([:positive]) end)
 
     %Session{}
     |> Session.changeset(attrs)
     |> Repo.insert()
     |> broadcast(:workflow_session_created)
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  def prepare_workflow_session(%Session{} = ws) do
+    Destila.Workflows.Setup.start(ws)
   end
 
   def update_workflow_session(%Session{} = workflow_session, attrs) do
