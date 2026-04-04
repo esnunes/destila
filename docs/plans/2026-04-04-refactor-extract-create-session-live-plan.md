@@ -352,10 +352,7 @@ These already re-fetch and reassign `workflow_session` and `metadata`, so setup 
 
 **File: `lib/destila/workflows/setup.ex`**
 
-Currently, `Setup.update/2` returns `:phase_complete` when all steps are done, which triggers `Engine.phase_update` → `advance_to_next`. Now setup is not a phase, so completion should:
-
-1. Set `phase_status` away from `:setup`.
-2. Call `Engine.start_session(ws)` to kick off the actual phase 1.
+Currently, `Setup.update/2` returns `:phase_complete` when all steps are done, which triggers `Engine.phase_update` → `advance_to_next`. Now setup is not a phase, so completion should return `:setup_complete` — a new status the Engine will handle.
 
 Modify `update/2`:
 
@@ -370,7 +367,6 @@ def update(workflow_session, _params) do
 
   if setup_keys != [] &&
        Enum.all?(setup_keys, &(get_in(metadata, [&1, "status"]) == "completed")) do
-    # Setup complete — transition to the actual phase
     :setup_complete
   else
     :processing
@@ -378,45 +374,49 @@ def update(workflow_session, _params) do
 end
 ```
 
-The caller (`Engine.phase_update/3` or a new handler) needs to handle `:setup_complete` by calling `Engine.start_session/1` (which creates the phase execution and calls `phase_start_action`).
-
 **File: `lib/destila/executions/engine.ex`**
 
-In `phase_update/3`, add a new clause:
+In `phase_update/3`, add a new clause to handle `:setup_complete`:
 
 ```elixir
 :setup_complete ->
-  # Setup is done — start the actual phase 1
+  # Setup is done — clear setup status and start the actual phase 1
   {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: nil})
   start_session(ws)
 ```
 
-**Update workflow `phase_update_action` for setup:**
+This calls `start_session/1` which creates the phase execution record and calls `phase_start_action` on the workflow.
 
-Since setup is no longer a phase, the `%{setup_step_completed: _}` updates are dispatched to the workflow's `phase_update_action` at the current phase (which is 1). The workflow modules still need to handle this:
+**Setup workers already use `ws.current_phase`** — both `SetupWorker` and `TitleGenerationWorker` already call `Engine.phase_update(workflow_session_id, workflow_session.current_phase, ...)` (not a hardcoded phase number). After this change the session's `current_phase` is 1 at setup time, and the workflow's `phase_update_action` at phase 1 matches `%{setup_step_completed: _}` first (before any AI-related clauses):
 
-Actually, the setup updates come from workers (`SetupWorker`, `TitleGenerationWorker`) which call `Engine.phase_update(ws_id, phase, %{setup_step_completed: ...})`. Currently they pass the setup phase number (2). After this change, they should pass the current phase (1) and the workflow's `phase_update_action` should route setup params to `Setup.update/2`.
-
-The workflow modules already have:
 ```elixir
 def phase_update_action(ws, _phase_number, %{setup_step_completed: _} = params) do
   Destila.Workflows.Setup.update(ws, params)
 end
 ```
 
-This still works — the `_phase_number` is ignored. The setup workers just need to pass `ws.current_phase` instead of a hardcoded phase number.
+The `_phase_number` is ignored, so this works regardless of which phase number the worker passes. **No changes needed to setup workers.**
 
-Check where setup workers call `Engine.phase_update`:
-
-**File: Look up `SetupWorker` and `TitleGenerationWorker`** to confirm they pass the correct phase.
-
-### Step 8: Update setup workers to use current_phase
-
-The setup workers (`SetupWorker`, `TitleGenerationWorker`) need to report completion to `Engine.phase_update` using the session's `current_phase` rather than a hardcoded phase number. Check these workers and update their `Engine.phase_update` calls to use `ws.current_phase`.
-
-### Step 9: Database migration
+### Step 8: Database migration
 
 **File: `priv/repo/migrations/<timestamp>_extract_create_session_live.exs`**
+
+The migration must update **four tables** that store phase numbers:
+
+1. `workflow_sessions` — `current_phase` and `total_phases`
+2. `workflow_session_metadata` — `phase_name` (rename `"wizard"` and `"Setup"` to `"creation"`)
+3. `messages` — `phase` column (integer, stores the phase number when message was created)
+4. `phase_executions` — `phase_number` and `phase_name`
+
+**Why messages and phase_executions matter:**
+
+- **`messages.phase`**: Used by `AiConversationPhase` to group messages into phase sections with dividers (line 215 of `ai_conversation_phase.ex`: `for {phase, group} <- @phase_groups`). Each divider displays `Workflows.phase_name(workflow_type, phase)` which does `Enum.at(phases(), phase - 1)`. If messages have old phase 3 but `phases/0` now has 4 entries (not 6), phase 3 would resolve to "Technical Concerns" instead of the correct "Task Description".
+
+- **`messages.phase`**: Used by `derive_message_type/3` in `lib/destila/ai.ex` (line 254) via `get_phase_opts/2` (line 278) which does `Enum.at(phases(), phase - 1)`. Old phase 6 messages would try to access index 5 in a 4-element list and get `nil`, breaking message type detection.
+
+- **`phase_executions.phase_number`**: Used by `get_current_phase_execution/1` which orders by `phase_number DESC`. Used by `get_phase_execution_by_number/2` for exact lookups. Used by `ensure_phase_execution/2` which has a unique constraint on `(workflow_session_id, phase_number)`.
+
+- **`build_conversation_context/1`** in `BrainstormIdeaWorkflow` (line 345) groups messages by `&1.phase` and calls `phase_name(phase)` — same lookup issue.
 
 ```elixir
 defmodule Destila.Repo.Migrations.ExtractCreateSessionLive do
@@ -424,35 +424,71 @@ defmodule Destila.Repo.Migrations.ExtractCreateSessionLive do
 
   def up do
     # 1. Decrement current_phase and total_phases by 2 for all sessions
-    #    that still have wizard+setup phases (current_phase >= 1)
     execute """
     UPDATE workflow_sessions
     SET current_phase = MAX(current_phase - 2, 1),
         total_phases = total_phases - 2
     """
 
-    # 2. Reassign wizard/setup metadata phase_name to "creation"
+    # 2. Sessions that were on old phase 1 (wizard) or old phase 2 (setup)
+    #    are now at phase 1 with setup status
+    execute """
+    UPDATE workflow_sessions
+    SET phase_status = 'setup'
+    WHERE current_phase = 1 AND phase_status IN ('processing', 'awaiting_input')
+    AND id IN (
+      SELECT DISTINCT workflow_session_id FROM workflow_session_metadata
+      WHERE phase_name IN ('wizard', 'Setup') AND key IN ('title_gen', 'repo_sync', 'worktree')
+      AND json_extract(value, '$.status') != 'completed'
+    )
+    """
+
+    # 3. Reassign wizard/setup metadata phase_name to "creation"
     execute """
     UPDATE workflow_session_metadata
     SET phase_name = 'creation'
     WHERE phase_name IN ('wizard', 'Setup')
     """
 
-    # 3. Sessions that were on phase 1 (wizard) or phase 2 (setup)
-    #    are now at phase 1 with setup status
+    # 4. Decrement phase numbers on all messages by 2 (min 1)
+    #    Messages at old phases 1-2 (wizard/setup) didn't exist in practice
+    #    (wizards don't create AI messages), but guard with MAX just in case
     execute """
-    UPDATE workflow_sessions
-    SET phase_status = 'setup'
-    WHERE current_phase = 1 AND phase_status = 'processing'
-    AND id IN (
-      SELECT workflow_session_id FROM workflow_session_metadata
-      WHERE phase_name = 'creation' AND key IN ('title_gen', 'repo_sync', 'worktree')
-      AND json_extract(value, '$.status') != 'completed'
+    UPDATE messages
+    SET phase = MAX(phase - 2, 1)
+    WHERE ai_session_id IN (
+      SELECT id FROM ai_sessions
     )
     """
+
+    # 5. Update phase_executions: decrement phase_number by 2
+    #    and update phase_name to match new phase definitions.
+    #    Delete wizard/setup phase executions (old phases 1-2).
+    execute """
+    DELETE FROM phase_executions
+    WHERE phase_number <= 2
+    """
+
+    execute """
+    UPDATE phase_executions
+    SET phase_number = phase_number - 2
+    """
+
+    # 6. Update phase_name on remaining phase_executions.
+    #    We update per-workflow-type since phase names differ.
+    #    BrainstormIdea: old 3→1 "Task Description", 4→2 "Gherkin Review",
+    #                    5→3 "Technical Concerns", 6→4 "Prompt Generation"
+    #    ImplementGeneralPrompt: old 3→1 "Generate Plan", 4→2 "Deepen Plan",
+    #                            5→3 "Work", 6→4 "Review", 7→5 "Browser Tests",
+    #                            8→6 "Feature Video", 9→7 "Adjustments"
+    #    Phase names are already correct because they were set from the workflow's
+    #    phase_name() at creation time, and we've only shifted the numbers.
+    #    The names stay the same — only phase_number changed.
+    #    No phase_name update needed.
   end
 
   def down do
+    # Reverse: increment phases back by 2
     execute """
     UPDATE workflow_sessions
     SET current_phase = current_phase + 2,
@@ -472,13 +508,30 @@ defmodule Destila.Repo.Migrations.ExtractCreateSessionLive do
     WHERE phase_name = 'creation'
     AND key IN ('title_gen', 'repo_sync', 'worktree')
     """
+
+    execute """
+    UPDATE messages
+    SET phase = phase + 2
+    WHERE ai_session_id IN (
+      SELECT id FROM ai_sessions
+    )
+    """
+
+    execute """
+    UPDATE phase_executions
+    SET phase_number = phase_number + 2
+    """
   end
 end
 ```
 
-Note: The `MAX(current_phase - 2, 1)` ensures sessions that were on phase 1 or 2 don't go below 1.
+**Note on `MAX(current_phase - 2, 1)`**: Sessions on old phase 1 (wizard) or 2 (setup) go to 1. Sessions on old phase 3+ get correctly decremented.
 
-### Step 10: Delete old wizard phase files
+**Note on phase_executions deletion**: Wizard and setup phase_executions (old phases 1-2) are deleted since these phases no longer exist. Their status data is not needed — the creation flow and setup status are handled differently now.
+
+**Note on in-flight Oban jobs**: `AiQueryWorker` jobs carry a `"phase"` arg set at enqueue time. If a job was enqueued for old phase 3 and runs after migration, it will pass `phase=3` to `Engine.phase_update`. However, `Engine.phase_update` does `%{ws | current_phase: phase}` — the ws was already migrated to `current_phase=1`, but the phase override from the job args would make it 3, which won't match the workflow's `phases/0` (now only 4 entries for brainstorm). **Mitigation**: Cancel all pending Oban jobs before running the migration: `Oban.cancel_all_jobs(Destila.Workers.AiQueryWorker)`. Active sessions will need to be retried after deployment.
+
+### Step 9: Delete old wizard phase files
 
 Delete:
 - `lib/destila_web/live/phases/wizard_phase.ex`
@@ -488,7 +541,7 @@ Delete:
 
 Remove `list_sessions_with_generated_prompts/0` from `lib/destila/workflows.ex` (no callers remain after `PromptWizardPhase` is deleted).
 
-### Step 11: Update feature files
+### Step 10: Update feature files
 
 **File: `features/workflow_type_selection.feature`**
 
@@ -508,7 +561,7 @@ Update scenario "Select a workflow type to start" — navigating to a type now g
 - Phase 2 setup scenarios become setup status scenarios
 - Phase references shift: old "Phase 3" → "Phase 1", old "Phase 9" → "Phase 7"
 
-### Step 12: Update tests
+### Step 11: Update tests
 
 Update existing tests that reference:
 - Phase numbers (decrement by 2)
@@ -527,31 +580,40 @@ Add new tests for:
 
 1. **`lib/destila/workflow.ex`** — Add `creation_config/0` callback
 2. **`lib/destila/workflows.ex`** — Add `creation_config/1` dispatcher, `list_sessions_with_exported_metadata/1`, remove `list_sessions_with_generated_prompts/0`
-3. **`lib/destila/workflows/brainstorm_idea_workflow.ex`** — Add `creation_config/0`, remove wizard/setup from `phases/0`, remove setup handler from `phase_update_action`, update phase number references
-4. **`lib/destila/workflows/implement_general_prompt_workflow.ex`** — Same as above, plus update `session_strategy/1` (old 5 → new 3)
+3. **`lib/destila/workflows/brainstorm_idea_workflow.ex`** — Add `creation_config/0`, remove wizard/setup from `phases/0`, remove setup handler from `phase_update_action`
+4. **`lib/destila/workflows/implement_general_prompt_workflow.ex`** — Same as above, plus update `session_strategy/1` (old 5 -> new 3)
 5. **`lib/destila/workflows/setup.ex`** — Return `:setup_complete` instead of `:phase_complete`
 6. **`lib/destila/executions/engine.ex`** — Handle `:setup_complete` in `phase_update/3`
 7. **`lib/destila_web/live/create_session_live.ex`** — New file
 8. **`lib/destila_web/live/workflow_runner_live.ex`** — Remove type selection/wizard mount paths, add setup status rendering
 9. **`lib/destila_web/router.ex`** — Point `/workflows` routes to `CreateSessionLive`
-10. **`priv/repo/migrations/<timestamp>_extract_create_session_live.exs`** — New migration
-11. **`lib/destila/workers/setup_worker.ex`** — Use `ws.current_phase` for `Engine.phase_update` calls
-12. **`lib/destila/workers/title_generation_worker.ex`** — Same
-13. **`features/workflow_type_selection.feature`** — Update scenarios
-14. **`features/brainstorm_idea_workflow.feature`** — Update phase numbers and descriptions
-15. **`features/implement_general_prompt_workflow.feature`** — Update phase numbers and descriptions
+10. **`priv/repo/migrations/<timestamp>_extract_create_session_live.exs`** — New migration (sessions, metadata, messages, phase_executions)
+11. **`features/workflow_type_selection.feature`** — Update scenarios
+12. **`features/brainstorm_idea_workflow.feature`** — Update phase numbers and descriptions
+13. **`features/implement_general_prompt_workflow.feature`** — Update phase numbers and descriptions
 
 ## Files to delete
 
 1. **`lib/destila_web/live/phases/wizard_phase.ex`**
 2. **`lib/destila_web/live/phases/prompt_wizard_phase.ex`**
 
+## Files confirmed unchanged
+
+1. **`lib/destila/workers/setup_worker.ex`** — Already uses `ws.current_phase`, no changes needed
+2. **`lib/destila/workers/title_generation_worker.ex`** — Already uses `ws.current_phase`, no changes needed
+3. **`lib/destila/ai.ex`** — `get_phase_opts/2` (line 278) uses `Enum.at(phases(), phase - 1)` which works correctly after message phase numbers are migrated
+4. **`lib/destila_web/live/phases/ai_conversation_phase.ex`** — Phase dividers (line 225) use `Workflows.phase_name(workflow_type, phase)` which resolves correctly after message phase migration
+
 ## Risks and mitigations
 
-1. **Existing sessions in DB with old phase numbers** — The migration handles this, but sessions actively being used during deployment may see inconsistency. Mitigation: the migration is idempotent and the `MAX(current_phase - 2, 1)` guard prevents negative phases.
+1. **In-flight Oban jobs with old phase numbers** — `AiQueryWorker` jobs carry a `"phase"` arg set at enqueue time. If a job was enqueued before migration with old phase 3 and executes after, `Engine.phase_update` does `%{ws | current_phase: phase}` (line 107 of `engine.ex`) with the stale number, causing `phase_update_action` to look up the wrong phase definition via `Enum.at(phases(), phase - 1)`. **Mitigation**: Cancel all pending `AiQueryWorker` jobs before running the migration. Active sessions will need retry after deployment.
 
-2. **Setup workers reporting to wrong phase** — If a setup worker fires during deployment before the code update, it may report to the old phase number. Mitigation: `phase_update_action` routes `%{setup_step_completed: _}` regardless of phase number, so this is safe.
+2. **`build_conversation_context/1` on pre-migration messages** — This function in `BrainstormIdeaWorkflow` (line 345) groups messages by `&1.phase` and calls `phase_name(phase)`. After migration, stored message phase numbers are decremented, so `phase_name(1)` correctly resolves to "Task Description" from the new `phases/0`. **No issue if migration runs correctly.**
 
-3. **CraftingBoardLive column grouping** — `phase_columns/0` derives from `phases/0`, so it automatically adjusts. Sessions in the DB with updated `current_phase` values will map correctly to the new columns.
+3. **`derive_message_type/3` in `ai.ex`** — Uses `get_phase_opts(workflow_type, phase)` (line 254) which does `Enum.at(phases(), phase - 1)` (line 279). After migration, message phase numbers are decremented, so lookups resolve correctly. E.g., old phase 6 messages (Prompt Generation) become phase 4, and `Enum.at(phases(), 3)` correctly returns the Prompt Generation opts with `message_type: :generated_prompt`. **No issue if migration runs correctly.**
 
-4. **AI messages referencing old phase numbers** — Existing messages in `messages` table have a `phase` column with old numbers. These are display-only (grouped by phase in `AiConversationPhase`) and will show correctly as long as the phase number on the message matches the current session's `current_phase`. For in-flight sessions, old messages at phases 3-6 won't match phases 1-4, but `AiConversationPhase` groups by phase number from the messages themselves, so conversation history remains coherent — it just won't match the new phase names in dividers for pre-existing sessions.
+4. **Phase execution unique constraint** — `phase_executions` has a unique constraint on `(workflow_session_id, phase_number)`. The migration deletes old phases 1-2 first, then decrements remaining numbers. If old phase 3 becomes 1, this is safe because old phase 1 was already deleted. **Order matters: delete first, then decrement.**
+
+5. **CraftingBoardLive column grouping** — `phase_columns/0` derives from the updated `phases/0`, so it automatically adjusts. Sessions in the DB with updated `current_phase` values map correctly to the new columns.
+
+6. **Setup workers during deployment** — If a setup worker fires after the code update but before migration, `ws.current_phase` is still old phase 2 (pre-migration). The `%{setup_step_completed: _}` clause matches regardless of phase number, so `Setup.update/2` runs correctly. The returned `:setup_complete` won't be handled by the old Engine code (which only knows `:phase_complete`), but this is a brief window. **Mitigation**: Run migration immediately after deploying code.
