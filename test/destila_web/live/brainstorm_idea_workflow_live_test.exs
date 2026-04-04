@@ -71,7 +71,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       end
 
     {:ok, ws} =
-      Destila.Workflows.create_workflow_session(%{
+      Destila.Workflows.insert_workflow_session(%{
         title: "Test Brainstorm Idea",
         workflow_type: :brainstorm_idea,
         project_id: nil,
@@ -177,7 +177,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: @feature, scenario: "Setup displays progress"
     test "shows setup progress steps", %{conn: conn} do
       {:ok, ws} =
-        Destila.Workflows.create_workflow_session(%{
+        Destila.Workflows.insert_workflow_session(%{
           title: "Test Session",
           workflow_type: :brainstorm_idea,
           current_phase: 1,
@@ -420,7 +420,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       project = create_project()
 
       {:ok, ws} =
-        Destila.Workflows.create_workflow_session(%{
+        Destila.Workflows.insert_workflow_session(%{
           title: "Test Session",
           workflow_type: :brainstorm_idea,
           current_phase: 1,
@@ -593,7 +593,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
   defp create_session_with_options(input_type) do
     {:ok, ws} =
-      Destila.Workflows.create_workflow_session(%{
+      Destila.Workflows.insert_workflow_session(%{
         title: "Test Options",
         workflow_type: :brainstorm_idea,
         current_phase: 1,
@@ -645,7 +645,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
   defp create_session_with_questions do
     {:ok, ws} =
-      Destila.Workflows.create_workflow_session(%{
+      Destila.Workflows.insert_workflow_session(%{
         title: "Test Questions",
         workflow_type: :brainstorm_idea,
         current_phase: 1,

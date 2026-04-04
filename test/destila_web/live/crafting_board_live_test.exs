@@ -36,7 +36,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       position: System.unique_integer([:positive])
     }
 
-    {:ok, prompt} = Destila.Workflows.create_workflow_session(Map.merge(defaults, attrs))
+    {:ok, prompt} = Destila.Workflows.insert_workflow_session(Map.merge(defaults, attrs))
     prompt
   end
 

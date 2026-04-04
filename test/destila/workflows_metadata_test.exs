@@ -5,7 +5,7 @@ defmodule Destila.WorkflowsMetadataTest do
 
   defp create_session do
     {:ok, ws} =
-      Workflows.create_workflow_session(%{
+      Workflows.insert_workflow_session(%{
         title: "Test Session",
         workflow_type: :brainstorm_idea,
         current_phase: 1,

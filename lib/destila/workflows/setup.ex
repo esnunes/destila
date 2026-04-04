@@ -22,7 +22,7 @@ defmodule Destila.Workflows.Setup do
 
     if ws.project_id do
       %{"workflow_session_id" => ws.id}
-      |> Destila.Workers.SetupWorker.new()
+      |> Destila.Workers.PrepareWorkflowSession.new()
       |> Oban.insert()
     end
 
