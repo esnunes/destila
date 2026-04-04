@@ -29,22 +29,13 @@ defmodule DestilaWeb.CreateSessionLive do
 
   defp mount_form(workflow_type_str, socket) do
     workflow_type = String.to_existing_atom(workflow_type_str)
-    {source_key, label, dest_key} = Workflows.creation_config(workflow_type)
-
-    source_sessions =
-      if source_key do
-        Workflows.list_sessions_with_exported_metadata(source_key)
-      else
-        []
-      end
+    source_sessions = Workflows.list_source_sessions(workflow_type)
 
     {:ok,
      socket
      |> assign(:view, :form)
      |> assign(:workflow_type, workflow_type)
-     |> assign(:source_metadata_key, source_key)
-     |> assign(:input_label, label)
-     |> assign(:dest_metadata_key, dest_key)
+     |> assign(:input_label, Workflows.creation_label(workflow_type))
      |> assign(:source_sessions, source_sessions)
      |> assign(:selected_session_id, nil)
      |> assign(:selected_text, nil)
@@ -166,52 +157,23 @@ defmodule DestilaWeb.CreateSessionLive do
         _ -> socket
       end
 
-    %{
-      workflow_type: workflow_type,
-      dest_metadata_key: dest_key,
-      input_text: input_text,
-      selected_session_id: selected_session_id,
-      project_id: project_id
-    } = socket.assigns
-
     errors = validate(socket.assigns)
 
     if errors == %{} do
-      # Determine title
-      title =
-        if selected_session_id do
-          source = Workflows.get_workflow_session(selected_session_id)
-          if source, do: source.title, else: Workflows.default_title(workflow_type)
-        else
-          Workflows.default_title(workflow_type)
-        end
+      %{
+        workflow_type: workflow_type,
+        input_text: input_text,
+        selected_session_id: selected_session_id,
+        project_id: project_id
+      } = socket.assigns
 
-      title_generating = is_nil(selected_session_id)
-
-      session_attrs =
-        %{
-          title: title,
+      {:ok, ws} =
+        Workflows.create_workflow_session(%{
           workflow_type: workflow_type,
-          current_phase: 1,
-          total_phases: Workflows.total_phases(workflow_type),
-          phase_status: :setup,
-          title_generating: title_generating
-        }
-        |> maybe_put(:project_id, project_id)
-
-      {:ok, ws} = Workflows.create_workflow_session(session_attrs)
-
-      # Store creation metadata
-      Workflows.upsert_metadata(ws.id, "creation", dest_key, %{"text" => input_text})
-
-      if selected_session_id do
-        Workflows.upsert_metadata(ws.id, "creation", "source_session", %{
-          "id" => selected_session_id
+          input_text: input_text,
+          selected_session_id: selected_session_id,
+          project_id: project_id
         })
-      end
-
-      # Start setup (title gen, repo sync, worktree)
-      Workflows.Setup.start(ws)
 
       {:noreply, push_navigate(socket, to: ~p"/sessions/#{ws.id}")}
     else
@@ -414,9 +376,6 @@ defmodule DestilaWeb.CreateSessionLive do
 
     errors
   end
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp non_blank(nil), do: nil
   defp non_blank(""), do: nil

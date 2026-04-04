@@ -194,7 +194,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
         })
 
       {:ok, _ws} =
-        Destila.Workflows.create_workflow_session(%{
+        Destila.Workflows.insert_workflow_session(%{
           title: "Test Prompt",
           project_id: project.id,
           workflow_type: :brainstorm_idea,

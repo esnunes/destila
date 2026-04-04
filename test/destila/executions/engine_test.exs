@@ -24,7 +24,7 @@ defmodule Destila.Executions.EngineTest do
       phase_status: :awaiting_input
     }
 
-    {:ok, ws} = Workflows.create_workflow_session(Map.merge(default, attrs))
+    {:ok, ws} = Workflows.insert_workflow_session(Map.merge(default, attrs))
     ws
   end
 

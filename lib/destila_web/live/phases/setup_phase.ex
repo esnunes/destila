@@ -24,7 +24,7 @@ defmodule DestilaWeb.Phases.SetupPhase do
   end
 
   def handle_event("retry_setup", _params, socket) do
-    Destila.Workflows.Setup.start(socket.assigns.workflow_session)
+    Destila.Workflows.prepare_workflow_session(socket.assigns.workflow_session)
     {:noreply, socket}
   end
 

@@ -43,7 +43,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
 
   defp create_session_with_generated_prompt do
     {:ok, workflow_session} =
-      Destila.Workflows.create_workflow_session(%{
+      Destila.Workflows.insert_workflow_session(%{
         title: "Test Session",
         workflow_type: :brainstorm_idea,
         project_id: nil,

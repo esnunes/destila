@@ -39,7 +39,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     project = create_project()
 
     {:ok, ws} =
-      Destila.Workflows.create_workflow_session(%{
+      Destila.Workflows.insert_workflow_session(%{
         title: "Completed Brainstorm Idea",
         workflow_type: :brainstorm_idea,
         project_id: project.id,
@@ -64,7 +64,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     project_id = Keyword.get(opts, :project_id)
 
     {:ok, ws} =
-      Destila.Workflows.create_workflow_session(%{
+      Destila.Workflows.insert_workflow_session(%{
         title: "Test Implementation",
         workflow_type: :implement_general_prompt,
         project_id: project_id,

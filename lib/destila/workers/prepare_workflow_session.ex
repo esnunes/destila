@@ -1,4 +1,4 @@
-defmodule Destila.Workers.SetupWorker do
+defmodule Destila.Workers.PrepareWorkflowSession do
   use Oban.Worker, queue: :setup, max_attempts: 3
 
   alias Destila.{Git, Workflows}
