@@ -58,19 +58,8 @@ defmodule DestilaWeb.BoardComponents do
   @doc """
   Returns true if the session is in a state where a ClaudeSession GenServer should be running.
   """
-  def should_be_alive?(%{phase_status: :processing} = session) do
-    ai_phase?(session)
-  end
-
+  def should_be_alive?(%{phase_status: :processing}), do: true
   def should_be_alive?(_session), do: false
-
-  defp ai_phase?(session) do
-    case Destila.Workflows.phases(session.workflow_type)
-         |> Enum.at(session.current_phase - 1) do
-      %Destila.Workflow.Phase{} -> true
-      _ -> false
-    end
-  end
 
   defp aliveness_color(:alive), do: "bg-success"
   defp aliveness_color(:expected_down), do: "bg-base-content/20"
