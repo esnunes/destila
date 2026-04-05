@@ -11,8 +11,8 @@ defmodule Destila.Executions.Engine do
   AI conversation mechanics (enqueuing workers, saving messages, parsing
   AI responses) are handled by `Destila.AI.Conversation`.
 
-  During the migration period, the Engine writes to both `phase_executions`
-  AND `workflow_sessions.phase_status` to maintain backwards compatibility.
+  The Engine writes to both `phase_executions` (for execution history) and
+  `workflow_sessions.phase_status` (for classification and UI rendering).
   """
 
   alias Destila.{AI, Executions, Workflows}

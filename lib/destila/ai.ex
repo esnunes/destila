@@ -155,7 +155,7 @@ defmodule Destila.AI do
   @doc """
   Extracts the first session tool call from an AI result or raw_response map.
 
-  Handles both atom-keyed maps (from `collect_with_mcp` in the worker) and
+  Handles both atom-keyed maps (from the streaming collector in the worker) and
   string-keyed maps (from DB JSON in `process_message`). Returns a map with
   `:action` and `:message` keys, or `nil` if no session tool was called.
   """
