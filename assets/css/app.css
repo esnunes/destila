@@ -32,8 +32,8 @@
   --color-base-200: oklch(15% 0.008 260);
   --color-base-300: oklch(30% 0.015 260);
   --color-base-content: oklch(93% 0.005 260);
-  --color-primary: oklch(55% 0.2 265);
-  --color-primary-content: oklch(98% 0.01 265);
+  --color-primary: oklch(50% 0.19 277);
+  --color-primary-content: oklch(98% 0.01 277);
   --color-secondary: oklch(60% 0.15 290);
   --color-secondary-content: oklch(98% 0.01 290);
   --color-accent: oklch(70% 0.17 250);
@@ -68,8 +68,8 @@
   --color-base-200: oklch(97% 0.003 260);
   --color-base-300: oklch(93% 0.005 260);
   --color-base-content: oklch(25% 0.01 260);
-  --color-primary: oklch(55% 0.2 265);
-  --color-primary-content: oklch(98% 0.01 265);
+  --color-primary: oklch(50% 0.19 277);
+  --color-primary-content: oklch(98% 0.01 277);
   --color-secondary: oklch(55% 0.15 290);
   --color-secondary-content: oklch(98% 0.01 290);
   --color-accent: oklch(25% 0.01 260);
@@ -190,7 +190,7 @@ a, button, .card, .btn, input {
   border-color: oklch(0% 0 0 / 0.1);
 }
 .prose a {
-  color: oklch(55% 0.2 265);
+  color: oklch(50% 0.19 277);
   text-decoration: underline;
 }
 
