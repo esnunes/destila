@@ -56,32 +56,6 @@ defmodule Destila.Workflows do
   def default_title(workflow_type), do: workflow_module(workflow_type).default_title()
   def completion_message(workflow_type), do: workflow_module(workflow_type).completion_message()
 
-  def session_strategy(workflow_type, phase) do
-    case Enum.at(phases(workflow_type), phase - 1) do
-      %Destila.Workflows.Phase{session_strategy: strategy} -> normalize_strategy(strategy)
-      nil -> {:resume, []}
-    end
-  end
-
-  def phase_start_action(workflow_session) do
-    workflow_module(workflow_session.workflow_type).phase_start_action(
-      workflow_session,
-      workflow_session.current_phase
-    )
-  end
-
-  def phase_update_action(workflow_session, params) do
-    workflow_module(workflow_session.workflow_type).phase_update_action(
-      workflow_session,
-      workflow_session.current_phase,
-      params
-    )
-  end
-
-  defp normalize_strategy(:resume), do: {:resume, []}
-  defp normalize_strategy(:new), do: {:new, []}
-  defp normalize_strategy({action, opts}) when action in [:resume, :new], do: {action, opts}
-
   # --- Session CRUD ---
 
   def list_workflow_sessions do

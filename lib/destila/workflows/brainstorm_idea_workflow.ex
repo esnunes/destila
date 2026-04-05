@@ -44,92 +44,7 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
   end
 
-  # --- Phase actions ---
-
-  def phase_start_action(ws, phase_number) do
-    case Enum.at(phases(), phase_number - 1) do
-      %Phase{system_prompt: prompt_fn} when not is_nil(prompt_fn) ->
-        ensure_ai_session(ws)
-        query = prompt_fn.(ws)
-        enqueue_ai_worker(ws, phase_number, query)
-        :processing
-
-      _ ->
-        :awaiting_input
-    end
-  end
-
-  def phase_update_action(ws, phase_number, %{message: message}) do
-    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
-
-    if ai_session do
-      Destila.AI.create_message(ai_session.id, %{
-        role: :user,
-        content: message,
-        phase: phase_number
-      })
-
-      enqueue_ai_worker(ws, phase_number, message)
-      :processing
-    else
-      :awaiting_input
-    end
-  end
-
-  def phase_update_action(ws, phase_number, %{ai_result: result}) do
-    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
-
-    if ai_session do
-      response_text = Destila.AI.response_text(result)
-      session_action = Destila.AI.extract_session_action(result)
-
-      content =
-        case session_action do
-          %{message: msg} when is_binary(msg) and msg != "" -> msg
-          _ -> response_text
-        end
-
-      Destila.AI.create_message(ai_session.id, %{
-        role: :system,
-        content: content,
-        raw_response: result,
-        phase: phase_number
-      })
-
-      if result[:session_id] do
-        Destila.AI.update_ai_session(ai_session, %{claude_session_id: result[:session_id]})
-      end
-
-      # Check if this phase produces metadata (e.g. generated prompt)
-      save_phase_metadata(ws, phase_number, response_text)
-
-      case session_action do
-        %{action: "phase_complete"} -> :phase_complete
-        %{action: "suggest_phase_complete"} -> :suggest_phase_complete
-        _ -> :awaiting_input
-      end
-    else
-      :awaiting_input
-    end
-  end
-
-  def phase_update_action(ws, phase_number, %{ai_error: _reason}) do
-    ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
-
-    if ai_session do
-      Destila.AI.create_message(ai_session.id, %{
-        role: :system,
-        content: "Something went wrong. Please try sending your message again.",
-        phase: phase_number
-      })
-    end
-
-    :awaiting_input
-  end
-
-  def phase_update_action(_ws, _phase_number, _params), do: :awaiting_input
-
-  defp save_phase_metadata(ws, phase_number, response_text) do
+  def handle_response(ws, phase_number, response_text) do
     case Enum.at(phases(), phase_number - 1) do
       %Phase{message_type: :generated_prompt} ->
         phase_name = phase_name(phase_number)
@@ -142,34 +57,14 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
           exported: true
         )
 
+        :ok
+
       _ ->
         :ok
     end
   end
 
-  defp ensure_ai_session(ws) do
-    case Destila.AI.get_ai_session_for_workflow(ws.id) do
-      nil ->
-        metadata = Destila.Workflows.get_metadata(ws.id)
-        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
-
-        {:ok, session} =
-          Destila.AI.get_or_create_ai_session(ws.id, %{worktree_path: worktree_path})
-
-        session
-
-      session ->
-        session
-    end
-  end
-
-  defp enqueue_ai_worker(ws, phase, query) do
-    %{"workflow_session_id" => ws.id, "phase" => phase, "query" => query}
-    |> Destila.Workers.AiQueryWorker.new()
-    |> Oban.insert()
-  end
-
-  # AI system prompts
+  # --- AI system prompts ---
 
   @tool_instructions """
 
@@ -326,25 +221,5 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     The user may ask you to refine it. \
     Do NOT call the `mcp__destila__session` tool — the user will mark this phase as done manually.
     """
-  end
-
-  def build_conversation_context(messages) do
-    messages
-    |> Enum.group_by(& &1.phase)
-    |> Enum.sort_by(fn {phase, _} -> phase end)
-    |> Enum.map(fn {phase, msgs} ->
-      phase_label = phase_name(phase) || "Phase #{phase}"
-
-      content =
-        msgs
-        |> Enum.map(fn msg ->
-          role = if msg.role == :user, do: "User", else: "Assistant"
-          "#{role}: #{msg.content}"
-        end)
-        |> Enum.join("\n")
-
-      "## #{phase_label}\n#{content}"
-    end)
-    |> Enum.join("\n\n")
   end
 end

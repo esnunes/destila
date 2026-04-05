@@ -52,32 +52,16 @@ defmodule Destila.Workflows.Workflow do
                dest_metadata_key :: String.t()}
 
   @doc """
-  Called when a phase is entered. Performs any startup work (e.g. enqueuing
-  a worker) and returns the resulting status.
+  Optional hook called after saving an AI response message.
 
-  Return values:
-  - `:processing` — work was enqueued, phase is actively processing
-  - `:awaiting_input` — waiting for user/external input
+  Allows workflows to intercept responses for workflow-specific purposes
+  (e.g. saving generated prompt metadata). Default implementation is a no-op.
   """
-  @callback phase_start_action(workflow_session :: map(), phase_number :: integer()) ::
-              :processing | :awaiting_input
-
-  @doc """
-  Called when a phase receives an update (user input, AI response, etc.).
-  Performs the work (e.g. saving messages, enqueuing workers) and returns
-  the resulting status.
-
-  Return values:
-  - `:processing` — work was enqueued, phase is actively processing
-  - `:awaiting_input` — waiting for user/external input
-  - `:phase_complete` — phase is done, auto-advance to next
-  - `:suggest_phase_complete` — suggest completion, wait for user confirmation
-  """
-  @callback phase_update_action(
+  @callback handle_response(
               workflow_session :: map(),
               phase_number :: integer(),
-              params :: map()
-            ) :: :processing | :awaiting_input | :phase_complete | :suggest_phase_complete
+              response_text :: String.t()
+            ) :: :ok
 
   defmacro __using__(_opts) do
     quote do
@@ -103,7 +87,9 @@ defmodule Destila.Workflows.Workflow do
         columns ++ [{:done, "Done"}]
       end
 
-      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0
+      def handle_response(_workflow_session, _phase_number, _response_text), do: :ok
+
+      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0, handle_response: 3
     end
   end
 end

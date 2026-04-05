@@ -338,15 +338,18 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Phase 3 - AI starts a new session for implementation"
     test "session strategy returns :new for phase 3" do
-      assert Destila.Workflows.session_strategy(:implement_general_prompt, 3) == {:new, []}
+      work_phase = Enum.at(Destila.Workflows.ImplementGeneralPromptWorkflow.phases(), 2)
+      assert work_phase.session_strategy == :new
     end
 
     @tag feature: @feature,
          scenario: "Phase 3 - AI starts a new session for implementation"
     test "session strategy returns :resume for other phases" do
-      for phase <- [1, 2, 4, 5, 6, 7] do
-        assert Destila.Workflows.session_strategy(:implement_general_prompt, phase) ==
-                 {:resume, []}
+      phases = Destila.Workflows.ImplementGeneralPromptWorkflow.phases()
+
+      for idx <- [0, 1, 3, 4, 5, 6] do
+        phase = Enum.at(phases, idx)
+        assert phase.session_strategy == :resume
       end
     end
   end
