@@ -17,18 +17,13 @@ defmodule Destila.AI.Conversation do
   """
   def phase_start(ws) do
     phase_number = ws.current_phase
+    %{system_prompt: prompt_fn} = get_phase(ws, phase_number)
 
-    case get_phase(ws, phase_number) do
-      %{system_prompt: prompt_fn} when not is_nil(prompt_fn) ->
-        handle_session_strategy(ws, phase_number)
-        ensure_ai_session(ws)
-        query = prompt_fn.(ws)
-        enqueue_ai_worker(ws, phase_number, query)
-        :processing
-
-      _ ->
-        :awaiting_input
-    end
+    handle_session_strategy(ws, phase_number)
+    ensure_ai_session(ws)
+    query = prompt_fn.(ws)
+    enqueue_ai_worker(ws, phase_number, query)
+    :processing
   end
 
   @doc """

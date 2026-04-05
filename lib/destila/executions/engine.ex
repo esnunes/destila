@@ -53,21 +53,14 @@ defmodule Destila.Executions.Engine do
   def start_session(ws) do
     phase = ws.current_phase
     {:ok, pe} = Executions.ensure_phase_execution(ws, phase)
-    status = AI.Conversation.phase_start(ws)
+    AI.Conversation.phase_start(ws)
 
     # Reload to check if an inline worker already advanced past this phase.
     reloaded = Workflows.get_workflow_session!(ws.id)
 
     if reloaded.current_phase == phase do
-      case status do
-        :processing ->
-          Executions.start_phase(pe, "processing")
-          Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
-
-        :awaiting_input ->
-          Executions.start_phase(pe, "awaiting_input")
-          Workflows.update_workflow_session(reloaded, %{phase_status: :awaiting_input})
-      end
+      Executions.start_phase(pe, "processing")
+      Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
     end
   end
 
@@ -202,22 +195,15 @@ defmodule Destila.Executions.Engine do
 
     # Delegate phase startup to the workflow. In test/inline mode, this may
     # trigger a full worker execution chain (including nested transitions).
-    status = AI.Conversation.phase_start(ws)
+    AI.Conversation.phase_start(ws)
 
     # Reload to check if a nested transition (from an inline worker auto-advancing)
     # has already moved past this phase. If so, skip the status update.
     reloaded = Workflows.get_workflow_session!(ws.id)
 
     if reloaded.current_phase == next_phase do
-      case status do
-        :processing ->
-          Executions.start_phase(pe, "processing")
-          Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
-
-        :awaiting_input ->
-          Executions.start_phase(pe, "awaiting_input")
-          Workflows.update_workflow_session(reloaded, %{phase_status: :awaiting_input})
-      end
+      Executions.start_phase(pe, "processing")
+      Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
     end
   end
 
@@ -232,27 +218,14 @@ defmodule Destila.Executions.Engine do
 
     # Reload from DB to get fresh state after stopping the session
     ws = Workflows.get_workflow_session!(ws.id)
-    status = AI.Conversation.phase_start(ws)
+    AI.Conversation.phase_start(ws)
 
-    case status do
-      :processing ->
-        case Executions.get_current_phase_execution(ws.id) do
-          nil -> :ok
-          pe -> Executions.update_phase_execution_status(pe, "processing")
-        end
-
-        Workflows.update_workflow_session(ws, %{phase_status: :processing})
-
-      :awaiting_input ->
-        require Logger
-
-        Logger.warning(
-          "phase_retry: phase_start_action returned :awaiting_input " <>
-            "for phase #{phase} on workflow_session #{ws.id}"
-        )
-
-        {:ok, ws}
+    case Executions.get_current_phase_execution(ws.id) do
+      nil -> :ok
+      pe -> Executions.update_phase_execution_status(pe, "processing")
     end
+
+    Workflows.update_workflow_session(ws, %{phase_status: :processing})
   end
 
   defp complete_current_phase_execution(ws) do
