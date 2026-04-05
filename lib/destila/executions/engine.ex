@@ -15,7 +15,7 @@ defmodule Destila.Executions.Engine do
   AND `workflow_sessions.phase_status` to maintain backwards compatibility.
   """
 
-  alias Destila.{Executions, Workflows}
+  alias Destila.{AI, Executions, Workflows}
 
   @doc """
   Advances the workflow to the next phase after the current phase completes.
@@ -53,7 +53,7 @@ defmodule Destila.Executions.Engine do
   def start_session(ws) do
     phase = ws.current_phase
     {:ok, pe} = Executions.ensure_phase_execution(ws, phase)
-    status = Workflows.phase_start_action(ws)
+    status = AI.Conversation.phase_start(ws)
 
     # Reload to check if an inline worker already advanced past this phase.
     reloaded = Workflows.get_workflow_session!(ws.id)
@@ -117,7 +117,7 @@ defmodule Destila.Executions.Engine do
   def phase_update(workflow_session_id, phase, params) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
 
-    case Workflows.phase_update_action(%{ws | current_phase: phase}, params) do
+    case AI.Conversation.phase_update(%{ws | current_phase: phase}, params) do
       :processing ->
         case Executions.get_current_phase_execution(ws.id) do
           nil ->
@@ -202,7 +202,7 @@ defmodule Destila.Executions.Engine do
 
     # Delegate phase startup to the workflow. In test/inline mode, this may
     # trigger a full worker execution chain (including nested transitions).
-    status = Workflows.phase_start_action(ws)
+    status = AI.Conversation.phase_start(ws)
 
     # Reload to check if a nested transition (from an inline worker auto-advancing)
     # has already moved past this phase. If so, skip the status update.
@@ -223,27 +223,16 @@ defmodule Destila.Executions.Engine do
 
   defp handle_retry(ws) do
     phase = ws.current_phase
-    {strategy, _opts} = Workflows.session_strategy(ws.workflow_type, phase)
 
-    case strategy do
-      :new ->
-        Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
+    # Stop the running ClaudeSession for all strategies
+    AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
-        metadata = Workflows.get_metadata(ws.id)
-        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
-
-        Destila.AI.create_ai_session(%{
-          workflow_session_id: ws.id,
-          worktree_path: worktree_path
-        })
-
-      :resume ->
-        Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
-    end
+    # Apply the phase's session strategy (create fresh AI session if :new)
+    AI.Conversation.handle_session_strategy(ws, phase)
 
     # Reload from DB to get fresh state after stopping the session
     ws = Workflows.get_workflow_session!(ws.id)
-    status = Workflows.phase_start_action(ws)
+    status = AI.Conversation.phase_start(ws)
 
     case status do
       :processing ->
