@@ -1,4 +1,4 @@
-defmodule Destila.Workflow do
+defmodule Destila.Workflows.Workflow do
   @moduledoc """
   Behaviour and `use` macro for workflow modules.
 
@@ -9,9 +9,9 @@ defmodule Destila.Workflow do
   ## Usage
 
       defmodule MyApp.Workflows.MyWorkflow do
-        use Destila.Workflow
+        use Destila.Workflows.Workflow
 
-        alias Destila.Workflow.Phase
+        alias Destila.Workflows.Phase
 
         def phases do
           [
@@ -29,7 +29,7 @@ defmodule Destila.Workflow do
       end
   """
 
-  @type phase_definition :: %Destila.Workflow.Phase{}
+  @type phase_definition :: %Destila.Workflows.Phase{}
 
   @callback phases() :: [phase_definition()]
   @callback label() :: String.t()
@@ -81,13 +81,13 @@ defmodule Destila.Workflow do
 
   defmacro __using__(_opts) do
     quote do
-      @behaviour Destila.Workflow
+      @behaviour Destila.Workflows.Workflow
 
       def total_phases, do: length(phases())
 
       def phase_name(phase) when is_integer(phase) do
         case Enum.at(phases(), phase - 1) do
-          %Destila.Workflow.Phase{name: name} -> name
+          %Destila.Workflows.Phase{name: name} -> name
           nil -> nil
         end
       end

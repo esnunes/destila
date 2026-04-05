@@ -1,4 +1,4 @@
-defmodule Destila.Workflow.Phase do
+defmodule Destila.Workflows.Phase do
   @moduledoc """
   Struct describing a single workflow phase.
 

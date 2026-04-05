@@ -165,7 +165,7 @@ defmodule Destila.AI.ClaudeSession do
 
     strategy_opts =
       case phase_def do
-        %Destila.Workflow.Phase{session_strategy: {_action, opts}} -> opts
+        %Destila.Workflows.Phase{session_strategy: {_action, opts}} -> opts
         _ -> []
       end
 
@@ -190,7 +190,7 @@ defmodule Destila.AI.ClaudeSession do
     # Forward allowed_tools from phase definition if present
     opts =
       case phase_def do
-        %Destila.Workflow.Phase{allowed_tools: tools} when tools != [] ->
+        %Destila.Workflows.Phase{allowed_tools: tools} when tools != [] ->
           Keyword.put(opts, :allowed_tools, tools)
 
         _ ->

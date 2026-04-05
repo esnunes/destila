@@ -13,9 +13,9 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   reaches WorkflowRunnerLive.
   """
 
-  use Destila.Workflow
+  use Destila.Workflows.Workflow
 
-  alias Destila.Workflow.Phase
+  alias Destila.Workflows.Phase
 
   def phases do
     [

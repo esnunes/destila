@@ -4,7 +4,7 @@ defmodule Destila.WorkflowTest do
   alias Destila.Workflows.BrainstormIdeaWorkflow
   alias Destila.Workflows.ImplementGeneralPromptWorkflow
 
-  describe "Destila.Workflow behaviour via BrainstormIdeaWorkflow" do
+  describe "Destila.Workflows.Workflow behaviour via BrainstormIdeaWorkflow" do
     test "total_phases/0 returns the correct count" do
       assert BrainstormIdeaWorkflow.total_phases() == 4
     end

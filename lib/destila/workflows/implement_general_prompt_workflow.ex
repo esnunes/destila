@@ -29,9 +29,9 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     "mcp__destila__session"
   ]
 
-  use Destila.Workflow
+  use Destila.Workflows.Workflow
 
-  alias Destila.Workflow.Phase
+  alias Destila.Workflows.Phase
 
   @non_interactive_tool_instructions """
 

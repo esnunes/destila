@@ -58,7 +58,7 @@ defmodule Destila.Workflows do
 
   def session_strategy(workflow_type, phase) do
     case Enum.at(phases(workflow_type), phase - 1) do
-      %Destila.Workflow.Phase{session_strategy: strategy} -> normalize_strategy(strategy)
+      %Destila.Workflows.Phase{session_strategy: strategy} -> normalize_strategy(strategy)
       nil -> {:resume, []}
     end
   end

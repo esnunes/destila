@@ -765,7 +765,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   defp render_phase(%{phases: phases, current_phase: current_phase} = assigns) do
     case Enum.at(phases, current_phase - 1) do
-      %Destila.Workflow.Phase{} = phase ->
+      %Destila.Workflows.Phase{} = phase ->
         assigns = assign(assigns, :phase_config, phase)
 
         ~H"""
