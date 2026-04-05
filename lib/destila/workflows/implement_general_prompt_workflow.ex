@@ -31,6 +31,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   use Destila.Workflow
 
+  alias Destila.Workflow.Phase
+
   @non_interactive_tool_instructions """
 
   ## Phase Transitions
@@ -44,44 +46,51 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   def phases do
     [
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Generate Plan",
-       system_prompt: &plan_prompt/1,
-       non_interactive: true,
-       allowed_tools: @implementation_tools},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Deepen Plan",
-       system_prompt: &deepen_plan_prompt/1,
-       non_interactive: true,
-       skippable: true,
-       allowed_tools: @implementation_tools},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Work",
-       system_prompt: &work_prompt/1,
-       non_interactive: true,
-       allowed_tools: @implementation_tools},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Review",
-       system_prompt: &review_prompt/1,
-       non_interactive: true,
-       allowed_tools: @implementation_tools},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Browser Tests",
-       system_prompt: &browser_tests_prompt/1,
-       non_interactive: true,
-       skippable: true,
-       allowed_tools: @implementation_tools},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Feature Video",
-       system_prompt: &feature_video_prompt/1,
-       non_interactive: true,
-       skippable: true,
-       allowed_tools: @implementation_tools},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Adjustments",
-       system_prompt: &adjustments_prompt/1,
-       allowed_tools: @implementation_tools,
-       final: true}
+      %Phase{
+        name: "Generate Plan",
+        system_prompt: &plan_prompt/1,
+        non_interactive: true,
+        allowed_tools: @implementation_tools
+      },
+      %Phase{
+        name: "Deepen Plan",
+        system_prompt: &deepen_plan_prompt/1,
+        non_interactive: true,
+        skippable: true,
+        allowed_tools: @implementation_tools
+      },
+      %Phase{
+        name: "Work",
+        system_prompt: &work_prompt/1,
+        non_interactive: true,
+        allowed_tools: @implementation_tools
+      },
+      %Phase{
+        name: "Review",
+        system_prompt: &review_prompt/1,
+        non_interactive: true,
+        allowed_tools: @implementation_tools
+      },
+      %Phase{
+        name: "Browser Tests",
+        system_prompt: &browser_tests_prompt/1,
+        non_interactive: true,
+        skippable: true,
+        allowed_tools: @implementation_tools
+      },
+      %Phase{
+        name: "Feature Video",
+        system_prompt: &feature_video_prompt/1,
+        non_interactive: true,
+        skippable: true,
+        allowed_tools: @implementation_tools
+      },
+      %Phase{
+        name: "Adjustments",
+        system_prompt: &adjustments_prompt/1,
+        allowed_tools: @implementation_tools,
+        final: true
+      }
     ]
   end
 
@@ -111,20 +120,14 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   def phase_start_action(ws, phase_number) do
     case Enum.at(phases(), phase_number - 1) do
-      {_mod, opts} ->
-        case Keyword.get(opts, :system_prompt) do
-          nil ->
-            :awaiting_input
+      %Phase{system_prompt: prompt_fn} when not is_nil(prompt_fn) ->
+        handle_session_strategy(ws, phase_number)
+        ensure_ai_session(ws)
+        query = prompt_fn.(ws)
+        enqueue_ai_worker(ws, phase_number, query)
+        :processing
 
-          prompt_fn ->
-            handle_session_strategy(ws, phase_number)
-            ensure_ai_session(ws)
-            query = prompt_fn.(ws)
-            enqueue_ai_worker(ws, phase_number, query)
-            :processing
-        end
-
-      nil ->
+      _ ->
         :awaiting_input
     end
   end

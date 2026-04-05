@@ -164,16 +164,6 @@ defmodule Destila.AI.ClaudeSession do
     {_action, strategy_opts} =
       Destila.Workflows.session_strategy(workflow_session.workflow_type, phase)
 
-    # Look up phase definition opts for allowed_tools
-    phase_def_opts =
-      case Enum.at(
-             Destila.Workflows.phases(workflow_session.workflow_type),
-             phase - 1
-           ) do
-        {_mod, opts} -> opts
-        nil -> []
-      end
-
     ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)
 
     opts = base_opts
@@ -194,9 +184,12 @@ defmodule Destila.AI.ClaudeSession do
 
     # Forward allowed_tools from phase definition if present
     opts =
-      case Keyword.get(phase_def_opts, :allowed_tools) do
-        nil -> opts
-        tools -> Keyword.put(opts, :allowed_tools, tools)
+      case Enum.at(Destila.Workflows.phases(workflow_session.workflow_type), phase - 1) do
+        %Destila.Workflow.Phase{allowed_tools: tools} when tools != [] ->
+          Keyword.put(opts, :allowed_tools, tools)
+
+        _ ->
+          opts
       end
 
     merge_phase_opts(opts, strategy_opts)

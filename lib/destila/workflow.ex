@@ -27,7 +27,7 @@ defmodule Destila.Workflow do
       end
   """
 
-  @type phase_definition :: {module(), keyword()}
+  @type phase_definition :: %Destila.Workflow.Phase{}
 
   @callback phases() :: [phase_definition()]
   @callback label() :: String.t()
@@ -88,7 +88,7 @@ defmodule Destila.Workflow do
 
       def phase_name(phase) when is_integer(phase) do
         case Enum.at(phases(), phase - 1) do
-          {_mod, opts} -> Keyword.get(opts, :name)
+          %Destila.Workflow.Phase{name: name} -> name
           nil -> nil
         end
       end

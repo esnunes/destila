@@ -4,6 +4,8 @@ defmodule DestilaWeb.ChatComponents do
   import Phoenix.HTML, only: [raw: 1]
   import DestilaWeb.CoreComponents, only: [icon: 1]
 
+  alias Destila.Workflows
+
   defp markdown_to_html(text) when is_binary(text) do
     text
     |> Earmark.as_html!(
@@ -22,9 +24,239 @@ defmodule DestilaWeb.ChatComponents do
     {"a", [{"target", "_blank"} | attrs], children, meta}
   end
 
+  # --- chat_phase/1: full phase container (replaces AiConversationPhase render) ---
+
+  attr :workflow_session, :map, required: true
+  attr :messages, :list, required: true
+  attr :phase_number, :integer, required: true
+  attr :phase_config, :map, required: true
+  attr :streaming_chunks, :any, default: nil
+  attr :question_answers, :map, required: true
+  attr :metadata, :map, required: true
+  attr :current_step, :map, required: true
+
+  def chat_phase(assigns) do
+    worktree_path = get_in(assigns.metadata, ["worktree", "worktree_path"])
+    non_interactive = assigns.phase_config.non_interactive
+    is_final = assigns.phase_config.final
+
+    assigns =
+      assigns
+      |> assign(:phase_groups, phase_groups(assigns.messages, assigns.phase_number))
+      |> assign(:non_interactive, non_interactive)
+      |> assign(:worktree_path, worktree_path)
+      |> assign(:show_worktree_banner, is_final && !non_interactive && worktree_path != nil)
+
+    ~H"""
+    <div class="flex flex-col h-full">
+      <%!-- Scrollable chat area --%>
+      <div class="flex-1 min-h-0 overflow-y-auto px-6 py-6" id="chat-messages" phx-hook="ScrollBottom">
+        <div class="max-w-2xl mx-auto">
+          <%!-- Worktree path banner for interactive final phase --%>
+          <div
+            :if={@show_worktree_banner}
+            class="mb-6 rounded-lg border border-base-300 bg-base-200/50 p-4"
+          >
+            <div class="flex items-start gap-3">
+              <.icon name="hero-folder-open" class="size-5 text-primary shrink-0 mt-0.5" />
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-base-content/80">Source code</p>
+                <code class="text-xs text-base-content/50 break-all">{@worktree_path}</code>
+              </div>
+            </div>
+          </div>
+
+          <%= for {phase, group} <- @phase_groups do %>
+            <details
+              id={"phase-section-#{phase}"}
+              phx-hook=".PhaseToggle"
+              class={["phase-section", phase == elem(hd(@phase_groups), 0) && "first-phase"]}
+              open={phase >= @phase_number}
+            >
+              <summary class="flex items-center gap-3 my-6 cursor-pointer group list-none">
+                <div class="flex-1 h-px bg-base-300" />
+                <span class="flex items-center gap-1.5 text-xs font-medium text-base-content/40 uppercase tracking-wide group-hover:text-base-content/60 transition-colors">
+                  Phase {phase} — {Workflows.phase_name(@workflow_session.workflow_type, phase)}
+                  <.icon name="hero-chevron-down-micro" class="size-3 phase-chevron" />
+                </span>
+                <div class="flex-1 h-px bg-base-300" />
+              </summary>
+              <.chat_message
+                :for={msg <- group}
+                message={msg}
+                workflow_session={@workflow_session}
+              />
+              <%= if phase == @phase_number && @workflow_session.phase_status == :processing do %>
+                <%= if @streaming_chunks && @streaming_chunks != [] do %>
+                  <.chat_stream_debug chunks={@streaming_chunks} />
+                <% else %>
+                  <.chat_typing_indicator />
+                <% end %>
+              <% end %>
+            </details>
+          <% end %>
+
+          <%!-- Interactive-only: inline structured options --%>
+          <div
+            :if={
+              !@non_interactive &&
+                !@current_step.completed &&
+                @current_step.input_type in [:single_select, :multi_select]
+            }
+            class="ml-11 mb-4"
+          >
+            <p :if={@current_step.question_title} class="text-sm font-medium text-base-content mb-3">
+              {@current_step.question_title}
+            </p>
+            <.chat_input
+              input_type={@current_step.input_type}
+              options={@current_step.options}
+              inline
+            />
+          </div>
+
+          <%!-- Interactive-only: inline multi-question form --%>
+          <div
+            :if={
+              !@non_interactive &&
+                !@current_step.completed &&
+                @current_step.input_type == :questions
+            }
+            class="ml-11 mb-4"
+          >
+            <.multi_question_input
+              questions={@current_step.questions}
+              answers={@question_answers}
+            />
+          </div>
+        </div>
+      </div>
+
+      <%!-- Non-interactive: retry/cancel controls --%>
+      <div
+        :if={@non_interactive && !@current_step.completed}
+        class="max-w-2xl mx-auto w-full px-6 pb-4"
+      >
+        <div class="flex items-center justify-center gap-3">
+          <button
+            :if={@workflow_session.phase_status == :processing}
+            phx-click="cancel_phase"
+            id="cancel-phase-btn"
+            class="btn btn-outline btn-error btn-sm"
+          >
+            <.icon name="hero-stop-micro" class="size-4" /> Cancel
+          </button>
+          <button
+            :if={@workflow_session.phase_status == :awaiting_input}
+            phx-click="retry_phase"
+            id="retry-phase-btn"
+            class="btn btn-primary btn-sm"
+          >
+            <.icon name="hero-arrow-path-micro" class="size-4" /> Retry
+          </button>
+        </div>
+      </div>
+
+      <%!-- Interactive: text input with inline cancel/retry --%>
+      <div
+        :if={
+          !@non_interactive &&
+            !@current_step.completed &&
+            @workflow_session.phase_status not in [:advance_suggested]
+        }
+        class="max-w-2xl mx-auto w-full px-6 pb-4"
+      >
+        <.text_input
+          disabled={@workflow_session.phase_status == :processing}
+          show_cancel={@workflow_session.phase_status == :processing}
+          show_retry={@workflow_session.phase_status == :awaiting_input && length(@messages) > 0}
+        />
+      </div>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".PhaseToggle">
+        // Module-level map: element ID → boolean (user's desired open state).
+        // Shared across all hook instances since each <details> has a unique id.
+        const userOverrides = new Map();
+
+        export default {
+          mounted() {
+            // Snapshot what the server initially set for this element
+            this._serverOpen = this.el.hasAttribute("open");
+            this._restoring = false;
+
+            // The native "toggle" event fires when <details> open state changes,
+            // whether by user click or programmatic attribute change.
+            this.el.addEventListener("toggle", () => {
+              // Skip toggles caused by our own restoration in updated()
+              if (this._restoring) return;
+
+              const isOpen = this.el.hasAttribute("open");
+
+              if (isOpen !== this._serverOpen) {
+                // User toggled away from server default — record override
+                userOverrides.set(this.el.id, isOpen);
+              } else {
+                // User toggled back to match server — clear override
+                userOverrides.delete(this.el.id);
+              }
+            });
+          },
+
+          updated() {
+            // After LiveView patches the DOM, capture what the server wants.
+            // This MUST happen before any restoration so _serverOpen always
+            // reflects the server's intent, not our override.
+            this._serverOpen = this.el.hasAttribute("open");
+
+            if (!userOverrides.has(this.el.id)) return;
+
+            const desired = userOverrides.get(this.el.id);
+
+            // If the server's new default matches the user's preference
+            // (e.g. after phase advance), the override is redundant — clear it
+            if (desired === this._serverOpen) {
+              userOverrides.delete(this.el.id);
+              return;
+            }
+
+            // Restore the user's preference, suppressing the toggle event
+            this._restoring = true;
+            if (desired) {
+              this.el.setAttribute("open", "");
+            } else {
+              this.el.removeAttribute("open");
+            }
+            // The toggle event fires asynchronously after attribute change.
+            // Use requestAnimationFrame to clear the flag after it fires.
+            requestAnimationFrame(() => { this._restoring = false; });
+          },
+
+          destroyed() {
+            userOverrides.delete(this.el.id);
+          }
+        }
+      </script>
+    </div>
+    """
+  end
+
+  defp phase_groups(messages, current_phase) do
+    groups =
+      messages
+      |> Enum.group_by(& &1.phase)
+      |> Enum.sort_by(fn {phase, _} -> phase end)
+
+    if Enum.any?(groups, fn {phase, _} -> phase == current_phase end) do
+      groups
+    else
+      groups ++ [{current_phase, []}]
+    end
+  end
+
+  # --- chat_message ---
+
   attr :message, :map, required: true
   attr :workflow_session, :map, default: %{}
-  attr :target, :any, default: nil
 
   def chat_message(assigns) do
     processed = Destila.AI.process_message(assigns.message, assigns.workflow_session)
@@ -42,7 +274,7 @@ defmodule DestilaWeb.ChatComponents do
       assign(
         assigns,
         :next_phase_name,
-        Destila.Workflows.phase_name(ws.workflow_type, next_phase)
+        Workflows.phase_name(ws.workflow_type, next_phase)
       )
 
     ~H"""
@@ -267,6 +499,8 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
+  # --- Streaming / typing ---
+
   attr :chunks, :list, required: true
 
   def chat_stream_debug(assigns) do
@@ -402,11 +636,12 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
+  # --- Input components (target removed — events bubble to LiveView) ---
+
   attr :input_type, :atom, required: true
   attr :options, :list, default: nil
   attr :disabled, :boolean, default: false
   attr :inline, :boolean, default: false
-  attr :target, :any, default: nil
 
   def chat_input(assigns) do
     ~H"""
@@ -414,16 +649,14 @@ defmodule DestilaWeb.ChatComponents do
       "p-4",
       if(@inline, do: "bg-transparent", else: "border-t border-base-300 bg-base-100")
     ]}>
-      <.text_input :if={@input_type == :text} disabled={@disabled} target={@target} />
+      <.text_input :if={@input_type == :text} disabled={@disabled} />
       <.single_select_input
         :if={@input_type == :single_select}
         options={@options || []}
-        target={@target}
       />
       <.multi_select_input
         :if={@input_type == :multi_select}
         options={@options || []}
-        target={@target}
       />
       <.file_upload_input :if={@input_type == :file_upload} />
     </div>
@@ -431,13 +664,12 @@ defmodule DestilaWeb.ChatComponents do
   end
 
   attr :disabled, :boolean, default: false
-  attr :target, :any, default: nil
   attr :show_cancel, :boolean, default: false
   attr :show_retry, :boolean, default: false
 
   def text_input(assigns) do
     ~H"""
-    <form phx-submit="send_text" phx-target={@target} class="flex gap-2">
+    <form phx-submit="send_text" class="flex gap-2">
       <input
         type="text"
         name="content"
@@ -457,7 +689,6 @@ defmodule DestilaWeb.ChatComponents do
         :if={@show_cancel}
         type="button"
         phx-click="cancel_phase"
-        phx-target={@target}
         id="cancel-phase-btn"
         class="btn btn-outline btn-error"
       >
@@ -467,7 +698,6 @@ defmodule DestilaWeb.ChatComponents do
         :if={@show_retry}
         type="button"
         phx-click="retry_phase"
-        phx-target={@target}
         id="retry-phase-btn"
         class="btn btn-outline"
       >
@@ -479,7 +709,6 @@ defmodule DestilaWeb.ChatComponents do
   end
 
   attr :options, :list, required: true
-  attr :target, :any, default: nil
 
   def single_select_input(assigns) do
     ~H"""
@@ -489,7 +718,6 @@ defmodule DestilaWeb.ChatComponents do
         <button
           :for={opt <- @options}
           phx-click="select_single"
-          phx-target={@target}
           phx-value-label={opt.label}
           class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-sm transition-all cursor-pointer text-left"
         >
@@ -503,7 +731,7 @@ defmodule DestilaWeb.ChatComponents do
         </button>
       </div>
       <div class="divider text-xs text-base-content/30">or</div>
-      <form phx-submit="send_text" phx-target={@target} class="flex gap-2">
+      <form phx-submit="send_text" class="flex gap-2">
         <input
           type="text"
           name="content"
@@ -518,7 +746,6 @@ defmodule DestilaWeb.ChatComponents do
   end
 
   attr :options, :list, required: true
-  attr :target, :any, default: nil
 
   def multi_select_input(assigns) do
     ~H"""
@@ -526,7 +753,7 @@ defmodule DestilaWeb.ChatComponents do
       <p class="text-xs text-base-content/50 font-medium uppercase tracking-wide">
         Select all that apply
       </p>
-      <form phx-submit="select_multi" phx-target={@target} class="space-y-2">
+      <form phx-submit="select_multi" class="space-y-2">
         <label
           :for={opt <- @options}
           class="card bg-base-100 border border-base-300 hover:border-primary transition-all cursor-pointer"
@@ -607,7 +834,6 @@ defmodule DestilaWeb.ChatComponents do
 
   attr :questions, :list, required: true
   attr :answers, :map, required: true
-  attr :target, :any, default: nil
 
   def multi_question_input(assigns) do
     total = length(assigns.questions)
@@ -649,7 +875,6 @@ defmodule DestilaWeb.ChatComponents do
                   <button
                     :for={opt <- q.options}
                     phx-click="answer_question"
-                    phx-target={@target}
                     phx-value-index={idx}
                     phx-value-answer={opt.label}
                     class="card bg-base-100 border border-base-300 hover:border-primary hover:shadow-sm transition-all cursor-pointer text-left"
@@ -665,7 +890,7 @@ defmodule DestilaWeb.ChatComponents do
                     </div>
                   </button>
                 </div>
-                <form phx-submit="answer_question" phx-target={@target} class="flex gap-2">
+                <form phx-submit="answer_question" class="flex gap-2">
                   <input type="hidden" name="index" value={idx} />
                   <input
                     type="text"
@@ -677,7 +902,7 @@ defmodule DestilaWeb.ChatComponents do
                   <button type="submit" class="btn btn-sm btn-ghost">Send</button>
                 </form>
               <% else %>
-                <form phx-submit="confirm_multi_answer" phx-target={@target} class="space-y-2">
+                <form phx-submit="confirm_multi_answer" class="space-y-2">
                   <input type="hidden" name="index" value={idx} />
                   <div class="grid gap-2">
                     <label
@@ -728,7 +953,7 @@ defmodule DestilaWeb.ChatComponents do
 
       <%!-- Submit all when done --%>
       <%= if @all_answered do %>
-        <button phx-click="submit_all_answers" phx-target={@target} class="btn btn-primary w-full">
+        <button phx-click="submit_all_answers" class="btn btn-primary w-full">
           Submit All Answers
         </button>
       <% end %>
