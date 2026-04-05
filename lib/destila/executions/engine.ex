@@ -4,12 +4,12 @@ defmodule Destila.Executions.Engine do
 
   The Engine is responsible for:
   - Advancing workflows to the next phase
-  - Routing phase updates to the workflow and acting on the result
+  - Routing phase updates to `AI.Conversation` and acting on the result
   - Updating phase execution and workflow session status
   - Broadcasting state changes via PubSub
 
-  Phase-specific logic (e.g. enqueuing workers, saving messages, parsing
-  AI responses) is delegated to the workflow module via callbacks.
+  AI conversation mechanics (enqueuing workers, saving messages, parsing
+  AI responses) are handled by `Destila.AI.Conversation`.
 
   During the migration period, the Engine writes to both `phase_executions`
   AND `workflow_sessions.phase_status` to maintain backwards compatibility.
@@ -48,7 +48,7 @@ defmodule Destila.Executions.Engine do
 
   Unlike `advance_to_next/1`, which transitions *from* a completed phase,
   this starts the session's `current_phase` in place — creating the phase
-  execution and calling `phase_start_action` so workers get enqueued.
+  execution and calling `AI.Conversation.phase_start/1` so workers get enqueued.
   """
   def start_session(ws) do
     phase = ws.current_phase
@@ -72,7 +72,7 @@ defmodule Destila.Executions.Engine do
   end
 
   @doc """
-  Retries the current phase by re-running `phase_start_action`.
+  Retries the current phase by re-running `AI.Conversation.phase_start/1`.
 
   Follows the phase's session strategy:
   - `:resume` — stops the running ClaudeSession (prompt may be re-sent by the worker)
@@ -95,11 +95,11 @@ defmodule Destila.Executions.Engine do
   end
 
   @doc """
-  Routes a phase update to the workflow and acts on the result.
+  Routes a phase update to `AI.Conversation` and acts on the result.
 
   Called by `AiQueryWorker` after an AI response, or by `WorkflowRunnerLive`
-  when the user sends a message. The workflow's `phase_update_action/3`
-  processes the params and returns a status the Engine uses to update state.
+  when the user sends a message. `AI.Conversation.phase_update/2` processes
+  the params and returns a status the Engine uses to update state.
   """
   def phase_update(workflow_session_id, _phase, %{setup_step_completed: _} = params) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
