@@ -21,8 +21,7 @@ defmodule DestilaWeb.DashboardLive do
   def handle_info({event, _data}, socket)
       when event in [
              :workflow_session_created,
-             :workflow_session_updated,
-             :workflow_session_deleted
+             :workflow_session_updated
            ] do
     crafting = Destila.Workflows.list_workflow_sessions()
 

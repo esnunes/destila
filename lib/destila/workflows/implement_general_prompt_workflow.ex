@@ -56,7 +56,6 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
         name: "Deepen Plan",
         system_prompt: &deepen_plan_prompt/1,
         non_interactive: true,
-        skippable: true,
         allowed_tools: @implementation_tools
       },
       %Phase{
@@ -76,21 +75,18 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
         name: "Browser Tests",
         system_prompt: &browser_tests_prompt/1,
         non_interactive: true,
-        skippable: true,
         allowed_tools: @implementation_tools
       },
       %Phase{
         name: "Feature Video",
         system_prompt: &feature_video_prompt/1,
         non_interactive: true,
-        skippable: true,
         allowed_tools: @implementation_tools
       },
       %Phase{
         name: "Adjustments",
         system_prompt: &adjustments_prompt/1,
-        allowed_tools: @implementation_tools,
-        final: true
+        allowed_tools: @implementation_tools
       }
     ]
   end

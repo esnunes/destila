@@ -1,7 +1,7 @@
 defmodule Destila.WorkflowsClassifyTest do
   use DestilaWeb.ConnCase, async: false
 
-  alias Destila.{Executions, Workflows}
+  alias Destila.Workflows
 
   defp create_session(attrs) do
     default = %{
@@ -27,35 +27,22 @@ defmodule Destila.WorkflowsClassifyTest do
       assert Workflows.classify(ws) == :processing
     end
 
-    test "returns :waiting_for_user when phase execution is awaiting_input" do
-      ws = create_session(%{phase_status: nil})
-      Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
-      assert Workflows.classify(ws) == :waiting_for_user
-    end
-
-    test "returns :waiting_for_user when phase execution is awaiting_confirmation" do
-      ws = create_session(%{phase_status: nil})
-      Executions.create_phase_execution(ws, 1, %{status: "awaiting_confirmation"})
-      assert Workflows.classify(ws) == :waiting_for_user
-    end
-
-    test "returns :processing when phase execution is processing" do
-      ws = create_session(%{phase_status: nil})
-      Executions.create_phase_execution(ws, 1, %{status: "processing"})
-      assert Workflows.classify(ws) == :processing
-    end
-
-    test "falls back to phase_status when no phase execution exists" do
+    test "returns :waiting_for_user when phase_status is awaiting_input" do
       ws = create_session(%{phase_status: :awaiting_input})
       assert Workflows.classify(ws) == :waiting_for_user
     end
 
-    test "falls back to phase_status :processing when no phase execution exists" do
+    test "returns :waiting_for_user when phase_status is advance_suggested" do
+      ws = create_session(%{phase_status: :advance_suggested})
+      assert Workflows.classify(ws) == :waiting_for_user
+    end
+
+    test "returns :processing when phase_status is processing" do
       ws = create_session(%{phase_status: :processing})
       assert Workflows.classify(ws) == :processing
     end
 
-    test "falls back to :processing when no phase execution and nil phase_status" do
+    test "returns :processing when phase_status is nil" do
       ws = create_session(%{phase_status: nil})
       assert Workflows.classify(ws) == :processing
     end

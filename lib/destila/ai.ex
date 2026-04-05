@@ -10,10 +10,6 @@ defmodule Destila.AI do
 
   # --- AI Sessions ---
 
-  def get_ai_session!(id) do
-    Repo.get!(Session, id)
-  end
-
   def get_ai_session_for_workflow(workflow_session_id) do
     Repo.one(
       from(s in Session,
@@ -49,15 +45,6 @@ defmodule Destila.AI do
   end
 
   # --- Messages ---
-
-  def list_messages(ai_session_id) do
-    Repo.all(
-      from(m in Message,
-        where: m.ai_session_id == ^ai_session_id,
-        order_by: m.inserted_at
-      )
-    )
-  end
 
   def list_messages_for_workflow_session(workflow_session_id) do
     Repo.all(
