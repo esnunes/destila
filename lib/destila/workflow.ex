@@ -11,10 +11,12 @@ defmodule Destila.Workflow do
       defmodule MyApp.Workflows.MyWorkflow do
         use Destila.Workflow
 
+        alias Destila.Workflow.Phase
+
         def phases do
           [
-            {MyPhaseComponent, name: "Step One"},
-            {MyPhaseComponent, name: "Step Two"}
+            %Phase{name: "Step One", system_prompt: &step_one_prompt/1},
+            %Phase{name: "Step Two", system_prompt: &step_two_prompt/1}
           ]
         end
 
