@@ -252,10 +252,10 @@ defmodule Destila.AI do
   # --- Private helpers ---
 
   defp derive_message_type(raw, phase, workflow_session) do
-    phase_opts = get_phase_opts(workflow_session.workflow_type, phase)
+    phase_def = get_phase_def(workflow_session.workflow_type, phase)
 
     cond do
-      Keyword.get(phase_opts, :message_type) == :generated_prompt ->
+      phase_def && phase_def.message_type == :generated_prompt ->
         {nil, :generated_prompt}
 
       session = extract_session_action(raw) ->
@@ -275,11 +275,8 @@ defmodule Destila.AI do
     end
   end
 
-  defp get_phase_opts(workflow_type, phase) do
-    case Enum.at(Destila.Workflows.phases(workflow_type), phase - 1) do
-      {_mod, opts} -> opts
-      nil -> []
-    end
+  defp get_phase_def(workflow_type, phase) do
+    Enum.at(Destila.Workflows.phases(workflow_type), phase - 1)
   end
 
   defp extract_tool_input(%{"mcp_tool_uses" => tool_uses}) when is_list(tool_uses) do

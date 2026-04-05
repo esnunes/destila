@@ -1,4 +1,4 @@
-defmodule Destila.Workflow do
+defmodule Destila.Workflows.Workflow do
   @moduledoc """
   Behaviour and `use` macro for workflow modules.
 
@@ -9,12 +9,14 @@ defmodule Destila.Workflow do
   ## Usage
 
       defmodule MyApp.Workflows.MyWorkflow do
-        use Destila.Workflow
+        use Destila.Workflows.Workflow
+
+        alias Destila.Workflows.Phase
 
         def phases do
           [
-            {MyPhaseComponent, name: "Step One"},
-            {MyPhaseComponent, name: "Step Two"}
+            %Phase{name: "Step One", system_prompt: &step_one_prompt/1},
+            %Phase{name: "Step Two", system_prompt: &step_two_prompt/1}
           ]
         end
 
@@ -27,7 +29,7 @@ defmodule Destila.Workflow do
       end
   """
 
-  @type phase_definition :: {module(), keyword()}
+  @type phase_definition :: %Destila.Workflows.Phase{}
 
   @callback phases() :: [phase_definition()]
   @callback label() :: String.t()
@@ -48,9 +50,6 @@ defmodule Destila.Workflow do
   @callback creation_config() ::
               {source_metadata_key :: String.t() | nil, label :: String.t(),
                dest_metadata_key :: String.t()}
-
-  @callback session_strategy(integer()) ::
-              :resume | :new | {:resume, keyword()} | {:new, keyword()}
 
   @doc """
   Called when a phase is entered. Performs any startup work (e.g. enqueuing
@@ -82,13 +81,13 @@ defmodule Destila.Workflow do
 
   defmacro __using__(_opts) do
     quote do
-      @behaviour Destila.Workflow
+      @behaviour Destila.Workflows.Workflow
 
       def total_phases, do: length(phases())
 
       def phase_name(phase) when is_integer(phase) do
         case Enum.at(phases(), phase - 1) do
-          {_mod, opts} -> Keyword.get(opts, :name)
+          %Destila.Workflows.Phase{name: name} -> name
           nil -> nil
         end
       end
@@ -104,9 +103,7 @@ defmodule Destila.Workflow do
         columns ++ [{:done, "Done"}]
       end
 
-      def session_strategy(_phase), do: :resume
-
-      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0, session_strategy: 1
+      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0
     end
   end
 end

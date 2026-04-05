@@ -97,7 +97,7 @@ defmodule Destila.Executions.Engine do
   @doc """
   Routes a phase update to the workflow and acts on the result.
 
-  Called by `AiQueryWorker` after an AI response, or by `AiConversationPhase`
+  Called by `AiQueryWorker` after an AI response, or by `WorkflowRunnerLive`
   when the user sends a message. The workflow's `phase_update_action/3`
   processes the params and returns a status the Engine uses to update state.
   """

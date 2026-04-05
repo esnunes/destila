@@ -13,21 +13,21 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   reaches WorkflowRunnerLive.
   """
 
-  use Destila.Workflow
+  use Destila.Workflows.Workflow
+
+  alias Destila.Workflows.Phase
 
   def phases do
     [
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Task Description", system_prompt: &task_description_prompt/1},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Gherkin Review", system_prompt: &gherkin_review_prompt/1, skippable: true},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Technical Concerns", system_prompt: &technical_concerns_prompt/1},
-      {DestilaWeb.Phases.AiConversationPhase,
-       name: "Prompt Generation",
-       system_prompt: &prompt_generation_prompt/1,
-       final: true,
-       message_type: :generated_prompt}
+      %Phase{name: "Task Description", system_prompt: &task_description_prompt/1},
+      %Phase{name: "Gherkin Review", system_prompt: &gherkin_review_prompt/1, skippable: true},
+      %Phase{name: "Technical Concerns", system_prompt: &technical_concerns_prompt/1},
+      %Phase{
+        name: "Prompt Generation",
+        system_prompt: &prompt_generation_prompt/1,
+        final: true,
+        message_type: :generated_prompt
+      }
     ]
   end
 
@@ -48,19 +48,13 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
 
   def phase_start_action(ws, phase_number) do
     case Enum.at(phases(), phase_number - 1) do
-      {_mod, opts} ->
-        case Keyword.get(opts, :system_prompt) do
-          nil ->
-            :awaiting_input
+      %Phase{system_prompt: prompt_fn} when not is_nil(prompt_fn) ->
+        ensure_ai_session(ws)
+        query = prompt_fn.(ws)
+        enqueue_ai_worker(ws, phase_number, query)
+        :processing
 
-          prompt_fn ->
-            ensure_ai_session(ws)
-            query = prompt_fn.(ws)
-            enqueue_ai_worker(ws, phase_number, query)
-            :processing
-        end
-
-      nil ->
+      _ ->
         :awaiting_input
     end
   end
@@ -137,18 +131,16 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
 
   defp save_phase_metadata(ws, phase_number, response_text) do
     case Enum.at(phases(), phase_number - 1) do
-      {_mod, opts} ->
-        if Keyword.get(opts, :message_type) == :generated_prompt do
-          phase_name = phase_name(phase_number)
+      %Phase{message_type: :generated_prompt} ->
+        phase_name = phase_name(phase_number)
 
-          Destila.Workflows.upsert_metadata(
-            ws.id,
-            phase_name,
-            "prompt_generated",
-            %{"text" => String.trim(response_text)},
-            exported: true
-          )
-        end
+        Destila.Workflows.upsert_metadata(
+          ws.id,
+          phase_name,
+          "prompt_generated",
+          %{"text" => String.trim(response_text)},
+          exported: true
+        )
 
       _ ->
         :ok
