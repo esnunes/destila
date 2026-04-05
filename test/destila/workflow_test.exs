@@ -27,9 +27,10 @@ defmodule Destila.WorkflowTest do
       assert hd(columns) == {1, "Task Description"}
     end
 
-    test "session_strategy/1 defaults to :resume" do
-      assert BrainstormIdeaWorkflow.session_strategy(1) == :resume
-      assert BrainstormIdeaWorkflow.session_strategy(3) == :resume
+    test "session_strategy defaults to :resume for all phases" do
+      for phase <- BrainstormIdeaWorkflow.phases() do
+        assert phase.session_strategy == :resume
+      end
     end
 
     test "creation_config/0 returns expected tuple" do
@@ -37,15 +38,19 @@ defmodule Destila.WorkflowTest do
     end
   end
 
-  describe "ImplementGeneralPromptWorkflow overrides session_strategy" do
-    test "returns :new for phase 3" do
-      assert ImplementGeneralPromptWorkflow.session_strategy(3) == :new
+  describe "ImplementGeneralPromptWorkflow session_strategy in Phase struct" do
+    test "Work phase (3rd) has session_strategy :new" do
+      work_phase = Enum.at(ImplementGeneralPromptWorkflow.phases(), 2)
+      assert work_phase.session_strategy == :new
     end
 
-    test "returns :resume for other phases" do
-      assert ImplementGeneralPromptWorkflow.session_strategy(1) == :resume
-      assert ImplementGeneralPromptWorkflow.session_strategy(2) == :resume
-      assert ImplementGeneralPromptWorkflow.session_strategy(4) == :resume
+    test "all other phases default to :resume" do
+      phases = ImplementGeneralPromptWorkflow.phases()
+
+      for {phase, idx} <- Enum.with_index(phases), idx != 2 do
+        assert phase.session_strategy == :resume,
+               "Expected :resume for phase #{idx + 1} (#{phase.name}), got #{inspect(phase.session_strategy)}"
+      end
     end
 
     test "total_phases/0 returns 7" do

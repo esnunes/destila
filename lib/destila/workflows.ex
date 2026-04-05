@@ -57,7 +57,10 @@ defmodule Destila.Workflows do
   def completion_message(workflow_type), do: workflow_module(workflow_type).completion_message()
 
   def session_strategy(workflow_type, phase) do
-    workflow_module(workflow_type).session_strategy(phase) |> normalize_strategy()
+    case Enum.at(phases(workflow_type), phase - 1) do
+      %Destila.Workflow.Phase{session_strategy: strategy} -> normalize_strategy(strategy)
+      nil -> {:resume, []}
+    end
   end
 
   def phase_start_action(workflow_session) do

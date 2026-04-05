@@ -13,6 +13,7 @@ defmodule Destila.Workflow.Phase do
     skippable: false,
     final: false,
     non_interactive: false,
-    allowed_tools: []
+    allowed_tools: [],
+    session_strategy: :resume
   ]
 end

@@ -63,7 +63,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
         name: "Work",
         system_prompt: &work_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools
+        allowed_tools: @implementation_tools,
+        session_strategy: :new
       },
       %Phase{
         name: "Review",
@@ -110,18 +111,12 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     "Implementation complete! Plan executed, code reviewed, tests run, and feature recorded."
   end
 
-  # Phases 1-2: resume (single AI session for planning)
-  # Phase 3: new (fresh AI session for implementation)
-  # Phases 4-7: resume (reuse implementation AI session)
-  def session_strategy(3), do: :new
-  def session_strategy(_phase), do: :resume
-
   # --- Phase actions ---
 
   def phase_start_action(ws, phase_number) do
     case Enum.at(phases(), phase_number - 1) do
-      %Phase{system_prompt: prompt_fn} when not is_nil(prompt_fn) ->
-        handle_session_strategy(ws, phase_number)
+      %Phase{system_prompt: prompt_fn, session_strategy: strategy} when not is_nil(prompt_fn) ->
+        handle_session_strategy(ws, strategy)
         ensure_ai_session(ws)
         query = prompt_fn.(ws)
         enqueue_ai_worker(ws, phase_number, query)
@@ -199,23 +194,19 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   def phase_update_action(_ws, _phase_number, _params), do: :awaiting_input
 
-  defp handle_session_strategy(ws, phase_number) do
-    case session_strategy(phase_number) do
-      :new ->
-        Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
+  defp handle_session_strategy(ws, :new) do
+    Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
-        metadata = Destila.Workflows.get_metadata(ws.id)
-        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
+    metadata = Destila.Workflows.get_metadata(ws.id)
+    worktree_path = get_in(metadata, ["worktree", "worktree_path"])
 
-        Destila.AI.create_ai_session(%{
-          workflow_session_id: ws.id,
-          worktree_path: worktree_path
-        })
-
-      _ ->
-        :ok
-    end
+    Destila.AI.create_ai_session(%{
+      workflow_session_id: ws.id,
+      worktree_path: worktree_path
+    })
   end
+
+  defp handle_session_strategy(_ws, _strategy), do: :ok
 
   defp ensure_ai_session(ws) do
     case Destila.AI.get_ai_session_for_workflow(ws.id) do

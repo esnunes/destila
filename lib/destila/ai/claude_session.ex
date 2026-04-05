@@ -161,8 +161,13 @@ defmodule Destila.AI.ClaudeSession do
   Additional base options (e.g. `timeout_ms`) can be passed and will be included.
   """
   def session_opts_for_workflow(workflow_session, phase, base_opts \\ []) do
-    {_action, strategy_opts} =
-      Destila.Workflows.session_strategy(workflow_session.workflow_type, phase)
+    phase_def = Enum.at(Destila.Workflows.phases(workflow_session.workflow_type), phase - 1)
+
+    strategy_opts =
+      case phase_def do
+        %Destila.Workflow.Phase{session_strategy: {_action, opts}} -> opts
+        _ -> []
+      end
 
     ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)
 
@@ -184,7 +189,7 @@ defmodule Destila.AI.ClaudeSession do
 
     # Forward allowed_tools from phase definition if present
     opts =
-      case Enum.at(Destila.Workflows.phases(workflow_session.workflow_type), phase - 1) do
+      case phase_def do
         %Destila.Workflow.Phase{allowed_tools: tools} when tools != [] ->
           Keyword.put(opts, :allowed_tools, tools)
 

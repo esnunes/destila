@@ -51,9 +51,6 @@ defmodule Destila.Workflow do
               {source_metadata_key :: String.t() | nil, label :: String.t(),
                dest_metadata_key :: String.t()}
 
-  @callback session_strategy(integer()) ::
-              :resume | :new | {:resume, keyword()} | {:new, keyword()}
-
   @doc """
   Called when a phase is entered. Performs any startup work (e.g. enqueuing
   a worker) and returns the resulting status.
@@ -106,9 +103,7 @@ defmodule Destila.Workflow do
         columns ++ [{:done, "Done"}]
       end
 
-      def session_strategy(_phase), do: :resume
-
-      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0, session_strategy: 1
+      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0
     end
   end
 end
