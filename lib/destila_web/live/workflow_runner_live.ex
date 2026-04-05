@@ -625,6 +625,26 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
               <%!-- Sidebar content — toggled by hook --%>
               <div id="metadata-sidebar-content" class="w-80 overflow-y-auto flex-1 bg-base-100">
+                <%!-- Source code section --%>
+                <div
+                  :if={get_in(@metadata, ["worktree", "worktree_path"])}
+                  class="p-4 border-b border-base-300/60"
+                >
+                  <div class="flex items-center gap-2 mb-3">
+                    <.icon
+                      name="hero-folder-open-micro"
+                      class="size-4 text-base-content/30"
+                    />
+                    <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">
+                      Source Code
+                    </h3>
+                  </div>
+                  <code class="text-xs text-base-content/50 break-all leading-relaxed">
+                    {get_in(@metadata, ["worktree", "worktree_path"])}
+                  </code>
+                </div>
+
+                <%!-- Exported metadata section --%>
                 <div class="p-4">
                   <div class="flex items-center gap-2 mb-4">
                     <.icon

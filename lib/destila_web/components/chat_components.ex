@@ -36,36 +36,18 @@ defmodule DestilaWeb.ChatComponents do
   attr :current_step, :map, required: true
 
   def chat_phase(assigns) do
-    worktree_path = get_in(assigns.metadata, ["worktree", "worktree_path"])
     non_interactive = assigns.phase_config.non_interactive
-    is_final = assigns.phase_config.final
 
     assigns =
       assigns
       |> assign(:phase_groups, phase_groups(assigns.messages, assigns.phase_number))
       |> assign(:non_interactive, non_interactive)
-      |> assign(:worktree_path, worktree_path)
-      |> assign(:show_worktree_banner, is_final && !non_interactive && worktree_path != nil)
 
     ~H"""
     <div class="flex flex-col h-full">
       <%!-- Scrollable chat area --%>
       <div class="flex-1 min-h-0 overflow-y-auto px-6 py-6" id="chat-messages" phx-hook="ScrollBottom">
         <div class="max-w-2xl mx-auto">
-          <%!-- Worktree path banner for interactive final phase --%>
-          <div
-            :if={@show_worktree_banner}
-            class="mb-6 rounded-lg border border-base-300 bg-base-200/50 p-4"
-          >
-            <div class="flex items-start gap-3">
-              <.icon name="hero-folder-open" class="size-5 text-primary shrink-0 mt-0.5" />
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-base-content/80">Source code</p>
-                <code class="text-xs text-base-content/50 break-all">{@worktree_path}</code>
-              </div>
-            </div>
-          </div>
-
           <%= for {phase, group} <- @phase_groups do %>
             <details
               id={"phase-section-#{phase}"}
