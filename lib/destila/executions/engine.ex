@@ -33,8 +33,9 @@ defmodule Destila.Executions.Engine do
   def advance_to_next(ws) do
     next_phase = ws.current_phase + 1
 
-    # Complete current phase execution if it exists
-    complete_current_phase_execution(ws)
+    if pe = Executions.get_current_phase_execution(ws.id) do
+      Executions.complete_phase(pe)
+    end
 
     if next_phase > ws.total_phases do
       complete_workflow(ws)
@@ -202,11 +203,5 @@ defmodule Destila.Executions.Engine do
     end
 
     Workflows.update_workflow_session(ws, %{phase_status: :processing})
-  end
-
-  defp complete_current_phase_execution(ws) do
-    if pe = Executions.get_current_phase_execution(ws.id) do
-      Executions.complete_phase(pe)
-    end
   end
 end
