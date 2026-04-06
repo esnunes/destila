@@ -205,9 +205,8 @@ defmodule Destila.Executions.Engine do
   end
 
   defp complete_current_phase_execution(ws) do
-    with pe when not is_nil(pe) <- Executions.get_current_phase_execution(ws.id),
-         {:error, _} <- Executions.complete_phase(pe) do
-      Executions.skip_phase(pe)
+    if pe = Executions.get_current_phase_execution(ws.id) do
+      Executions.complete_phase(pe)
     end
   end
 end
