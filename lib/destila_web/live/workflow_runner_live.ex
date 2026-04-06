@@ -300,6 +300,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
     if ws.phase_status == :processing do
       AI.ClaudeSession.stop_for_workflow_session(ws.id)
+
+      if pe = Destila.Executions.get_current_phase_execution(ws.id) do
+        Destila.Executions.await_input(pe)
+      end
+
       {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: :awaiting_input})
       {:noreply, assign(socket, :workflow_session, ws)}
     else
