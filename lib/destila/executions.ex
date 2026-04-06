@@ -10,6 +10,7 @@ defmodule Destila.Executions do
 
   alias Destila.Repo
   alias Destila.Executions.PhaseExecution
+  alias Destila.Executions.StateMachine
 
   # --- Queries ---
 
@@ -68,40 +69,38 @@ defmodule Destila.Executions do
     |> Repo.insert()
   end
 
-  def update_phase_execution_status(%PhaseExecution{} = pe, status, attrs \\ %{}) do
-    pe
-    |> PhaseExecution.changeset(Map.put(attrs, :status, status))
-    |> Repo.update()
+  def process_phase(%PhaseExecution{} = pe) do
+    StateMachine.transition(pe, :processing)
+  end
+
+  def await_input(%PhaseExecution{} = pe) do
+    StateMachine.transition(pe, :awaiting_input)
   end
 
   def complete_phase(%PhaseExecution{} = pe, result \\ nil) do
-    update_phase_execution_status(pe, :completed, %{
+    StateMachine.transition(pe, :completed, %{
       result: result,
       completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end
 
-  def stage_completion(%PhaseExecution{} = pe, result) do
-    update_phase_execution_status(pe, :awaiting_confirmation, %{staged_result: result})
+  def await_confirmation(%PhaseExecution{} = pe, result) do
+    StateMachine.transition(pe, :awaiting_confirmation, %{staged_result: result})
   end
 
   def confirm_completion(%PhaseExecution{} = pe) do
-    complete_phase(pe, pe.staged_result)
-  end
-
-  def reject_completion(%PhaseExecution{} = pe) do
-    update_phase_execution_status(pe, :awaiting_input, %{staged_result: nil})
-  end
-
-  def skip_phase(%PhaseExecution{} = pe, reason \\ nil) do
-    update_phase_execution_status(pe, :skipped, %{
-      result: if(reason, do: %{"reason" => reason}, else: nil),
+    StateMachine.transition(pe, :completed, %{
+      result: pe.staged_result,
       completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end
 
-  def start_phase(%PhaseExecution{} = pe, status \\ :processing) do
-    update_phase_execution_status(pe, status, %{
+  def reject_completion(%PhaseExecution{} = pe) do
+    StateMachine.transition(pe, :awaiting_input, %{staged_result: nil})
+  end
+
+  def start_phase(%PhaseExecution{} = pe) do
+    StateMachine.transition(pe, :processing, %{
       started_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end

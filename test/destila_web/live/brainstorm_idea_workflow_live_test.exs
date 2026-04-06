@@ -54,14 +54,14 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
              }
            ]}
 
-        :skip_phase ->
-          {"Skipping this phase.",
+        :phase_complete ->
+          {"Moving to the next phase.",
            [
              %{
                "name" => "mcp__destila__session",
                "input" => %{
                  "action" => "phase_complete",
-                 "message" => "Skipping this phase."
+                 "message" => "Moving to the next phase."
                }
              }
            ]}

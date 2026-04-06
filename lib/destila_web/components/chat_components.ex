@@ -151,7 +151,7 @@ defmodule DestilaWeb.ChatComponents do
         <.text_input
           disabled={@workflow_session.phase_status == :processing}
           show_cancel={@workflow_session.phase_status == :processing}
-          show_retry={@workflow_session.phase_status == :awaiting_input && length(@messages) > 0}
+          show_retry={@workflow_session.phase_status == :awaiting_input}
         />
       </div>
 

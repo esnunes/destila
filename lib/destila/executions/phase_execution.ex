@@ -15,7 +15,6 @@ defmodule Destila.Executions.PhaseExecution do
         :awaiting_input,
         :awaiting_confirmation,
         :completed,
-        :skipped,
         :failed
       ],
       default: :pending

@@ -115,7 +115,7 @@ defmodule Destila.AI do
 
     # When session tool is active, suppress question UI
     {input_type, options, questions} =
-      if message_type in [:phase_advance, :skip_phase] do
+      if message_type == :phase_advance do
         {:text, nil, []}
       else
         {input_type, options, questions}
@@ -251,7 +251,7 @@ defmodule Destila.AI do
             {session.message || "Ready to move to the next phase.", :phase_advance}
 
           "phase_complete" ->
-            {session.message || "Skipping this phase.", :skip_phase}
+            {session.message || "Moving to the next phase.", :phase_advance}
 
           _ ->
             {nil, nil}
