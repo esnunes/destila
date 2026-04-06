@@ -1,5 +1,9 @@
 # Destila
 
+Destila is an AI-powered workflow orchestration tool for software development. It manages multi-phase, AI-assisted workflows that take developers from rough ideas to implemented code.
+
+## Getting started
+
 To start your Phoenix server:
 
 * Run `mix setup` to install and setup dependencies
