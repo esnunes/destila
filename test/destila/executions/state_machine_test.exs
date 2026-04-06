@@ -24,24 +24,27 @@ defmodule Destila.Executions.StateMachineTest do
   describe "valid_transition?/2" do
     test "allows valid transitions" do
       assert StateMachine.valid_transition?(:pending, :processing)
+      assert StateMachine.valid_transition?(:pending, :completed)
+      assert StateMachine.valid_transition?(:pending, :skipped)
       assert StateMachine.valid_transition?(:processing, :awaiting_input)
       assert StateMachine.valid_transition?(:processing, :awaiting_confirmation)
       assert StateMachine.valid_transition?(:processing, :completed)
       assert StateMachine.valid_transition?(:processing, :skipped)
       assert StateMachine.valid_transition?(:processing, :failed)
       assert StateMachine.valid_transition?(:awaiting_input, :processing)
+      assert StateMachine.valid_transition?(:awaiting_input, :completed)
+      assert StateMachine.valid_transition?(:awaiting_input, :skipped)
       assert StateMachine.valid_transition?(:awaiting_confirmation, :completed)
       assert StateMachine.valid_transition?(:awaiting_confirmation, :awaiting_input)
       assert StateMachine.valid_transition?(:failed, :processing)
+      assert StateMachine.valid_transition?(:failed, :completed)
+      assert StateMachine.valid_transition?(:failed, :skipped)
     end
 
     test "rejects invalid transitions" do
-      refute StateMachine.valid_transition?(:pending, :completed)
       refute StateMachine.valid_transition?(:pending, :awaiting_input)
       refute StateMachine.valid_transition?(:completed, :processing)
       refute StateMachine.valid_transition?(:skipped, :processing)
-      refute StateMachine.valid_transition?(:awaiting_input, :completed)
-      refute StateMachine.valid_transition?(:failed, :completed)
     end
   end
 
