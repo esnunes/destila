@@ -26,17 +26,20 @@ defmodule Destila.Executions.StateMachine do
   @doc """
   Transitions a phase execution to a new status, persisting the change.
 
-  Raises `ArgumentError` if the transition is invalid.
-  Returns the updated `%PhaseExecution{}`.
+  Returns `{:ok, %PhaseExecution{}}` on success or
+  `{:error, reason}` if the transition is invalid.
   """
-  def transition!(%PhaseExecution{status: from} = pe, to, attrs \\ %{}) do
-    unless valid_transition?(from, to) do
-      raise ArgumentError,
-            "invalid phase execution transition: #{from} -> #{to} (pe: #{pe.id}, ws: #{pe.workflow_session_id})"
-    end
+  def transition(%PhaseExecution{status: from} = pe, to, attrs \\ %{}) do
+    if valid_transition?(from, to) do
+      pe =
+        pe
+        |> PhaseExecution.changeset(Map.put(attrs, :status, to))
+        |> Repo.update!()
 
-    pe
-    |> PhaseExecution.changeset(Map.put(attrs, :status, to))
-    |> Repo.update!()
+      {:ok, pe}
+    else
+      {:error,
+       "invalid phase execution transition: #{from} -> #{to} (pe: #{pe.id}, ws: #{pe.workflow_session_id})"}
+    end
   end
 end

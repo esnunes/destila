@@ -66,13 +66,13 @@ defmodule Destila.Executions.StateMachineTest do
     end
   end
 
-  describe "transition!/3 happy paths" do
+  describe "transition/3 happy paths" do
     test "pending -> processing with started_at" do
       ws = create_session()
       pe = create_pe(ws, 1)
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      updated = StateMachine.transition!(pe, :processing, %{started_at: now})
+      {:ok, updated} = StateMachine.transition(pe, :processing, %{started_at: now})
 
       assert updated.status == :processing
       assert updated.started_at == now
@@ -83,8 +83,8 @@ defmodule Destila.Executions.StateMachineTest do
       pe = create_pe(ws, 1, %{status: :processing})
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      updated =
-        StateMachine.transition!(pe, :completed, %{
+      {:ok, updated} =
+        StateMachine.transition(pe, :completed, %{
           result: %{"summary" => "done"},
           completed_at: now
         })
@@ -98,7 +98,7 @@ defmodule Destila.Executions.StateMachineTest do
       ws = create_session()
       pe = create_pe(ws, 1, %{status: :awaiting_confirmation, staged_result: %{"data" => "x"}})
 
-      updated = StateMachine.transition!(pe, :awaiting_input, %{staged_result: nil})
+      {:ok, updated} = StateMachine.transition(pe, :awaiting_input, %{staged_result: nil})
 
       assert updated.status == :awaiting_input
       assert is_nil(updated.staged_result)
@@ -109,53 +109,46 @@ defmodule Destila.Executions.StateMachineTest do
       pe = create_pe(ws, 1, %{status: :failed})
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      updated = StateMachine.transition!(pe, :processing, %{started_at: now})
+      {:ok, updated} = StateMachine.transition(pe, :processing, %{started_at: now})
 
       assert updated.status == :processing
       assert updated.started_at == now
     end
   end
 
-  describe "transition!/3 invalid transitions" do
-    test "completed -> processing raises ArgumentError" do
+  describe "transition/3 invalid transitions" do
+    test "completed -> processing returns error" do
       ws = create_session()
       pe = create_pe(ws, 1, %{status: :completed})
 
-      assert_raise ArgumentError,
-                   ~r/invalid phase execution transition: completed -> processing/,
-                   fn ->
-                     StateMachine.transition!(pe, :processing)
-                   end
+      assert {:error, message} = StateMachine.transition(pe, :processing)
+      assert message =~ "invalid phase execution transition: completed -> processing"
     end
 
-    test "pending -> awaiting_input raises ArgumentError" do
+    test "pending -> awaiting_input returns error" do
       ws = create_session()
       pe = create_pe(ws, 1)
 
-      assert_raise ArgumentError,
-                   ~r/invalid phase execution transition: pending -> awaiting_input/,
-                   fn ->
-                     StateMachine.transition!(pe, :awaiting_input)
-                   end
+      assert {:error, message} = StateMachine.transition(pe, :awaiting_input)
+      assert message =~ "invalid phase execution transition: pending -> awaiting_input"
     end
 
-    test "skipped -> processing raises ArgumentError (terminal)" do
+    test "skipped -> processing returns error (terminal)" do
       ws = create_session()
       pe = create_pe(ws, 1, %{status: :skipped})
 
-      assert_raise ArgumentError, ~r/invalid phase execution transition/, fn ->
-        StateMachine.transition!(pe, :processing)
-      end
+      assert {:error, message} = StateMachine.transition(pe, :processing)
+      assert message =~ "invalid phase execution transition"
     end
   end
 
-  describe "transition!/3 with attrs" do
+  describe "transition/3 with attrs" do
     test "persists additional attributes alongside status change" do
       ws = create_session()
       pe = create_pe(ws, 1, %{status: :processing})
 
-      updated =
-        StateMachine.transition!(pe, :awaiting_confirmation, %{
+      {:ok, updated} =
+        StateMachine.transition(pe, :awaiting_confirmation, %{
           staged_result: %{"output" => "result data"}
         })
 

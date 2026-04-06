@@ -112,15 +112,8 @@ defmodule Destila.Executions.Engine do
 
     case AI.Conversation.phase_update(%{ws | current_phase: phase}, params) do
       :processing ->
-        case Executions.get_current_phase_execution(ws.id) do
-          nil ->
-            :ok
-
-          pe when pe.status in [:awaiting_input, :awaiting_confirmation] ->
-            Executions.process_phase(pe)
-
-          _pe ->
-            :ok
+        if pe = Executions.get_current_phase_execution(ws.id) do
+          Executions.process_phase(pe)
         end
 
         Workflows.update_workflow_session(ws, %{phase_status: :processing})
@@ -146,27 +139,16 @@ defmodule Destila.Executions.Engine do
   end
 
   defp handle_suggest_advance(ws) do
-    # Update phase execution to awaiting_confirmation
-    case Executions.get_current_phase_execution(ws.id) do
-      nil -> :ok
-      pe -> Executions.await_confirmation(pe, nil)
+    if pe = Executions.get_current_phase_execution(ws.id) do
+      Executions.await_confirmation(pe, nil)
     end
 
-    # Write to both old and new state
     Workflows.update_workflow_session(ws, %{phase_status: :advance_suggested})
   end
 
   defp handle_awaiting_input(ws) do
-    # Update phase execution status
-    case Executions.get_current_phase_execution(ws.id) do
-      nil ->
-        :ok
-
-      pe when pe.status == :processing ->
-        Executions.await_input(pe)
-
-      _pe ->
-        :ok
+    if pe = Executions.get_current_phase_execution(ws.id) do
+      Executions.await_input(pe)
     end
 
     Workflows.update_workflow_session(ws, %{phase_status: :awaiting_input})
@@ -209,9 +191,6 @@ defmodule Destila.Executions.Engine do
 
     case Executions.get_current_phase_execution(ws.id) do
       nil ->
-        :ok
-
-      pe when pe.status in [:completed, :skipped, :processing] ->
         :ok
 
       pe when pe.status == :awaiting_confirmation ->
