@@ -217,9 +217,18 @@ defmodule Destila.Executions.Engine do
 
   defp complete_current_phase_execution(ws) do
     case Executions.get_current_phase_execution(ws.id) do
-      nil -> :ok
-      pe when pe.status in [:completed, :skipped] -> :ok
-      pe -> Executions.complete_phase(pe)
+      nil ->
+        :ok
+
+      pe when pe.status in [:completed, :skipped] ->
+        :ok
+
+      pe when pe.status == :pending ->
+        {:ok, pe} = Executions.start_phase(pe)
+        Executions.complete_phase(pe)
+
+      pe ->
+        Executions.complete_phase(pe)
     end
   end
 end

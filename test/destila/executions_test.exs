@@ -66,6 +66,7 @@ defmodule Destila.ExecutionsTest do
     test "complete_phase sets status and completed_at" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
+      {:ok, pe} = Executions.start_phase(pe)
       {:ok, pe} = Executions.complete_phase(pe, %{"summary" => "done"})
 
       assert pe.status == :completed
@@ -76,6 +77,7 @@ defmodule Destila.ExecutionsTest do
     test "skip_phase sets status, reason, and completed_at" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
+      {:ok, pe} = Executions.start_phase(pe)
       {:ok, pe} = Executions.skip_phase(pe, "Not applicable")
 
       assert pe.status == :skipped
@@ -86,6 +88,7 @@ defmodule Destila.ExecutionsTest do
     test "stage_completion and confirm_completion" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
+      {:ok, pe} = Executions.start_phase(pe)
 
       {:ok, pe} = Executions.stage_completion(pe, %{"msg" => "ready"})
       assert pe.status == :awaiting_confirmation
@@ -99,6 +102,7 @@ defmodule Destila.ExecutionsTest do
     test "stage_completion and reject_completion" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
+      {:ok, pe} = Executions.start_phase(pe)
 
       {:ok, pe} = Executions.stage_completion(pe, %{"msg" => "ready"})
       {:ok, pe} = Executions.reject_completion(pe)
