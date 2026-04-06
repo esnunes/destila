@@ -117,7 +117,7 @@ defmodule Destila.Executions.Engine do
             :ok
 
           pe when pe.status in [:awaiting_input, :awaiting_confirmation] ->
-            Executions.update_phase_execution_status(pe, :processing)
+            Executions.process_phase(pe)
 
           _pe ->
             :ok
@@ -149,7 +149,7 @@ defmodule Destila.Executions.Engine do
     # Update phase execution to awaiting_confirmation
     case Executions.get_current_phase_execution(ws.id) do
       nil -> :ok
-      pe -> Executions.stage_completion(pe, nil)
+      pe -> Executions.await_confirmation(pe, nil)
     end
 
     # Write to both old and new state
@@ -163,7 +163,7 @@ defmodule Destila.Executions.Engine do
         :ok
 
       pe when pe.status == :processing ->
-        Executions.update_phase_execution_status(pe, :awaiting_input)
+        Executions.await_input(pe)
 
       _pe ->
         :ok
@@ -216,10 +216,10 @@ defmodule Destila.Executions.Engine do
 
       pe when pe.status == :awaiting_confirmation ->
         {:ok, pe} = Executions.reject_completion(pe)
-        Executions.update_phase_execution_status(pe, :processing)
+        Executions.process_phase(pe)
 
       pe ->
-        Executions.update_phase_execution_status(pe, :processing)
+        Executions.process_phase(pe)
     end
 
     Workflows.update_workflow_session(ws, %{phase_status: :processing})
@@ -238,7 +238,7 @@ defmodule Destila.Executions.Engine do
         Executions.complete_phase(pe)
 
       pe when pe.status in [:awaiting_input, :failed] ->
-        {:ok, pe} = Executions.update_phase_execution_status(pe, :processing)
+        {:ok, pe} = Executions.process_phase(pe)
         Executions.complete_phase(pe)
 
       pe ->

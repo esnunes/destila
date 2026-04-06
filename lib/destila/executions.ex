@@ -69,8 +69,12 @@ defmodule Destila.Executions do
     |> Repo.insert()
   end
 
-  def update_phase_execution_status(%PhaseExecution{} = pe, status, attrs \\ %{}) do
-    {:ok, StateMachine.transition!(pe, status, attrs)}
+  def process_phase(%PhaseExecution{} = pe) do
+    {:ok, StateMachine.transition!(pe, :processing)}
+  end
+
+  def await_input(%PhaseExecution{} = pe) do
+    {:ok, StateMachine.transition!(pe, :awaiting_input)}
   end
 
   def complete_phase(%PhaseExecution{} = pe, result \\ nil) do
@@ -81,7 +85,7 @@ defmodule Destila.Executions do
      })}
   end
 
-  def stage_completion(%PhaseExecution{} = pe, result) do
+  def await_confirmation(%PhaseExecution{} = pe, result) do
     {:ok, StateMachine.transition!(pe, :awaiting_confirmation, %{staged_result: result})}
   end
 
