@@ -256,5 +256,61 @@ defmodule Destila.Executions.EngineTest do
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.current_phase == 2
     end
+
+    test "completes awaiting_input phase execution before advancing" do
+      ws = create_session_with_ai(%{current_phase: 1, total_phases: 4})
+      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
+
+      Engine.advance_to_next(ws)
+
+      completed_pe = Executions.get_phase_execution!(pe.id)
+      assert completed_pe.status == :completed
+      assert completed_pe.completed_at != nil
+    end
+
+    test "completes failed phase execution before advancing" do
+      ws = create_session_with_ai(%{current_phase: 1, total_phases: 4})
+      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :failed})
+
+      Engine.advance_to_next(ws)
+
+      completed_pe = Executions.get_phase_execution!(pe.id)
+      assert completed_pe.status == :completed
+      assert completed_pe.completed_at != nil
+    end
+  end
+
+  describe "phase_retry/1" do
+    test "retries from awaiting_confirmation state" do
+      ws = create_session_with_ai(%{phase_status: :advance_suggested})
+      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_confirmation})
+
+      Engine.phase_retry(ws)
+
+      updated_pe = Executions.get_phase_execution!(pe.id)
+      assert updated_pe.status == :processing
+
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert updated_ws.phase_status == :processing
+    end
+
+    test "retries from awaiting_input state" do
+      ws = create_session_with_ai(%{phase_status: :awaiting_input})
+      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
+
+      Engine.phase_retry(ws)
+
+      updated_pe = Executions.get_phase_execution!(pe.id)
+      assert updated_pe.status == :processing
+
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert updated_ws.phase_status == :processing
+    end
+
+    test "returns noop when already processing" do
+      ws = create_session_with_ai(%{phase_status: :processing})
+
+      assert Engine.phase_retry(ws) == :noop
+    end
   end
 end
