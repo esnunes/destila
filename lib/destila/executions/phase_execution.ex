@@ -2,14 +2,25 @@ defmodule Destila.Executions.PhaseExecution do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses ~w(pending awaiting_input processing awaiting_confirmation completed skipped failed)
-
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "phase_executions" do
     field(:phase_number, :integer)
     field(:phase_name, :string)
-    field(:status, :string, default: "pending")
+
+    field(:status, Ecto.Enum,
+      values: [
+        :pending,
+        :processing,
+        :awaiting_input,
+        :awaiting_confirmation,
+        :completed,
+        :skipped,
+        :failed
+      ],
+      default: :pending
+    )
+
     field(:result, :map)
     field(:staged_result, :map)
     field(:started_at, :utc_datetime)
@@ -33,9 +44,6 @@ defmodule Destila.Executions.PhaseExecution do
       :completed_at
     ])
     |> validate_required([:workflow_session_id, :phase_number, :phase_name, :status])
-    |> validate_inclusion(:status, @statuses)
     |> unique_constraint([:workflow_session_id, :phase_number])
   end
-
-  def statuses, do: @statuses
 end

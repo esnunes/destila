@@ -138,7 +138,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     ws = socket.assigns.workflow_session
 
     case Destila.Executions.get_current_phase_execution(ws.id) do
-      %{status: "awaiting_confirmation"} = pe -> Destila.Executions.reject_completion(pe)
+      %{status: :awaiting_confirmation} = pe -> Destila.Executions.reject_completion(pe)
       _ -> :ok
     end
 

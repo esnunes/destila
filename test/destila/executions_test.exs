@@ -23,7 +23,7 @@ defmodule Destila.ExecutionsTest do
       assert pe.workflow_session_id == ws.id
       assert pe.phase_number == 1
       assert pe.phase_name == "Task Description"
-      assert pe.status == "pending"
+      assert pe.status == :pending
       assert is_nil(pe.started_at)
       assert is_nil(pe.completed_at)
     end
@@ -32,9 +32,9 @@ defmodule Destila.ExecutionsTest do
       ws = create_session()
 
       {:ok, pe} =
-        Executions.create_phase_execution(ws, 2, %{status: "processing"})
+        Executions.create_phase_execution(ws, 2, %{status: :processing})
 
-      assert pe.status == "processing"
+      assert pe.status == :processing
     end
 
     test "enforces unique constraint on workflow_session_id + phase_number" do
@@ -68,7 +68,7 @@ defmodule Destila.ExecutionsTest do
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
       {:ok, pe} = Executions.complete_phase(pe, %{"summary" => "done"})
 
-      assert pe.status == "completed"
+      assert pe.status == :completed
       assert pe.result == %{"summary" => "done"}
       assert pe.completed_at != nil
     end
@@ -78,7 +78,7 @@ defmodule Destila.ExecutionsTest do
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
       {:ok, pe} = Executions.skip_phase(pe, "Not applicable")
 
-      assert pe.status == "skipped"
+      assert pe.status == :skipped
       assert pe.result == %{"reason" => "Not applicable"}
       assert pe.completed_at != nil
     end
@@ -88,11 +88,11 @@ defmodule Destila.ExecutionsTest do
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
 
       {:ok, pe} = Executions.stage_completion(pe, %{"msg" => "ready"})
-      assert pe.status == "awaiting_confirmation"
+      assert pe.status == :awaiting_confirmation
       assert pe.staged_result == %{"msg" => "ready"}
 
       {:ok, pe} = Executions.confirm_completion(pe)
-      assert pe.status == "completed"
+      assert pe.status == :completed
       assert pe.result == %{"msg" => "ready"}
     end
 
@@ -103,7 +103,7 @@ defmodule Destila.ExecutionsTest do
       {:ok, pe} = Executions.stage_completion(pe, %{"msg" => "ready"})
       {:ok, pe} = Executions.reject_completion(pe)
 
-      assert pe.status == "awaiting_input"
+      assert pe.status == :awaiting_input
       assert is_nil(pe.staged_result)
     end
 
@@ -112,7 +112,7 @@ defmodule Destila.ExecutionsTest do
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
       {:ok, pe} = Executions.start_phase(pe)
 
-      assert pe.status == "processing"
+      assert pe.status == :processing
       assert pe.started_at != nil
     end
   end

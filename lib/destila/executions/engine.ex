@@ -59,7 +59,7 @@ defmodule Destila.Executions.Engine do
     reloaded = Workflows.get_workflow_session!(ws.id)
 
     if reloaded.current_phase == phase do
-      Executions.start_phase(pe, "processing")
+      Executions.start_phase(pe, :processing)
       Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
     end
   end
@@ -116,8 +116,8 @@ defmodule Destila.Executions.Engine do
           nil ->
             :ok
 
-          pe when pe.status in ["awaiting_input", "awaiting_confirmation"] ->
-            Executions.update_phase_execution_status(pe, "processing")
+          pe when pe.status in [:awaiting_input, :awaiting_confirmation] ->
+            Executions.update_phase_execution_status(pe, :processing)
 
           _pe ->
             :ok
@@ -162,8 +162,8 @@ defmodule Destila.Executions.Engine do
       nil ->
         :ok
 
-      pe when pe.status == "processing" ->
-        Executions.update_phase_execution_status(pe, "awaiting_input")
+      pe when pe.status == :processing ->
+        Executions.update_phase_execution_status(pe, :awaiting_input)
 
       _pe ->
         :ok
@@ -189,7 +189,7 @@ defmodule Destila.Executions.Engine do
     reloaded = Workflows.get_workflow_session!(ws.id)
 
     if reloaded.current_phase == next_phase do
-      Executions.start_phase(pe, "processing")
+      Executions.start_phase(pe, :processing)
       Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
     end
   end
@@ -209,7 +209,7 @@ defmodule Destila.Executions.Engine do
 
     case Executions.get_current_phase_execution(ws.id) do
       nil -> :ok
-      pe -> Executions.update_phase_execution_status(pe, "processing")
+      pe -> Executions.update_phase_execution_status(pe, :processing)
     end
 
     Workflows.update_workflow_session(ws, %{phase_status: :processing})
@@ -218,7 +218,7 @@ defmodule Destila.Executions.Engine do
   defp complete_current_phase_execution(ws) do
     case Executions.get_current_phase_execution(ws.id) do
       nil -> :ok
-      pe when pe.status in ["completed", "skipped"] -> :ok
+      pe when pe.status in [:completed, :skipped] -> :ok
       pe -> Executions.complete_phase(pe)
     end
   end

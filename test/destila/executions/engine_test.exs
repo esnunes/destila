@@ -66,14 +66,14 @@ defmodule Destila.Executions.EngineTest do
       assert updated_ws.phase_status == :advance_suggested
 
       updated_pe = Executions.get_phase_execution!(pe.id)
-      assert updated_pe.status == "awaiting_confirmation"
+      assert updated_pe.status == :awaiting_confirmation
     end
   end
 
   describe "phase_update/3 with continue conversation" do
     test "sets phase_status to conversing" do
       ws = create_session_with_ai(%{phase_status: :processing})
-      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: "processing"})
+      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :processing})
 
       Engine.phase_update(ws.id, 1, %{
         ai_result: %{text: "More questions", result: "More questions"}
@@ -83,7 +83,7 @@ defmodule Destila.Executions.EngineTest do
       assert updated_ws.phase_status == :awaiting_input
 
       updated_pe = Executions.get_phase_execution!(pe.id)
-      assert updated_pe.status == "awaiting_input"
+      assert updated_pe.status == :awaiting_input
     end
   end
 
@@ -137,7 +137,7 @@ defmodule Destila.Executions.EngineTest do
 
       # Current phase execution should be completed
       updated_pe = Executions.get_phase_execution!(pe.id)
-      assert updated_pe.status == "completed"
+      assert updated_pe.status == :completed
 
       # New phase execution should exist for phase 2
       new_pe = Executions.get_phase_execution_by_number(ws.id, 2)
@@ -158,7 +158,7 @@ defmodule Destila.Executions.EngineTest do
 
     test "updates phase_execution status from awaiting_input to processing" do
       ws = create_session_with_ai(%{phase_status: :awaiting_input})
-      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
+      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
 
       Engine.phase_update(ws.id, 1, %{message: "Hello"})
 
@@ -166,7 +166,7 @@ defmodule Destila.Executions.EngineTest do
       assert updated_ws.phase_status == :processing
 
       updated_pe = Executions.get_phase_execution!(pe.id)
-      assert updated_pe.status == "processing"
+      assert updated_pe.status == :processing
     end
   end
 
@@ -239,12 +239,12 @@ defmodule Destila.Executions.EngineTest do
 
     test "completes current phase execution before advancing" do
       ws = create_session_with_ai(%{current_phase: 1, total_phases: 4})
-      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: "awaiting_confirmation"})
+      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_confirmation})
 
       Engine.advance_to_next(ws)
 
       completed_pe = Executions.get_phase_execution!(pe.id)
-      assert completed_pe.status == "completed"
+      assert completed_pe.status == :completed
       assert completed_pe.completed_at != nil
     end
 

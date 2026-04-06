@@ -60,7 +60,7 @@ defmodule Destila.Executions do
           workflow_session_id: workflow_session.id,
           phase_number: phase_number,
           phase_name: phase_name,
-          status: "pending"
+          status: :pending
         },
         attrs
       )
@@ -75,14 +75,14 @@ defmodule Destila.Executions do
   end
 
   def complete_phase(%PhaseExecution{} = pe, result \\ nil) do
-    update_phase_execution_status(pe, "completed", %{
+    update_phase_execution_status(pe, :completed, %{
       result: result,
       completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end
 
   def stage_completion(%PhaseExecution{} = pe, result) do
-    update_phase_execution_status(pe, "awaiting_confirmation", %{staged_result: result})
+    update_phase_execution_status(pe, :awaiting_confirmation, %{staged_result: result})
   end
 
   def confirm_completion(%PhaseExecution{} = pe) do
@@ -90,17 +90,17 @@ defmodule Destila.Executions do
   end
 
   def reject_completion(%PhaseExecution{} = pe) do
-    update_phase_execution_status(pe, "awaiting_input", %{staged_result: nil})
+    update_phase_execution_status(pe, :awaiting_input, %{staged_result: nil})
   end
 
   def skip_phase(%PhaseExecution{} = pe, reason \\ nil) do
-    update_phase_execution_status(pe, "skipped", %{
+    update_phase_execution_status(pe, :skipped, %{
       result: if(reason, do: %{"reason" => reason}, else: nil),
       completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end
 
-  def start_phase(%PhaseExecution{} = pe, status \\ "processing") do
+  def start_phase(%PhaseExecution{} = pe, status \\ :processing) do
     update_phase_execution_status(pe, status, %{
       started_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
