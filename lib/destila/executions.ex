@@ -99,8 +99,8 @@ defmodule Destila.Executions do
     StateMachine.transition(pe, :awaiting_input, %{staged_result: nil})
   end
 
-  def start_phase(%PhaseExecution{} = pe, status \\ :processing) do
-    StateMachine.transition(pe, status, %{
+  def start_phase(%PhaseExecution{} = pe) do
+    StateMachine.transition(pe, :processing, %{
       started_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end

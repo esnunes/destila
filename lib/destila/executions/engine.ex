@@ -59,7 +59,7 @@ defmodule Destila.Executions.Engine do
     reloaded = Workflows.get_workflow_session!(ws.id)
 
     if reloaded.current_phase == phase do
-      Executions.start_phase(pe, :processing)
+      Executions.start_phase(pe)
       Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
     end
   end
@@ -171,7 +171,7 @@ defmodule Destila.Executions.Engine do
     reloaded = Workflows.get_workflow_session!(ws.id)
 
     if reloaded.current_phase == next_phase do
-      Executions.start_phase(pe, :processing)
+      Executions.start_phase(pe)
       Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
     end
   end
