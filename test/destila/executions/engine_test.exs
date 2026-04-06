@@ -257,26 +257,24 @@ defmodule Destila.Executions.EngineTest do
       assert updated_ws.current_phase == 2
     end
 
-    test "completes awaiting_input phase execution before advancing" do
+    test "skips awaiting_input phase execution before advancing" do
       ws = create_session_with_ai(%{current_phase: 1, total_phases: 4})
       {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
 
       Engine.advance_to_next(ws)
 
-      completed_pe = Executions.get_phase_execution!(pe.id)
-      assert completed_pe.status == :completed
-      assert completed_pe.completed_at != nil
+      skipped_pe = Executions.get_phase_execution!(pe.id)
+      assert skipped_pe.status == :skipped
     end
 
-    test "completes failed phase execution before advancing" do
+    test "skips failed phase execution before advancing" do
       ws = create_session_with_ai(%{current_phase: 1, total_phases: 4})
       {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :failed})
 
       Engine.advance_to_next(ws)
 
-      completed_pe = Executions.get_phase_execution!(pe.id)
-      assert completed_pe.status == :completed
-      assert completed_pe.completed_at != nil
+      skipped_pe = Executions.get_phase_execution!(pe.id)
+      assert skipped_pe.status == :skipped
     end
   end
 

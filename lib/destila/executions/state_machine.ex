@@ -8,11 +8,11 @@ defmodule Destila.Executions.StateMachine do
   alias Destila.Executions.PhaseExecution
 
   @transitions %{
-    pending: [:processing, :completed, :skipped],
+    pending: [:processing, :skipped],
     processing: [:awaiting_input, :awaiting_confirmation, :completed, :skipped, :failed],
-    awaiting_input: [:processing, :completed, :skipped],
+    awaiting_input: [:processing, :skipped],
     awaiting_confirmation: [:completed, :awaiting_input],
-    failed: [:processing, :completed, :skipped],
+    failed: [:processing, :skipped],
     completed: [],
     skipped: []
   }
