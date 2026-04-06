@@ -139,19 +139,10 @@ defmodule Destila.AI.Conversation do
   end
 
   defp ensure_ai_session(ws) do
-    case AI.get_ai_session_for_workflow(ws.id) do
-      nil ->
-        metadata = Workflows.get_metadata(ws.id)
-        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
-
-        {:ok, session} =
-          AI.get_or_create_ai_session(ws.id, %{worktree_path: worktree_path})
-
-        session
-
-      session ->
-        session
-    end
+    metadata = Workflows.get_metadata(ws.id)
+    worktree_path = get_in(metadata, ["worktree", "worktree_path"])
+    {:ok, session} = AI.get_or_create_ai_session(ws.id, %{worktree_path: worktree_path})
+    session
   end
 
   defp enqueue_ai_worker(ws, phase, query) do

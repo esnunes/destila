@@ -307,35 +307,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
-  # --- Phase signals from LiveComponents ---
-
-  # Phase complete — advance to next phase (guard: phase must match current)
-  def handle_info({:phase_complete, phase, _data}, socket)
-      when phase == socket.assigns.current_phase do
-    ws = socket.assigns.workflow_session
-
-    Destila.Executions.Engine.advance_to_next(ws)
-    ws = Workflows.get_workflow_session!(ws.id)
-
-    {:noreply,
-     socket
-     |> assign(:workflow_session, ws)
-     |> assign(:current_phase, ws.current_phase)
-     |> assign_metadata(ws.id)
-     |> assign(:page_title, ws.title)
-     |> assign(:question_answers, %{})
-     |> assign_ai_state(ws)}
-  end
-
-  # Stale phase_complete — ignore
-  def handle_info({:phase_complete, _stale_phase, _data}, socket) do
-    {:noreply, socket}
-  end
-
-  def handle_info({:phase_event, _event, _data}, socket) do
-    {:noreply, socket}
-  end
-
   # PubSub: workflow session updated — refresh shared chrome
   def handle_info({:workflow_session_updated, updated_ws}, socket) do
     if socket.assigns[:workflow_session] &&

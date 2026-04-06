@@ -15,11 +15,7 @@ defmodule DestilaWeb.SetupComponents do
     metadata = assigns.metadata
     steps = build_steps(ws, metadata)
 
-    assigns =
-      assigns
-      |> assign(:steps, steps)
-      |> assign(:all_done, all_completed?(steps))
-      |> assign(:has_failure, has_failure?(steps))
+    assigns = assign(assigns, :steps, steps)
 
     ~H"""
     <div class="overflow-y-auto h-full px-6 py-6">
@@ -70,7 +66,7 @@ defmodule DestilaWeb.SetupComponents do
         [
           %{
             key: "title_gen",
-            label: step_label("title_gen", metadata),
+            label: "Generating title...",
             status: get_step_status(metadata, "title_gen"),
             error: get_step_error(metadata, "title_gen")
           }
@@ -102,9 +98,6 @@ defmodule DestilaWeb.SetupComponents do
     title_steps ++ repo_steps
   end
 
-  defp step_label("title_gen", _), do: "Generating title..."
-  defp step_label(_, _), do: ""
-
   defp get_step_status(metadata, key) do
     case metadata[key] do
       %{"status" => status} -> status
@@ -117,13 +110,5 @@ defmodule DestilaWeb.SetupComponents do
       %{"error" => error} -> error
       _ -> nil
     end
-  end
-
-  defp all_completed?(steps) do
-    Enum.all?(steps, &(&1.status == "completed"))
-  end
-
-  defp has_failure?(steps) do
-    Enum.any?(steps, &(&1.status == "failed"))
   end
 end

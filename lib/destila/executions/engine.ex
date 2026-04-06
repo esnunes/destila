@@ -11,8 +11,8 @@ defmodule Destila.Executions.Engine do
   AI conversation mechanics (enqueuing workers, saving messages, parsing
   AI responses) are handled by `Destila.AI.Conversation`.
 
-  During the migration period, the Engine writes to both `phase_executions`
-  AND `workflow_sessions.phase_status` to maintain backwards compatibility.
+  The Engine writes to both `phase_executions` (for execution history) and
+  `workflow_sessions.phase_status` (for classification and UI rendering).
   """
 
   alias Destila.{AI, Executions, Workflows}
@@ -129,7 +129,7 @@ defmodule Destila.Executions.Engine do
         handle_awaiting_input(ws)
 
       :phase_complete ->
-        handle_auto_advance(ws, phase)
+        advance_to_next(ws)
 
       :suggest_phase_complete ->
         handle_suggest_advance(ws)
@@ -143,19 +143,6 @@ defmodule Destila.Executions.Engine do
       done_at: DateTime.utc_now(),
       phase_status: nil
     })
-  end
-
-  defp handle_auto_advance(ws, current_phase) do
-    next_phase = current_phase + 1
-
-    # Complete current phase execution
-    complete_current_phase_execution(ws)
-
-    if next_phase > ws.total_phases do
-      complete_workflow(ws)
-    else
-      transition_to_phase(ws, next_phase)
-    end
   end
 
   defp handle_suggest_advance(ws) do

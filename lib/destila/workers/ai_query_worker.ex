@@ -19,12 +19,6 @@ defmodule Destila.Workers.AiQueryWorker do
         }
       }) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
-    ai_session_record = AI.get_ai_session_for_workflow(workflow_session_id)
-
-    unless ai_session_record do
-      raise "No AI session record found for workflow session #{workflow_session_id}"
-    end
-
     session_opts = AI.ClaudeSession.session_opts_for_workflow(ws, phase)
 
     case AI.ClaudeSession.for_workflow_session(workflow_session_id, session_opts) do

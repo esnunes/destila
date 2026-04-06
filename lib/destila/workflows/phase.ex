@@ -10,8 +10,6 @@ defmodule Destila.Workflows.Phase do
     :name,
     :system_prompt,
     :message_type,
-    skippable: false,
-    final: false,
     non_interactive: false,
     allowed_tools: [],
     session_strategy: :resume

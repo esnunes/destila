@@ -93,6 +93,9 @@ defmodule Destila.AI.ClaudeSession do
   @doc """
   Sends a prompt to the session and returns the result.
 
+  Broadcasts each raw stream chunk to the given PubSub topic.
+  Requires `stream_topic` in opts.
+
   Returns `{:ok, result}` or `{:error, result}` where result includes:
   - `:result` — final text from the AI
   - `:is_error` — whether an error occurred
@@ -100,26 +103,9 @@ defmodule Destila.AI.ClaudeSession do
 
   Resets the inactivity timer after each call completes.
   """
-  def query(session, prompt, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout, :timer.minutes(15))
-    GenServer.call(session, {:query, prompt, opts}, timeout)
-  end
-
-  @doc """
-  Like `query/3`, but broadcasts each raw stream chunk to the given PubSub topic.
-
-  Requires `stream_topic` in opts.
-  """
   def query_streaming(session, prompt, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, :timer.minutes(15))
     GenServer.call(session, {:query_streaming, prompt, opts}, timeout)
-  end
-
-  @doc """
-  Returns the underlying ClaudeCode session ID for resumption.
-  """
-  def session_id(session) do
-    GenServer.call(session, :session_id)
   end
 
   @doc """
@@ -287,25 +273,6 @@ defmodule Destila.AI.ClaudeSession do
   end
 
   @impl true
-  def handle_call({:query, prompt, opts}, _from, state) do
-    result =
-      state.claude_session
-      |> ClaudeCode.stream(prompt, opts)
-      |> collect_with_mcp()
-
-    state = reset_timer(state)
-
-    reply =
-      if result.is_error do
-        {:error, result}
-      else
-        {:ok, result}
-      end
-
-    {:reply, reply, state}
-  end
-
-  @impl true
   def handle_call({:query_streaming, prompt, opts}, _from, state) do
     topic = Keyword.fetch!(opts, :stream_topic)
 
@@ -327,12 +294,6 @@ defmodule Destila.AI.ClaudeSession do
   end
 
   @impl true
-  def handle_call(:session_id, _from, state) do
-    id = ClaudeCode.Session.session_id(state.claude_session)
-    {:reply, id, state}
-  end
-
-  @impl true
   def handle_info(:inactivity_timeout, state) do
     {:stop, :normal, state}
   end
@@ -341,49 +302,6 @@ defmodule Destila.AI.ClaudeSession do
   def terminate(_reason, state) do
     ClaudeCode.stop(state.claude_session)
     :ok
-  end
-
-  # Collects stream results like ClaudeCode.Stream.collect/1 but also captures
-  # MCPToolUseBlock entries which collect/1 ignores.
-  defp collect_with_mcp(stream) do
-    initial = %{
-      text: [],
-      mcp_tool_uses: [],
-      result: nil,
-      is_error: false,
-      session_id: nil
-    }
-
-    acc =
-      Enum.reduce(stream, initial, fn
-        %ClaudeCode.Message.AssistantMessage{message: message}, acc ->
-          {texts, mcp_tools} = extract_content(message.content)
-
-          %{
-            acc
-            | text: texts ++ acc.text,
-              mcp_tool_uses: mcp_tools ++ acc.mcp_tool_uses
-          }
-
-        %ClaudeCode.Message.ResultMessage{} = msg, acc ->
-          %{
-            acc
-            | result: msg.result,
-              is_error: msg.is_error,
-              session_id: msg.session_id
-          }
-
-        _, acc ->
-          acc
-      end)
-
-    %{
-      result: acc.result,
-      text: acc.text |> Enum.reverse() |> Enum.join("\n\n"),
-      is_error: acc.is_error,
-      session_id: acc.session_id,
-      mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses)
-    }
   end
 
   defp collect_with_mcp_and_broadcast(stream, topic) do

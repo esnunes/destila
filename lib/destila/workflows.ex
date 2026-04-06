@@ -156,28 +156,11 @@ defmodule Destila.Workflows do
     get_workflow_session!(id) |> update_workflow_session(attrs)
   end
 
-  def classify(%Session{} = workflow_session) do
+  def classify(%Session{} = ws) do
     cond do
-      Session.done?(workflow_session) ->
-        :done
-
-      true ->
-        # Check phase execution first, fall back to phase_status
-        case Destila.Executions.get_current_phase_execution(workflow_session.id) do
-          %{status: status} when status in ["awaiting_input", "awaiting_confirmation"] ->
-            :waiting_for_user
-
-          %{status: "processing"} ->
-            :processing
-
-          _ ->
-            # Fallback to legacy phase_status
-            case workflow_session.phase_status do
-              status when status in [:awaiting_input, :advance_suggested] -> :waiting_for_user
-              :processing -> :processing
-              _ -> :processing
-            end
-        end
+      Session.done?(ws) -> :done
+      ws.phase_status in [:awaiting_input, :advance_suggested] -> :waiting_for_user
+      true -> :processing
     end
   end
 
