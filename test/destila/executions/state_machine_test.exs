@@ -27,7 +27,6 @@ defmodule Destila.Executions.StateMachineTest do
       assert StateMachine.valid_transition?(:processing, :awaiting_input)
       assert StateMachine.valid_transition?(:processing, :awaiting_confirmation)
       assert StateMachine.valid_transition?(:processing, :completed)
-      assert StateMachine.valid_transition?(:processing, :skipped)
       assert StateMachine.valid_transition?(:processing, :failed)
       assert StateMachine.valid_transition?(:awaiting_input, :processing)
       assert StateMachine.valid_transition?(:awaiting_confirmation, :completed)
@@ -39,7 +38,6 @@ defmodule Destila.Executions.StateMachineTest do
       refute StateMachine.valid_transition?(:pending, :completed)
       refute StateMachine.valid_transition?(:pending, :awaiting_input)
       refute StateMachine.valid_transition?(:completed, :processing)
-      refute StateMachine.valid_transition?(:skipped, :processing)
       refute StateMachine.valid_transition?(:awaiting_input, :completed)
       refute StateMachine.valid_transition?(:failed, :completed)
     end
@@ -51,14 +49,12 @@ defmodule Destila.Executions.StateMachineTest do
                :awaiting_input,
                :awaiting_confirmation,
                :completed,
-               :skipped,
                :failed
              ]
     end
 
     test "returns empty list for terminal states" do
       assert StateMachine.allowed_transitions(:completed) == []
-      assert StateMachine.allowed_transitions(:skipped) == []
     end
 
     test "returns empty list for unknown states" do
@@ -131,14 +127,6 @@ defmodule Destila.Executions.StateMachineTest do
 
       assert {:error, message} = StateMachine.transition(pe, :awaiting_input)
       assert message =~ "invalid phase execution transition: pending -> awaiting_input"
-    end
-
-    test "skipped -> processing returns error (terminal)" do
-      ws = create_session()
-      pe = create_pe(ws, 1, %{status: :skipped})
-
-      assert {:error, message} = StateMachine.transition(pe, :processing)
-      assert message =~ "invalid phase execution transition"
     end
   end
 

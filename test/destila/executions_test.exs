@@ -74,17 +74,6 @@ defmodule Destila.ExecutionsTest do
       assert pe.completed_at != nil
     end
 
-    test "skip_phase sets status, reason, and completed_at" do
-      ws = create_session()
-      {:ok, pe} = Executions.create_phase_execution(ws, 3)
-      {:ok, pe} = Executions.start_phase(pe)
-      {:ok, pe} = Executions.skip_phase(pe, "Not applicable")
-
-      assert pe.status == :skipped
-      assert pe.result == %{"reason" => "Not applicable"}
-      assert pe.completed_at != nil
-    end
-
     test "await_confirmation and confirm_completion" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)

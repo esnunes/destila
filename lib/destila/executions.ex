@@ -99,13 +99,6 @@ defmodule Destila.Executions do
     StateMachine.transition(pe, :awaiting_input, %{staged_result: nil})
   end
 
-  def skip_phase(%PhaseExecution{} = pe, reason \\ nil) do
-    StateMachine.transition(pe, :skipped, %{
-      result: if(reason, do: %{"reason" => reason}, else: nil),
-      completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
-    })
-  end
-
   def start_phase(%PhaseExecution{} = pe, status \\ :processing) do
     StateMachine.transition(pe, status, %{
       started_at: DateTime.utc_now() |> DateTime.truncate(:second)

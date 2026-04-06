@@ -9,12 +9,11 @@ defmodule Destila.Executions.StateMachine do
 
   @transitions %{
     pending: [:processing],
-    processing: [:awaiting_input, :awaiting_confirmation, :completed, :skipped, :failed],
+    processing: [:awaiting_input, :awaiting_confirmation, :completed, :failed],
     awaiting_input: [:processing],
     awaiting_confirmation: [:completed, :awaiting_input],
     failed: [:processing],
-    completed: [],
-    skipped: []
+    completed: []
   }
 
   @doc "Returns true if transitioning from `from` to `to` is allowed."
