@@ -208,8 +208,18 @@ defmodule Destila.Executions.Engine do
     AI.Conversation.phase_start(ws)
 
     case Executions.get_current_phase_execution(ws.id) do
-      nil -> :ok
-      pe -> Executions.update_phase_execution_status(pe, :processing)
+      nil ->
+        :ok
+
+      pe when pe.status in [:completed, :skipped, :processing] ->
+        :ok
+
+      pe when pe.status == :awaiting_confirmation ->
+        {:ok, pe} = Executions.reject_completion(pe)
+        Executions.update_phase_execution_status(pe, :processing)
+
+      pe ->
+        Executions.update_phase_execution_status(pe, :processing)
     end
 
     Workflows.update_workflow_session(ws, %{phase_status: :processing})
@@ -227,7 +237,12 @@ defmodule Destila.Executions.Engine do
         {:ok, pe} = Executions.start_phase(pe)
         Executions.complete_phase(pe)
 
+      pe when pe.status in [:awaiting_input, :failed] ->
+        {:ok, pe} = Executions.update_phase_execution_status(pe, :processing)
+        Executions.complete_phase(pe)
+
       pe ->
+        # processing, awaiting_confirmation — both can transition directly to completed
         Executions.complete_phase(pe)
     end
   end
