@@ -256,7 +256,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
       ws = create_implement_session(1, phase_status: :awaiting_input)
 
       {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
+        Destila.Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -279,7 +279,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
       # Verify phase execution status updated
       pe = Destila.Executions.get_current_phase_execution(ws.id)
-      assert pe.status == "processing"
+      assert pe.status == :processing
     end
 
     @tag feature: @feature, scenario: "Non-interactive phase shows retry on error"
@@ -287,7 +287,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
       ws = create_implement_session(1, phase_status: :awaiting_input)
 
       {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
+        Destila.Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -312,7 +312,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
       ws = create_implement_session(1, phase_status: :awaiting_input)
 
       {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 1, %{status: "awaiting_input"})
+        Destila.Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
