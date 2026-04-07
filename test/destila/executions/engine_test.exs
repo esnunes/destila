@@ -174,27 +174,21 @@ defmodule Destila.Executions.EngineTest do
     end
   end
 
-  describe "phase_update/3 with setup_step_completed" do
-    test "transitions from setup to phase 1 when all setup steps complete" do
+  describe "phase_update/3 with setup status" do
+    test "transitions from setup to phase 1 when setup completes" do
       ws = create_session_with_ai(%{})
 
-      Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "completed"})
-      Workflows.upsert_metadata(ws.id, "creation", "worktree", %{"status" => "completed"})
-
-      Engine.phase_update(ws.id, 1, %{setup_step_completed: true})
+      Engine.phase_update(ws.id, 1, %{setup: :completed})
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.current_phase == 1
-      # Phase execution exists (not in :setup), status depends on AI worker outcome
       assert Session.phase_status(updated_ws) != :setup
     end
 
-    test "stays in setup when not all steps complete" do
+    test "stays in setup when setup is still processing" do
       ws = create_session(%{})
 
-      Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "in_progress"})
-
-      Engine.phase_update(ws.id, 1, %{setup_step_completed: true})
+      Engine.phase_update(ws.id, 1, %{setup: :processing})
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert Session.phase_status(updated_ws) == :setup
@@ -203,10 +197,7 @@ defmodule Destila.Executions.EngineTest do
     test "creates phase execution for phase 1 after setup completes" do
       ws = create_session_with_ai(%{})
 
-      Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "completed"})
-      Workflows.upsert_metadata(ws.id, "creation", "worktree", %{"status" => "completed"})
-
-      Engine.phase_update(ws.id, 1, %{setup_step_completed: true})
+      Engine.phase_update(ws.id, 1, %{setup: :completed})
 
       pe = Executions.get_phase_execution_by_number(ws.id, 1)
       assert pe != nil
