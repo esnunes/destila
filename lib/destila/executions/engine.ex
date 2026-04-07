@@ -52,13 +52,20 @@ defmodule Destila.Executions.Engine do
   def start_session(ws) do
     phase = ws.current_phase
     {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
-    AI.Conversation.phase_start(ws)
 
-    # Reload to check if an inline worker already advanced past this phase.
-    reloaded = Workflows.get_workflow_session!(ws.id)
+    case ensure_worktree_ready(ws) do
+      :ready ->
+        AI.Conversation.phase_start(ws)
 
-    if reloaded.current_phase == phase do
-      Workflows.broadcast({:ok, reloaded}, :workflow_session_updated)
+        reloaded = Workflows.get_workflow_session!(ws.id)
+
+        if reloaded.current_phase == phase do
+          Workflows.broadcast({:ok, reloaded}, :workflow_session_updated)
+        end
+
+      :preparing ->
+        # Broadcast so the LiveView shows the preparing state
+        Workflows.broadcast({:ok, ws}, :workflow_session_updated)
     end
   end
 
@@ -92,15 +99,17 @@ defmodule Destila.Executions.Engine do
   when the user sends a message. `AI.Conversation.phase_update/2` processes
   the params and returns a status the Engine uses to update state.
   """
-  def phase_update(workflow_session_id, _phase, %{setup: :completed}) do
+  def phase_update(workflow_session_id, _phase, %{worktree_ready: true}) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
-    start_session(ws)
-  end
 
-  def phase_update(workflow_session_id, _phase, %{setup: :processing}) do
-    ws = Workflows.get_workflow_session!(workflow_session_id)
-    # Broadcast so the LiveView refreshes setup step progress.
-    Workflows.broadcast({:ok, ws}, :workflow_session_updated)
+    # Worktree is ready — start the current phase
+    AI.Conversation.phase_start(ws)
+
+    reloaded = Workflows.get_workflow_session!(ws.id)
+
+    if reloaded.current_phase == ws.current_phase do
+      Workflows.broadcast({:ok, reloaded}, :workflow_session_updated)
+    end
   end
 
   def phase_update(workflow_session_id, phase, params) do
@@ -151,12 +160,37 @@ defmodule Destila.Executions.Engine do
     {:ok, _pe} = Executions.ensure_phase_execution(ws, next_phase)
     {:ok, ws} = Workflows.update_workflow_session(ws, %{current_phase: next_phase})
 
-    AI.Conversation.phase_start(ws)
+    case ensure_worktree_ready(ws) do
+      :ready ->
+        AI.Conversation.phase_start(ws)
 
-    reloaded = Workflows.get_workflow_session!(ws.id)
+        reloaded = Workflows.get_workflow_session!(ws.id)
 
-    if reloaded.current_phase == next_phase do
-      Workflows.broadcast({:ok, reloaded}, :workflow_session_updated)
+        if reloaded.current_phase == next_phase do
+          Workflows.broadcast({:ok, reloaded}, :workflow_session_updated)
+        end
+
+      :preparing ->
+        Workflows.broadcast({:ok, ws}, :workflow_session_updated)
+    end
+  end
+
+  defp ensure_worktree_ready(ws) do
+    if ws.project_id do
+      ai_session = AI.get_ai_session_for_workflow(ws.id)
+      worktree_path = ai_session && ai_session.worktree_path
+
+      if worktree_path && Destila.Git.worktree_exists?(worktree_path) do
+        :ready
+      else
+        %{"workflow_session_id" => ws.id}
+        |> Destila.Workers.PrepareWorkflowSession.new()
+        |> Oban.insert()
+
+        :preparing
+      end
+    else
+      :ready
     end
   end
 

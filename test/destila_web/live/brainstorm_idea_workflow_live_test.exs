@@ -182,7 +182,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
   describe "Setup" do
     @tag feature: @feature, scenario: "Setup displays progress"
-    test "shows setup progress steps", %{conn: conn} do
+    test "shows setup progress", %{conn: conn} do
       {:ok, ws} =
         Destila.Workflows.insert_workflow_session(%{
           title: "Test Session",
@@ -195,15 +195,11 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       # No PE created — derived status is :setup
 
-      Destila.Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
-        "status" => "in_progress"
-      })
-
       {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert html =~ "Phase 1/4"
       assert html =~ "Task Description"
-      assert html =~ "Syncing repository..."
+      assert html =~ "Preparing workspace..."
     end
   end
 
@@ -412,38 +408,8 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     end
   end
 
-  # --- Setup retry ---
-
-  describe "setup retry" do
-    @tag feature: @feature, scenario: "Retry a failed setup step"
-    test "shows retry button on failed step and re-enqueues on click", %{conn: conn} do
-      project = create_project()
-
-      {:ok, ws} =
-        Destila.Workflows.insert_workflow_session(%{
-          title: "Test Session",
-          workflow_type: :brainstorm_idea,
-          current_phase: 1,
-          total_phases: 4,
-          project_id: project.id
-        })
-
-      # No PE — derived status is :setup
-
-      Destila.Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
-        "status" => "failed",
-        "error" => "Connection refused"
-      })
-
-      {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      # Failed step is visible with error
-      assert html =~ "Connection refused"
-
-      # Retry button is present
-      assert html =~ "Retry"
-    end
-  end
+  # Setup retry removed — per-step failure tracking no longer exists.
+  # If the Oban worker fails, it retries automatically (max 3 attempts).
 
   # --- AI structured inputs ---
 

@@ -183,7 +183,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("retry_setup", _params, socket) do
-    Workflows.prepare_workflow_session(socket.assigns.workflow_session)
+    ws = socket.assigns.workflow_session
+    Destila.Executions.Engine.start_session(ws)
     {:noreply, socket}
   end
 
@@ -605,7 +606,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
               <div id="metadata-sidebar-content" class="w-80 overflow-y-auto flex-1 bg-base-100">
                 <%!-- Source code section --%>
                 <div
-                  :if={get_in(@metadata, ["worktree", "worktree_path"])}
+                  :if={@worktree_path}
                   class="p-4 border-b border-base-300/60"
                 >
                   <div class="flex items-center gap-2 mb-3">
@@ -618,7 +619,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                     </h3>
                   </div>
                   <code class="text-xs text-base-content/50 break-all leading-relaxed">
-                    {get_in(@metadata, ["worktree", "worktree_path"])}
+                    {@worktree_path}
                   </code>
                 </div>
 
@@ -740,10 +741,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   defp do_render_phase(%{phase_status: :setup} = assigns) do
     ~H"""
-    <DestilaWeb.SetupComponents.setup
-      workflow_session={@workflow_session}
-      metadata={@metadata}
-    />
+    <DestilaWeb.SetupComponents.setup workflow_session={@workflow_session} />
     """
   end
 
@@ -778,9 +776,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   defp assign_metadata(socket, ws_id) do
     all = Workflows.get_all_metadata(ws_id)
 
+    ai_session = AI.get_ai_session_for_workflow(ws_id)
+    worktree_path = ai_session && ai_session.worktree_path
+
     socket
     |> assign(:metadata, Enum.reduce(all, %{}, fn m, acc -> Map.put(acc, m.key, m.value) end))
     |> assign(:exported_metadata, Enum.filter(all, & &1.exported))
+    |> assign(:worktree_path, worktree_path)
   end
 
   defp metadata_value_block(assigns) do

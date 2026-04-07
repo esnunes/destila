@@ -174,34 +174,16 @@ defmodule Destila.Executions.EngineTest do
     end
   end
 
-  describe "phase_update/3 with setup status" do
-    test "transitions from setup to phase 1 when setup completes" do
+  describe "phase_update/3 with worktree_ready" do
+    test "starts phase when worktree becomes ready" do
       ws = create_session_with_ai(%{})
+      {:ok, _pe} = Executions.create_phase_execution(ws, 1)
 
-      Engine.phase_update(ws.id, 1, %{setup: :completed})
+      Engine.phase_update(ws.id, 1, %{worktree_ready: true})
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.current_phase == 1
       assert Session.phase_status(updated_ws) != :setup
-    end
-
-    test "stays in setup when setup is still processing" do
-      ws = create_session(%{})
-
-      Engine.phase_update(ws.id, 1, %{setup: :processing})
-
-      updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert Session.phase_status(updated_ws) == :setup
-    end
-
-    test "creates phase execution for phase 1 after setup completes" do
-      ws = create_session_with_ai(%{})
-
-      Engine.phase_update(ws.id, 1, %{setup: :completed})
-
-      pe = Executions.get_phase_execution_by_number(ws.id, 1)
-      assert pe != nil
-      assert pe.phase_name == "Task Description"
     end
   end
 

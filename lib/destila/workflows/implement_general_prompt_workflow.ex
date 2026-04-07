@@ -217,8 +217,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
   end
 
   defp adjustments_prompt(workflow_session) do
-    metadata = Destila.Workflows.get_metadata(workflow_session.id)
-    worktree_path = get_in(metadata, ["worktree", "worktree_path"]) || "unknown"
+    ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)
+    worktree_path = (ai_session && ai_session.worktree_path) || "unknown"
 
     """
     The implementation is complete. Before starting, do two things:

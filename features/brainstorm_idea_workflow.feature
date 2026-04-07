@@ -34,8 +34,8 @@ Feature: Brainstorm Idea Workflow
 
   Scenario: Setup displays progress
     Given I completed the creation form and am on the session detail page
-    Then I should see the setup progress steps
-    And the session should be in setup status at Phase 1
+    Then I should see "Preparing workspace..." while the worktree is being created
+    And the session should show Phase 1 status
 
   Scenario: Phase 1 - AI asks clarifying questions
     Given the session has completed setup and is in Phase 1 - Task Description
@@ -96,14 +96,6 @@ Feature: Brainstorm Idea Workflow
     Then I should see an inline title editor
     When I change the title and press Enter
     Then the title should be updated
-
-  Scenario: Retry a failed setup step
-    Given setup is running for my session
-    And a step fails due to an error
-    Then I should see the error message for the failed step
-    And I should see a "Retry" button
-    When I click "Retry"
-    Then the failed step should be attempted again
 
   Scenario: Answer AI with a single-select option
     Given the AI presents options as single-select buttons

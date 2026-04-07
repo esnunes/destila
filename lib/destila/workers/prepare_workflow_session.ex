@@ -1,62 +1,41 @@
 defmodule Destila.Workers.PrepareWorkflowSession do
   use Oban.Worker, queue: :setup, max_attempts: 3
 
-  alias Destila.{Git, Workflows}
+  alias Destila.{AI, Git, Workflows}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"workflow_session_id" => workflow_session_id}}) do
     workflow_session = Workflows.get_workflow_session!(workflow_session_id)
+    project = Destila.Projects.get_project(workflow_session.project_id)
 
-    if workflow_session.project_id do
-      project = Destila.Projects.get_project(workflow_session.project_id)
+    with :ok <- sync_repo(project),
+         {:ok, worktree_path} <- create_worktree(workflow_session, project) do
+      AI.get_or_create_ai_session(workflow_session.id, %{worktree_path: worktree_path})
 
-      with :ok <- sync_repo(workflow_session, project),
-           :ok <- notify_engine(workflow_session, :processing),
-           :ok <- create_worktree(workflow_session, project) do
-        notify_engine(workflow_session, :completed)
-        :ok
-      end
-    else
-      notify_engine(workflow_session, :completed)
+      Destila.Executions.Engine.phase_update(
+        workflow_session.id,
+        workflow_session.current_phase,
+        %{worktree_ready: true}
+      )
+
       :ok
     end
   end
 
-  defp notify_engine(ws, status) do
-    Destila.Executions.Engine.phase_update(ws.id, ws.current_phase, %{setup: status})
-    :ok
-  end
+  defp sync_repo(nil), do: :ok
 
-  defp sync_repo(_workflow_session, nil), do: :ok
-
-  defp sync_repo(workflow_session, project) do
-    ws_id = workflow_session.id
-
+  defp sync_repo(project) do
     cond do
       project.local_folder && project.local_folder != "" ->
-        upsert_step(ws_id, "repo_sync", "in_progress")
-
         case Git.pull(project.local_folder) do
-          {:ok, _} ->
-            upsert_step(ws_id, "repo_sync", "completed")
-            :ok
-
-          {:error, reason} ->
-            upsert_step(ws_id, "repo_sync", "failed", reason)
-            {:error, reason}
+          {:ok, _} -> :ok
+          {:error, reason} -> {:error, reason}
         end
 
       project.git_repo_url && project.git_repo_url != "" ->
-        upsert_step(ws_id, "repo_sync", "in_progress")
-
         with {:ok, path} <- Git.effective_local_folder(project),
              {:ok, _} <- Git.pull(path) do
-          upsert_step(ws_id, "repo_sync", "completed")
           :ok
-        else
-          {:error, reason} ->
-            upsert_step(ws_id, "repo_sync", "failed", reason)
-            {:error, reason}
         end
 
       true ->
@@ -64,60 +43,24 @@ defmodule Destila.Workers.PrepareWorkflowSession do
     end
   end
 
-  defp create_worktree(_workflow_session, nil), do: :ok
+  defp create_worktree(_workflow_session, nil), do: {:ok, nil}
 
   defp create_worktree(workflow_session, project) do
-    ws_id = workflow_session.id
-
     case Git.effective_local_folder(project) do
       {:ok, local_folder} ->
-        worktree_path = Path.join([local_folder, ".claude", "worktrees", ws_id])
+        worktree_path = Path.join([local_folder, ".claude", "worktrees", workflow_session.id])
 
         if Git.worktree_exists?(worktree_path) do
-          upsert_step(ws_id, "worktree", "completed", nil, %{
-            "worktree_path" => worktree_path
-          })
-
-          :ok
+          {:ok, worktree_path}
         else
-          upsert_step(ws_id, "worktree", "in_progress")
-
-          case Git.worktree_add(local_folder, worktree_path, ws_id) do
-            {:ok, _} ->
-              upsert_step(ws_id, "worktree", "completed", nil, %{
-                "worktree_path" => worktree_path
-              })
-
-              :ok
-
-            {:error, reason} ->
-              upsert_step(ws_id, "worktree", "failed", reason)
-              {:error, reason}
+          case Git.worktree_add(local_folder, worktree_path, workflow_session.id) do
+            {:ok, _} -> {:ok, worktree_path}
+            {:error, reason} -> {:error, reason}
           end
         end
 
       {:error, reason} ->
-        upsert_step(ws_id, "worktree", "failed", reason)
         {:error, reason}
     end
   end
-
-  defp upsert_step(workflow_session_id, step, status, error \\ nil, extra \\ %{}) do
-    value =
-      %{"status" => status}
-      |> then(fn v -> if error, do: Map.put(v, "error", sanitize_error(error)), else: v end)
-      |> Map.merge(extra)
-
-    Workflows.upsert_metadata(workflow_session_id, "setup", step, value)
-  end
-
-  defp sanitize_error(message) when is_binary(message) do
-    message
-    |> String.split("\n")
-    |> List.first()
-    |> String.replace(~r{/[^\s]+}, "[path]")
-    |> String.slice(0, 200)
-  end
-
-  defp sanitize_error(other), do: inspect(other) |> String.slice(0, 200)
 end
