@@ -77,11 +77,18 @@ Feature: Brainstorm Idea Workflow
 
   Scenario: Phase 4 - Prompt Generation and mark as done
     Given the session is in Phase 4 - Prompt Generation
+    And the phase is no longer processing
     Then the AI should generate an implementation prompt
     And the prompt should be displayed in a styled card
     When I am satisfied with the generated prompt
     And I click "Mark as Done"
     Then the workflow should be marked as complete
+
+  Scenario: Mark as Done is hidden while last phase is processing
+    Given the session is in Phase 4 - Prompt Generation
+    And the phase is still processing
+    Then I should not see a "Mark as Done" button
+    And the session should not be marked as complete
 
   Scenario: Un-done a completed session
     Given the session is marked as done
