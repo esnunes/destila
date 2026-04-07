@@ -41,6 +41,9 @@ destila-*.tar
 /*.db
 /*.db-*
 
+# Feature video scratch directory.
+/.context/
+
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
