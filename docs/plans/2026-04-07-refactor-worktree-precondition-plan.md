@@ -47,6 +47,45 @@ The setup UI currently shows per-step progress (repo_sync in_progress, worktree 
 
 Instead of enqueuing `PrepareWorkflowSession` on creation, the workflow context calls `Engine.start_session/1`. The Engine's `start_session/1` checks worktree availability and either starts the phase immediately or enqueues `PrepareWorkflowSession`.
 
+## Critical timing analysis
+
+### Phase start flow (after changes)
+
+```
+Workflows.create_workflow_session(params)
+  → Engine.start_session(ws)
+    → Executions.ensure_phase_execution(ws, 1)     # PE created → status is :processing
+    → ensure_worktree_ready(ws)
+      ├─ No project_id → :ready → AI.Conversation.phase_start(ws) → enqueues AiQueryWorker
+      └─ Has project_id:
+         ├─ AI session exists with worktree_path AND path exists on disk → :ready → phase_start
+         └─ Otherwise → :preparing → enqueues PrepareWorkflowSession
+           └─ Worker runs → sync repo → create worktree → store path on AI session
+             → Engine.phase_update(ws.id, phase, %{worktree_ready: true})
+               → AI.Conversation.phase_start(ws) → enqueues AiQueryWorker
+```
+
+**Key insight:** Because `ensure_phase_execution` runs BEFORE the worktree check, `current_status/1` returns `:processing` (not `:setup`) even while the worktree is being prepared. The setup UI (`do_render_phase(:setup)`) will NOT render during worktree preparation — the chat UI renders with a processing spinner instead. This is the correct UX.
+
+### `get_or_create_ai_session` idempotency concern
+
+`PrepareWorkflowSession` calls `AI.get_or_create_ai_session(ws.id, %{worktree_path: path})`. If an AI session already exists (created by a prior phase or retry), `get_or_create_ai_session` returns the existing one WITHOUT updating `worktree_path`. This is correct for the happy path (worktree_path is already set). But if the worktree was deleted and re-created at a different path, the existing AI session's `worktree_path` would be stale.
+
+**Mitigation:** The worktree path is deterministic — `{local_folder}/.claude/worktrees/{ws_id}`. It never changes for a given session. So `get_or_create_ai_session` returning the existing session is always correct. If the worktree was deleted, it's re-created at the same path.
+
+### `handle_session_strategy(:new)` ordering
+
+For phases with `:new` strategy (e.g., "Work" phase 3), the flow is:
+1. `transition_to_phase(ws, 3)` → `ensure_worktree_ready(ws)` → gets latest AI session → has `worktree_path` → path exists → `:ready`
+2. `AI.Conversation.phase_start(ws)` → `handle_session_strategy(ws, 3)` → `:new` → reads `worktree_path` from current AI session → creates NEW AI session with same `worktree_path`
+3. `ensure_ai_session(ws)` → AI session exists (just created in step 2) → no-op
+
+This is correct because `ensure_worktree_ready` checks the worktree BEFORE `handle_session_strategy` creates the new AI session.
+
+### No-project path in `PrepareWorkflowSession` is dead code
+
+After this change, the worker is only enqueued by `ensure_worktree_ready` when `ws.project_id` is truthy. The `else` branch in `perform/1` (no project_id) is dead code. Remove it for clarity.
+
 ## Changes
 
 ### Step 1: Add `ensure_worktree_ready/1` to Engine
@@ -173,25 +212,20 @@ defmodule Destila.Workers.PrepareWorkflowSession do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"workflow_session_id" => workflow_session_id}}) do
     workflow_session = Workflows.get_workflow_session!(workflow_session_id)
+    project = Destila.Projects.get_project(workflow_session.project_id)
 
-    if workflow_session.project_id do
-      project = Destila.Projects.get_project(workflow_session.project_id)
+    with :ok <- sync_repo(project),
+         {:ok, worktree_path} <- create_worktree(workflow_session, project) do
+      AI.get_or_create_ai_session(workflow_session.id, %{worktree_path: worktree_path})
 
-      with :ok <- sync_repo(project),
-           {:ok, worktree_path} <- create_worktree(workflow_session, project) do
-        AI.get_or_create_ai_session(workflow_session.id, %{worktree_path: worktree_path})
-        notify_engine(workflow_session, %{worktree_ready: true})
-        :ok
-      end
-    else
-      notify_engine(workflow_session, %{worktree_ready: true})
+      Destila.Executions.Engine.phase_update(
+        workflow_session.id,
+        workflow_session.current_phase,
+        %{worktree_ready: true}
+      )
+
       :ok
     end
-  end
-
-  defp notify_engine(ws, params) do
-    Destila.Executions.Engine.phase_update(ws.id, ws.current_phase, params)
-    :ok
   end
 
   defp sync_repo(nil), do: :ok
@@ -238,7 +272,13 @@ defmodule Destila.Workers.PrepareWorkflowSession do
 end
 ```
 
-Note: `sync_repo/1` no longer takes `workflow_session` as first arg since it doesn't write metadata.
+Key changes from current code:
+- **Removed:** `upsert_step/5`, `sanitize_error/1`, and all metadata writes
+- **Removed:** `notify_engine/2` helper and the `%{setup: status}` signal pattern
+- **Removed:** No-project `else` branch from `perform/1` (dead code — worker is only enqueued by `ensure_worktree_ready` when `project_id` is truthy)
+- **Changed:** `sync_repo/1` no longer takes `workflow_session` as first arg since it doesn't write metadata
+- **Added:** `AI.get_or_create_ai_session` call to store `worktree_path` on the AI session record
+- **Changed:** Signals `%{worktree_ready: true}` to the Engine instead of `%{setup: :completed}`
 
 ### Step 5: Update `Workflows.create_workflow_session/1`
 
@@ -380,19 +420,18 @@ However, there's a nuance: `current_status/1` returns `:setup` when no PE exists
 - The user needs a way to retry
 - We can keep the `retry_setup` event but it now calls `Engine.start_session/1`
 
-For the initial implementation, simplify `SetupComponents` to show a single "Preparing workspace..." step when the session has a project and no phase execution exists (shouldn't happen after our changes, but is defensive). Remove the `build_steps/2`, `get_step_status/2`, `get_step_error/2` functions. Remove `repo_sync` and `worktree` metadata references.
+For the initial implementation, simplify `SetupComponents` to show a single "Preparing workspace..." spinner. Remove the `build_steps/2`, `get_step_status/2`, `get_step_error/2` functions. Remove `repo_sync` and `worktree` metadata references. Remove the `metadata` attr since it's no longer needed.
 
 ```elixir
 defmodule DestilaWeb.SetupComponents do
   @moduledoc """
   Function component for setup status — displays a simple preparing indicator.
-  Rendered by WorkflowRunnerLive when no phase execution exists yet.
+  Rendered by WorkflowRunnerLive when no phase execution exists yet (defensive).
   """
 
   use DestilaWeb, :html
 
   attr :workflow_session, :map, required: true
-  attr :metadata, :map, required: true
 
   def setup(assigns) do
     ~H"""
@@ -409,14 +448,23 @@ defmodule DestilaWeb.SetupComponents do
 end
 ```
 
+**Also update the caller in `WorkflowRunnerLive`** — remove the `metadata` attr from the `do_render_phase(:setup)` template (line 741-748):
+
+```elixir
+defp do_render_phase(%{phase_status: :setup} = assigns) do
+  ~H"""
+  <DestilaWeb.SetupComponents.setup workflow_session={@workflow_session} />
+  """
+end
+```
+
+**Note on `do_render_phase(:setup)` reachability:** After these changes, `current_status/1` returns `:setup` only when no PE exists. Since `start_session/1` creates the PE synchronously before checking the worktree, the `:setup` status is only briefly visible between session creation and `start_session/1` completing (both happen in the same `create_workflow_session` call). The `do_render_phase(:setup)` clause is effectively unreachable in normal operation but is kept as defensive code.
+
 ### Step 10: Update tests
 
-**File:** `test/destila/executions/engine_test.exs`
+#### `test/destila/executions/engine_test.exs`
 
-Update the `"phase_update/3 with setup status"` describe block:
-
-1. Replace `%{setup: :completed}` tests with `%{worktree_ready: true}` tests
-2. Remove the `%{setup: :processing}` test (no longer a signal)
+**Replace** the entire `"phase_update/3 with setup status"` describe block (lines 177-206) with:
 
 ```elixir
 describe "phase_update/3 with worktree_ready" do
@@ -430,24 +478,79 @@ describe "phase_update/3 with worktree_ready" do
     assert updated_ws.current_phase == 1
     assert Session.phase_status(updated_ws) != :setup
   end
+
+  test "creates phase execution if not present" do
+    ws = create_session_with_ai(%{})
+    # No PE created manually — worktree_ready handler should work
+    # even if PE was already created by start_session
+
+    Engine.phase_update(ws.id, 1, %{worktree_ready: true})
+
+    updated_ws = Workflows.get_workflow_session!(ws.id)
+    assert Session.phase_status(updated_ws) != :setup
+  end
 end
 ```
 
-**File:** `test/destila_web/live/brainstorm_idea_workflow_live_test.exs`
+**Remove** these three tests from the old describe block:
+- "transitions from setup to phase 1 when setup completes" (line 178)
+- "stays in setup when setup is still processing" (line 188)
+- "creates phase execution for phase 1 after setup completes" (line 197)
 
-- **"shows setup progress steps" test (lines 183-207):** Update to reflect simplified setup UI. Remove `repo_sync` metadata upsert. Assert "Preparing workspace..." instead of "Syncing repository...".
-- **Setup failure test (lines 420-445):** Remove — setup failures no longer tracked in metadata. (Or convert to test that the retry mechanism works.)
+#### `test/destila_web/live/brainstorm_idea_workflow_live_test.exs`
 
-**File:** `test/destila/workflows_metadata_test.exs`
+**"shows setup progress steps" test (lines 183-207):**
+- Remove the `repo_sync` metadata upsert (lines 198-200)
+- The test creates a session with no PE → derived status is `:setup`
+- Assert "Preparing workspace..." instead of "Syncing repository..."
+- Keep the Phase 1/4 and Task Description assertions
 
-- Tests that use `repo_sync` metadata as example data (lines 37-70) should be updated to use non-infrastructure metadata keys, since `repo_sync` is no longer written.
+```elixir
+@tag feature: @feature, scenario: "Setup displays progress"
+test "shows setup progress", %{conn: conn} do
+  {:ok, ws} =
+    Destila.Workflows.insert_workflow_session(%{
+      title: "Test Session",
+      workflow_type: :brainstorm_idea,
+      current_phase: 1,
+      total_phases: 4,
+      title_generating: true,
+      project_id: create_project().id
+    })
+
+  # No PE created — derived status is :setup
+
+  {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
+
+  assert html =~ "Phase 1/4"
+  assert html =~ "Task Description"
+  assert html =~ "Preparing workspace..."
+end
+```
+
+**Setup failure test (lines 420-445):** Remove entirely. Setup failures are no longer tracked in metadata. The retry mechanism works via `Engine.start_session/1` which re-checks worktree availability.
+
+#### `test/destila/workflows_metadata_test.exs`
+
+Tests at lines 37-70 use `repo_sync` as example metadata. These are testing the `upsert_metadata` function itself, not the setup flow. **Change the key from `"repo_sync"` to any other non-infrastructure key** (e.g., `"example_step"` or `"test_data"`). The test logic is unchanged — only the key name changes.
+
+#### Feature file updates for `@tag` annotations
+
+After removing the setup failure test, check that the `@tag feature:` / `scenario:` annotations still match the Gherkin scenarios. The "Retry a failed setup step" scenario will be removed from the feature file (Step 11), so no dangling tag references.
 
 ### Step 11: Update Gherkin feature files
 
 **File:** `features/brainstorm_idea_workflow.feature`
 
-- Update "Setup displays progress" scenario (line 35-38): Change to reflect simple "Preparing workspace..." text
-- Update "Retry a failed setup step" scenario (line 100-101): Adjust or remove — retry now calls `Engine.start_session/1`
+**Update** "Setup displays progress" scenario (lines 35-38):
+```gherkin
+  Scenario: Setup displays progress
+    Given I completed the creation form and am on the session detail page
+    Then I should see "Preparing workspace..." while the worktree is being created
+    And the session should show Phase 1 status
+```
+
+**Remove** "Retry a failed setup step" scenario (lines 100-106) entirely. Per-step failure tracking no longer exists. If the Oban worker fails, it retries automatically (max 3 attempts). A more general retry mechanism may be added later.
 
 **File:** `features/implement_general_prompt_workflow.feature`
 
