@@ -62,6 +62,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:total_phases, workflow_session.total_phases)
        |> assign(:editing_title, false)
        |> assign_metadata(workflow_session.id)
+       |> assign_worktree_path(workflow_session.id)
        |> assign(:page_title, workflow_session.title)
        |> assign(:streaming_chunks, nil)
        |> assign(:alive_session, alive_session)
@@ -332,6 +333,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
          )
        )
        |> assign_metadata(ws.id)
+       |> assign_worktree_path(ws.id)
        |> assign_ai_state(ws)}
     else
       {:noreply, socket}
@@ -774,13 +776,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   defp assign_metadata(socket, ws_id) do
     all = Workflows.get_all_metadata(ws_id)
 
-    ai_session = AI.get_ai_session_for_workflow(ws_id)
-    worktree_path = ai_session && ai_session.worktree_path
-
     socket
     |> assign(:metadata, Enum.reduce(all, %{}, fn m, acc -> Map.put(acc, m.key, m.value) end))
     |> assign(:exported_metadata, Enum.filter(all, & &1.exported))
-    |> assign(:worktree_path, worktree_path)
+  end
+
+  defp assign_worktree_path(socket, ws_id) do
+    ai_session = AI.get_ai_session_for_workflow(ws_id)
+    assign(socket, :worktree_path, ai_session && ai_session.worktree_path)
   end
 
   defp metadata_value_block(assigns) do
