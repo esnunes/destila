@@ -44,7 +44,7 @@ defmodule Destila.Sessions.SessionProcess do
     end
   end
 
-  def send_message(session_id, content), do: call(session_id, {:user_message, content})
+  def send_message(session_id, content), do: call(session_id, {:send_message, content})
   def confirm_advance(session_id), do: call(session_id, :confirm_advance)
   def decline_advance(session_id), do: call(session_id, :decline_advance)
   def retry(session_id), do: call(session_id, :retry)
@@ -95,7 +95,7 @@ defmodule Destila.Sessions.SessionProcess do
 
   # --- User message ---
   @impl true
-  def handle_event({:call, from}, {:user_message, content}, {:phase, n, status}, data)
+  def handle_event({:call, from}, {:send_message, content}, {:phase, n, status}, data)
       when status in [:awaiting_input, :awaiting_confirmation] do
     case AI.Conversation.phase_update(data.ws, %{message: content}) do
       :processing ->
