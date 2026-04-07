@@ -52,7 +52,8 @@ defmodule Destila.Executions.EngineTest do
       AI.create_message(ai_session.id, %{
         role: :system,
         content: "Ready to advance",
-        phase: 1
+        phase: 1,
+        workflow_session_id: ws.id
       })
 
       Engine.phase_update(ws.id, 1, %{

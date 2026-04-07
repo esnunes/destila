@@ -12,6 +12,7 @@ defmodule Destila.AI.Message do
     field(:phase, :integer, default: 1)
 
     belongs_to(:ai_session, Destila.AI.Session)
+    belongs_to(:workflow_session, Destila.Workflows.Session)
 
     field(:inserted_at, :utc_datetime_usec, autogenerate: {DateTime, :utc_now, []})
   end
@@ -21,13 +22,14 @@ defmodule Destila.AI.Message do
     message
     |> cast(attrs, [
       :ai_session_id,
+      :workflow_session_id,
       :role,
       :content,
       :raw_response,
       :selected,
       :phase
     ])
-    |> validate_required([:ai_session_id, :role])
+    |> validate_required([:ai_session_id, :workflow_session_id, :role])
     |> validate_number(:phase, greater_than_or_equal_to: 1)
   end
 end

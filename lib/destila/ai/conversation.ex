@@ -39,7 +39,8 @@ defmodule Destila.AI.Conversation do
       AI.create_message(ai_session.id, %{
         role: :user,
         content: message,
-        phase: phase_number
+        phase: phase_number,
+        workflow_session_id: ws.id
       })
 
       enqueue_ai_worker(ws, phase_number, message)
@@ -67,7 +68,8 @@ defmodule Destila.AI.Conversation do
         role: :system,
         content: content,
         raw_response: result,
-        phase: phase_number
+        phase: phase_number,
+        workflow_session_id: ws.id
       })
 
       if result[:session_id] do
@@ -96,7 +98,8 @@ defmodule Destila.AI.Conversation do
       AI.create_message(ai_session.id, %{
         role: :system,
         content: "Something went wrong. Please try sending your message again.",
-        phase: phase_number
+        phase: phase_number,
+        workflow_session_id: ws.id
       })
     end
 

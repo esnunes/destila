@@ -90,14 +90,16 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: "Let's work on your task.",
-        phase: 1
+        phase: 1,
+        workflow_session_id: ws.id
       })
 
     {:ok, _} =
       Destila.AI.create_message(ai_session.id, %{
         role: :user,
         content: "Fix the login timeout bug",
-        phase: 1
+        phase: 1,
+        workflow_session_id: ws.id
       })
 
     raw_response =
@@ -115,7 +117,8 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
         role: :system,
         content: last_content,
         raw_response: raw_response,
-        phase: phase
+        phase: phase,
+        workflow_session_id: ws.id
       })
 
     ws
@@ -641,7 +644,8 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       role: :system,
       content: "Pick one:",
       raw_response: raw_response,
-      phase: 1
+      phase: 1,
+      workflow_session_id: ws.id
     })
 
     ws
@@ -699,7 +703,8 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       role: :system,
       content: "",
       raw_response: raw_response,
-      phase: 1
+      phase: 1,
+      workflow_session_id: ws.id
     })
 
     ws

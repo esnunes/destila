@@ -223,7 +223,8 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Planning the implementation...",
-          phase: 1
+          phase: 1,
+          workflow_session_id: ws.id
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -244,7 +245,8 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Something went wrong.",
-          phase: 1
+          phase: 1,
+          workflow_session_id: ws.id
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -265,7 +267,8 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Something went wrong.",
-          phase: 1
+          phase: 1,
+          workflow_session_id: ws.id
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -293,7 +296,8 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Something went wrong.",
-          phase: 1
+          phase: 1,
+          workflow_session_id: ws.id
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -315,7 +319,8 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         Destila.AI.create_message(ai_session.id, %{
           role: :system,
           content: "Something went wrong.",
-          phase: 1
+          phase: 1,
+          workflow_session_id: ws.id
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
