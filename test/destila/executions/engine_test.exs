@@ -178,7 +178,6 @@ defmodule Destila.Executions.EngineTest do
     test "transitions from setup to phase 1 when all setup steps complete" do
       ws = create_session_with_ai(%{})
 
-      Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
       Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "completed"})
       Workflows.upsert_metadata(ws.id, "creation", "worktree", %{"status" => "completed"})
 
@@ -193,7 +192,6 @@ defmodule Destila.Executions.EngineTest do
     test "stays in setup when not all steps complete" do
       ws = create_session(%{})
 
-      Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
       Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "in_progress"})
 
       Engine.phase_update(ws.id, 1, %{setup_step_completed: true})
@@ -205,7 +203,6 @@ defmodule Destila.Executions.EngineTest do
     test "creates phase execution for phase 1 after setup completes" do
       ws = create_session_with_ai(%{})
 
-      Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
       Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "completed"})
       Workflows.upsert_metadata(ws.id, "creation", "worktree", %{"status" => "completed"})
 

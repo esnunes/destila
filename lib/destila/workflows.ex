@@ -121,6 +121,12 @@ defmodule Destila.Workflows do
         upsert_metadata(ws.id, "creation", "source_session", %{"id" => selected_session_id})
       end
 
+      if title_generating do
+        %{"workflow_session_id" => ws.id, "idea" => input_text}
+        |> Destila.Workers.TitleGenerationWorker.new()
+        |> Oban.insert()
+      end
+
       prepare_workflow_session(ws)
 
       {:ok, ws}
@@ -141,7 +147,13 @@ defmodule Destila.Workflows do
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   def prepare_workflow_session(%Session{} = ws) do
-    Destila.Workflows.Setup.start(ws)
+    case Destila.Workflows.Setup.start(ws) do
+      :setup_complete ->
+        Destila.Executions.Engine.start_session(ws)
+
+      :processing ->
+        :ok
+    end
   end
 
   def update_workflow_session(%Session{} = workflow_session, attrs) do

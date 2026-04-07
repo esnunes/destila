@@ -180,36 +180,6 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     end
   end
 
-  # --- Setup ---
-
-  describe "Setup" do
-    @tag feature: @feature,
-         scenario: "Setup skips title generation for source session"
-    test "skips title generation when source session selected", %{conn: conn} do
-      ws = create_implement_session(1, pe_status: :setup, title_generating: false)
-
-      {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
-      refute html =~ "Generating title..."
-    end
-
-    @tag feature: @feature, scenario: "Setup generates title for manual prompt"
-    test "shows title generation for manual prompt", %{conn: conn} do
-      ws =
-        create_implement_session(1,
-          pe_status: :setup,
-          title_generating: true,
-          project_id: create_project().id
-        )
-
-      Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
-        "status" => "in_progress"
-      })
-
-      {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
-      assert html =~ "Generating title..."
-    end
-  end
-
   # --- Non-interactive phases ---
 
   describe "Non-interactive AI phases" do

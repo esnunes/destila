@@ -3,30 +3,22 @@ defmodule Destila.Workflows.Setup do
   Shared logic for the setup phase across workflows.
   """
 
-  @setup_keys ~w(title_gen repo_sync worktree)
+  @setup_keys ~w(repo_sync worktree)
 
   @doc """
-  Enqueues setup workers (title generation, repo sync/worktree).
-  Called from workflow `phase_start_action`.
+  Enqueues setup workers (repo sync/worktree).
+  Returns `:setup_complete` when no workers are needed (no project).
   """
   def start(ws) do
-    metadata = Destila.Workflows.get_metadata(ws.id)
-
-    if ws.title_generating do
-      idea = get_in(metadata, ["idea", "text"]) || get_in(metadata, ["prompt", "text"]) || ""
-
-      %{"workflow_session_id" => ws.id, "idea" => idea}
-      |> Destila.Workers.TitleGenerationWorker.new()
-      |> Oban.insert()
-    end
-
     if ws.project_id do
       %{"workflow_session_id" => ws.id}
       |> Destila.Workers.PrepareWorkflowSession.new()
       |> Oban.insert()
-    end
 
-    :processing
+      :processing
+    else
+      :setup_complete
+    end
   end
 
   @doc """

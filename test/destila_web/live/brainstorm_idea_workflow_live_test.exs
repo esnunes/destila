@@ -195,10 +195,6 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       # No PE created — derived status is :setup
 
-      Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
-        "status" => "completed"
-      })
-
       Destila.Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
         "status" => "in_progress"
       })
@@ -207,7 +203,6 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       assert html =~ "Phase 1/4"
       assert html =~ "Task Description"
-      assert html =~ "Generating title..."
       assert html =~ "Syncing repository..."
     end
   end
@@ -434,10 +429,6 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
         })
 
       # No PE — derived status is :setup
-
-      Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
-        "status" => "completed"
-      })
 
       Destila.Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
         "status" => "failed",
@@ -737,7 +728,6 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
          scenario: "Sidebar is empty when no metadata is exported"
     test "shows empty state when no metadata is exported", %{conn: conn} do
       ws = create_session_in_phase(1)
-      Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "done"})
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 

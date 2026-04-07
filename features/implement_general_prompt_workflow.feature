@@ -50,15 +50,6 @@ Feature: Implement General Prompt Workflow
     And I click "Start"
     Then I should see an error indicating a project is required
 
-  Scenario: Setup skips title generation for source session
-    Given I started an implementation from an existing session
-    Then the setup should not show "Generating title..."
-    And the session title should match the source session title
-
-  Scenario: Setup generates title for manual prompt
-    Given I started an implementation with a manual prompt
-    Then the setup should show "Generating title..."
-
   Scenario: Phase 1 - Non-interactive AI generates plan
     Given I am on phase 1 of an implementation workflow
     Then I should not see a text input
