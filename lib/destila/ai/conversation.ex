@@ -8,6 +8,7 @@ defmodule Destila.AI.Conversation do
   """
 
   alias Destila.{AI, Workflows}
+  alias Destila.AI.ResponseProcessor
 
   @doc """
   Starts a phase by reading the system prompt, handling session strategy,
@@ -55,8 +56,8 @@ defmodule Destila.AI.Conversation do
     ai_session = AI.get_ai_session_for_workflow(ws.id)
 
     if ai_session do
-      response_text = AI.response_text(result)
-      session_action = AI.extract_session_action(result)
+      response_text = ResponseProcessor.response_text(result)
+      session_action = ResponseProcessor.extract_session_action(result)
 
       content =
         case session_action do
