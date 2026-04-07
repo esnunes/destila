@@ -188,33 +188,36 @@ defmodule Destila.Sessions.SessionProcess do
 end
 ```
 
-#### Callbacks and handle_event clauses
+#### Callbacks
+
+No `:state_enter` — side effects are handled explicitly in `advance/2` and `start_first_phase/1` to avoid double-firing on re-entry.
 
 ```elixir
   @impl true
-  def callback_mode, do: [:handle_event_function, :state_enter]
+  def callback_mode, do: :handle_event_function
 
   @impl true
   def init(session_id) do
     ws = Workflows.get_workflow_session!(session_id)
     state = reconstruct_state(ws)
     data = %{session_id: session_id, ws: ws}
+
+    # For new sessions (no PE yet), kick off the first phase.
+    # IMPORTANT: Elixir `if` does NOT rebind outer variables — must capture the result.
+    {state, data} =
+      if state == :setup do
+        start_first_phase(data)
+        ws = reload(data)
+        {reconstruct_state(ws), %{data | ws: ws}}
+      else
+        {state, data}
+      end
+
     {:ok, state, data, [inactivity_timeout()]}
   end
 ```
 
-**State enter callbacks:**
-
-The `:enter` callback for `{:phase, n, :processing}` is where we start the AI conversation when transitioning into processing from a phase advance (not from user message — user messages handle their own enqueue). However, since enter callbacks fire on *every* state entry including re-entry, we need to be careful. The safest approach: do NOT use `:state_enter` for side effects. Instead, handle phase starts explicitly in the `advance/2` helper and `start_first_phase/1`.
-
-**Decision: Drop `:state_enter`, use explicit helpers instead.** This avoids double-firing issues and keeps side effects explicit.
-
-```elixir
-  @impl true
-  def callback_mode, do: :handle_event_function
-```
-
-**handle_event clauses:**
+**handle_event clauses (order matters — specific patterns before catch-alls):**
 
 ```elixir
   # --- User message ---
@@ -251,8 +254,9 @@ The `:enter` callback for `{:phase, n, :processing}` is where we start the AI co
      [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
   end
 
-  # --- AI response ---
-  def handle_event(:cast, {:ai_response, result}, {:phase, n, :processing}, data) do
+  # --- AI response (phase must match to reject stale worker results) ---
+  def handle_event(:cast, {:ai_response, result, phase}, {:phase, n, :processing}, data)
+      when phase == n do
     case AI.Conversation.phase_update(data.ws, %{ai_result: result}) do
       :awaiting_input ->
         transition_pe(data, n, :awaiting_input)
@@ -275,13 +279,24 @@ The `:enter` callback for `{:phase, n, :processing}` is where we start the AI co
     end
   end
 
-  # --- AI error ---
-  def handle_event(:cast, {:ai_error, reason}, {:phase, n, :processing}, data) do
+  # --- AI response from a stale/different phase — ignore ---
+  def handle_event(:cast, {:ai_response, _result, _phase}, _state, _data) do
+    :keep_state_and_data
+  end
+
+  # --- AI error (phase must match) ---
+  def handle_event(:cast, {:ai_error, reason, phase}, {:phase, n, :processing}, data)
+      when phase == n do
     AI.Conversation.phase_update(data.ws, %{ai_error: reason})
     transition_pe(data, n, :awaiting_input)
     ws = reload(data)
     broadcast_updated(ws)
     {:next_state, {:phase, n, :awaiting_input}, %{data | ws: ws}, [inactivity_timeout()]}
+  end
+
+  # --- AI error from a stale/different phase — ignore ---
+  def handle_event(:cast, {:ai_error, _reason, _phase}, _state, _data) do
+    :keep_state_and_data
   end
 
   # --- Retry ---
@@ -373,12 +388,18 @@ The `:enter` callback for `{:phase, n, :processing}` is where we start the AI co
     {:stop, :normal}
   end
 
-  # --- Catch-all for unexpected events (no-op) ---
+  # --- Catch-all for unexpected events (MUST be last) ---
+  # Returns {:error, :invalid_event} for calls so the LiveView can handle gracefully
   def handle_event({:call, from}, _event, _state, _data) do
     {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
   end
 
   def handle_event(:cast, _event, _state, _data) do
+    :keep_state_and_data
+  end
+
+  # Also handle plain :info messages (e.g., from Process.monitor, if any)
+  def handle_event(:info, _msg, _state, _data) do
     :keep_state_and_data
   end
 ```
@@ -602,19 +623,26 @@ The PubSub `handle_info` handlers stay largely the same — `:workflow_session_u
 
 **File:** `lib/destila/workers/ai_query_worker.ex`
 
-```elixir
-# Before:
-Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_result: result})
-Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_error: reason})
+The worker includes the `phase` in each cast so SessionProcess can reject stale responses (e.g., a worker from phase 1 completing after the session advanced to phase 2). There are 3 Engine calls to replace:
 
-# After:
+```elixir
 alias Destila.Sessions.SessionProcess
 
-SessionProcess.cast(ws.id, {:ai_response, result})
-SessionProcess.cast(ws.id, {:ai_error, reason})
-```
+# Line 30 (success):
+# Before: Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_result: result})
+# After:
+SessionProcess.cast(ws.id, {:ai_response, result, phase})
 
-Remove the `phase` parameter from cast — SessionProcess knows the current phase from its state.
+# Line 34 (query error):
+# Before: Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_error: reason})
+# After:
+SessionProcess.cast(ws.id, {:ai_error, reason, phase})
+
+# Line 39 (session acquisition error):
+# Before: Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_error: reason})
+# After:
+SessionProcess.cast(ws.id, {:ai_error, reason, phase})
+```
 
 ### Step 5: Update PrepareWorkflowSession
 
@@ -644,25 +672,7 @@ alias Destila.Sessions.SessionProcess
 {:ok, _pid} = SessionProcess.ensure_started(ws.id)
 ```
 
-The process reconstructs state on init. For a brand-new session, `reconstruct_state/1` returns `:setup` (no PE exists). We need the init to also kick off the first phase. Add to `init/1`:
-
-```elixir
-def init(session_id) do
-  ws = Workflows.get_workflow_session!(session_id)
-  state = reconstruct_state(ws)
-  data = %{session_id: session_id, ws: ws}
-
-  # For new sessions, start the first phase
-  if state == :setup do
-    start_first_phase(data)
-    ws = reload(data)
-    state = reconstruct_state(ws)
-    data = %{data | ws: ws}
-  end
-
-  {:ok, state, data, [inactivity_timeout()]}
-end
-```
+The process reconstructs state on init. For a brand-new session, `reconstruct_state/1` returns `:setup` (no PE exists). The `init/1` callback (shown in Step 2) already handles this by calling `start_first_phase/1` when `state == :setup`.
 
 ### Step 7: Delete Engine
 
@@ -674,22 +684,89 @@ end
 
 **File:** `test/destila/executions/engine_test.exs` → `test/destila/sessions/session_process_test.exs`
 
-Replace `Engine.phase_update(...)` calls with `SessionProcess.cast(...)` / `SessionProcess.call(...)`. The test structure stays similar — create session, trigger event, assert PE status and ws state.
+The test structure stays similar — create session, trigger event, assert PE status and ws state. Key differences:
 
-Key changes:
-- Start `Destila.Sessions.Registry` and `Destila.Sessions.Supervisor` in test setup (or ensure they're in the test supervision tree)
-- Replace `Engine.advance_to_next(ws)` with `SessionProcess.confirm_advance(ws.id)` (but need PE in `:awaiting_confirmation` state first)
-- Replace `Engine.phase_retry(ws)` with `SessionProcess.retry(ws.id)`
-- For cast-based events (`ai_response`, `ai_error`), may need a small synchronization mechanism (e.g., call a sync function after cast) to avoid race conditions in tests
+1. **Registry and DynamicSupervisor** are available automatically (started by `Destila.Application` in test env)
+2. **Cast synchronization** — after `SessionProcess.cast`, use `:sys.get_state` to flush the message queue before asserting
+3. **Process cleanup** — use `on_exit` to stop the SessionProcess after each test to avoid interference
 
-Test synchronization approach: After a `SessionProcess.cast`, call `SessionProcess.send_message` with a known sentinel or use `:sys.get_state` on the process to ensure the cast has been processed:
+#### Test helper for cast synchronization
 
 ```elixir
-# Ensure cast is processed before asserting
-SessionProcess.cast(ws.id, {:ai_response, result})
-_ = :sys.get_state(GenServer.whereis({:via, Registry, {Destila.Sessions.Registry, ws.id}}))
-# Now assert
+defp sync_process(ws_id) do
+  name = {:via, Registry, {Destila.Sessions.Registry, ws_id}}
+  case GenServer.whereis(name) do
+    nil -> :ok
+    pid -> _ = :sys.get_state(pid)
+  end
+end
 ```
+
+#### Concrete test translations
+
+**`Engine.phase_update(ws.id, 1, %{ai_result: result})` → `SessionProcess.cast`:**
+
+```elixir
+# Before (Engine test):
+Engine.phase_update(ws.id, 1, %{ai_result: %{text: "More questions", result: "More questions"}})
+pe = Executions.get_current_phase_execution(ws.id)
+assert pe.status == :awaiting_input
+
+# After (SessionProcess test):
+# Must ensure process is started first (create_session_with_ai starts it via ensure_started)
+SessionProcess.cast(ws.id, {:ai_response, %{text: "More questions", result: "More questions"}, 1})
+sync_process(ws.id)
+pe = Executions.get_current_phase_execution(ws.id)
+assert pe.status == :awaiting_input
+```
+
+**`Engine.advance_to_next(ws)` → `SessionProcess.confirm_advance`:**
+
+```elixir
+# Before (Engine test):
+Engine.advance_to_next(ws)
+updated_ws = Workflows.get_workflow_session!(ws.id)
+assert updated_ws.current_phase == 2
+
+# After (SessionProcess test — PE must be in :awaiting_confirmation):
+{:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_confirmation})
+{:ok, ws} = SessionProcess.confirm_advance(ws.id)
+assert ws.current_phase == 2
+```
+
+**`Engine.phase_retry(ws)` → `SessionProcess.retry`:**
+
+```elixir
+# Before:
+Engine.phase_retry(ws)
+
+# After:
+{:ok, ws} = SessionProcess.retry(ws.id)
+```
+
+#### Setup and teardown
+
+```elixir
+setup do
+  ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+    text = "AI response"
+    [ClaudeCode.Test.text(text), ClaudeCode.Test.result(text)]
+  end)
+  ClaudeCode.Test.set_mode_to_shared()
+  :ok
+end
+
+# Helper to create session AND start the process
+defp create_session_with_process(attrs) do
+  ws = create_session_with_ai(attrs)
+  {:ok, _pid} = SessionProcess.ensure_started(ws.id)
+  # Wait for init to complete (which may start the first phase)
+  sync_process(ws.id)
+  ws
+end
+```
+
+**Note:** Some existing Engine tests use `create_session` without an AI session. Since SessionProcess always starts via `ensure_started` and `init` reads from DB, the test setup is slightly different — the process exists and may auto-start the first phase. Tests that need specific PE states should create the PE before calling `ensure_started`, or set up the PE and then call `ensure_started` (which will reconstruct state from the existing PE).
 
 ### Step 9: Run `mix precommit`
 
@@ -697,7 +774,7 @@ Ensure compilation with `--warnings-as-errors`, formatting, and all tests pass.
 
 ## Critical considerations
 
-### Race condition during ensure_started
+### 1. Race condition during ensure_started
 
 Two processes calling `ensure_started/1` simultaneously for the same session could try to start two processes. `DynamicSupervisor.start_child` will return `{:error, {:already_started, pid}}` for the second call because the Registry name is unique. Handle this in `ensure_started/1`:
 
@@ -714,41 +791,75 @@ def ensure_started(session_id) do
 end
 ```
 
-### gen_statem call timeout
+### 2. gen_statem call timeout
 
 Default `:gen_statem.call` timeout is 5 seconds. Since SessionProcess does DB writes in handlers, this should be sufficient. If any handler risks being slow (e.g., `retry` which stops a ClaudeSession), consider increasing the timeout for specific calls or making them async.
 
-### Existing PubSub event compatibility
+### 3. Existing PubSub event compatibility
 
 SessionProcess broadcasts `{:workflow_session_updated, ws}` — the same event the Engine currently triggers via `Workflows.broadcast({:ok, ws}, :workflow_session_updated)`. This means:
 - `WorkflowRunnerLive.handle_info({:workflow_session_updated, ...})` continues to work unchanged
 - `CraftingBoardLive` continues to work unchanged
 - No new PubSub events need to be introduced
 
-### AI.Conversation.phase_update phase parameter
+### 4. Stale worker responses (phase guard)
 
-Currently `Engine.phase_update/3` receives a `phase` parameter from workers and passes it to `AI.Conversation.phase_update` via `%{ws | current_phase: phase}`. In SessionProcess, the process always knows the current phase from its state. However, we must ensure the phase in the worker's message matches the current phase — if not, the message is stale and should be ignored.
+Workers include the `phase` in their cast tuple (`{:ai_response, result, phase}`). The `handle_event` clause guards `when phase == n` against the current state `{:phase, n, :processing}`. A catch-all clause drops stale responses silently. This handles the case where a worker from phase 1 completes after the session has already advanced to phase 2.
 
-Add a phase guard to `ai_response` handler:
+The current Engine achieves this differently — it re-reads `ws` from DB and overrides `current_phase` with the worker's phase via `%{ws | current_phase: phase}`. The SessionProcess approach is cleaner: the process state is the source of truth for current phase, and stale responses are simply ignored.
+
+### 5. Elixir `if` scoping in init/1
+
+**Critical implementation note:** Elixir `if/case/cond` blocks do NOT rebind variables in the outer scope. Code like this is a bug:
 
 ```elixir
-def handle_event(:cast, {:ai_response, result, phase}, {:phase, n, :processing}, data)
-    when phase == n do
-  # process response
+# WRONG — state and data are NOT rebound after the if
+if state == :setup do
+  start_first_phase(data)
+  ws = reload(data)
+  state = reconstruct_state(ws)  # only visible inside the if block
+  data = %{data | ws: ws}        # only visible inside the if block
 end
-
-def handle_event(:cast, {:ai_response, _result, phase}, {:phase, n, _status}, _data)
-    when phase != n do
-  # stale response from previous phase — ignore
-  :keep_state_and_data
-end
+# state and data here are still the ORIGINAL values
 ```
 
-Update the worker to include the phase in the cast:
+The correct pattern is to capture the result:
+
 ```elixir
-SessionProcess.cast(ws.id, {:ai_response, result, phase})
-SessionProcess.cast(ws.id, {:ai_error, reason, phase})
+# CORRECT — capture the result of the if expression
+{state, data} =
+  if state == :setup do
+    start_first_phase(data)
+    ws = reload(data)
+    {reconstruct_state(ws), %{data | ws: ws}}
+  else
+    {state, data}
+  end
 ```
+
+This pattern must be used consistently throughout the module wherever `if`/`case` blocks produce values that need to be used later.
+
+### 6. `confirm_advance` on last phase — behavior change
+
+**Current behavior:** The LiveView guards `if next_phase > ws.total_phases do {:noreply, socket}` — calling confirm_advance on the last phase is a no-op.
+
+**New behavior:** SessionProcess's `advance/2` detects `next > ws.total_phases` and completes the workflow (sets `done_at`). This means `confirm_advance` on the last phase now completes the workflow.
+
+**Decision: Allow it.** This is actually correct — when the AI calls `suggest_phase_complete` on the last phase and the user confirms, the workflow should complete. The current no-op behavior is arguably a bug. The UI already shows "Mark as Done" on the last phase (which skips the confirmation flow), so `confirm_advance` on the last phase is unlikely to be triggered in practice, but if it is, completing the workflow is the right behavior.
+
+### 7. `Workflows.unarchive_workflow_session` bypasses SessionProcess
+
+`unarchive_workflow_session/1` (line 213-225 in `workflows.ex`) directly calls `Executions.await_input(pe)` when PE was `:processing` at archive time. This is a state transition outside SessionProcess.
+
+**Decision: Leave it as-is for now.** The SessionProcess won't be running when a session is unarchived (it was archived, so the process would have timed out). When the LiveView mounts the unarchived session, `ensure_started` will spin up a fresh SessionProcess that reconstructs state from DB — and the PE will already be in `:awaiting_input`. So the direct DB write is safe because no SessionProcess is running to conflict with it.
+
+If we want to be extra safe, we could have `unarchive_workflow_session` call `SessionProcess.cast(ws.id, :unarchive)` instead, but that's unnecessary complexity for a rare operation.
+
+### 8. LiveView integration tests
+
+The existing LiveView tests (`test/destila_web/live/brainstorm_idea_workflow_live_test.exs`, etc.) do NOT directly reference Engine — they test through the LiveView's event handlers. Since those handlers will now call SessionProcess, the tests need `Destila.Sessions.Registry` and `Destila.Sessions.Supervisor` to be running.
+
+These are started in `Destila.Application`, which is started by the test suite (via `DestilaWeb.ConnCase`), so **no additional test setup is needed** — the Registry and DynamicSupervisor will be available automatically.
 
 ## Files changed
 
