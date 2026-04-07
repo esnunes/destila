@@ -17,6 +17,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   import DestilaWeb.ChatComponents
 
   alias Destila.AI
+  alias Destila.AI.ResponseProcessor
   alias Destila.Workflows
   alias Destila.Workflows.Session
 
@@ -263,7 +264,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     last_system = messages |> Enum.filter(&(&1.role == :system)) |> List.last()
 
     if last_system do
-      processed = AI.process_message(last_system, ws)
+      processed = ResponseProcessor.process_message(last_system, ws)
       answers = socket.assigns.question_answers
 
       response_parts =
@@ -407,7 +408,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         last_system = messages |> Enum.filter(&(&1.role == :system)) |> List.last()
 
         if last_system do
-          processed = AI.process_message(last_system, ws)
+          processed = ResponseProcessor.process_message(last_system, ws)
 
           question_title =
             case processed.questions do

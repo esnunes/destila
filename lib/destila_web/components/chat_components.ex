@@ -4,6 +4,7 @@ defmodule DestilaWeb.ChatComponents do
   import Phoenix.HTML, only: [raw: 1]
   import DestilaWeb.CoreComponents, only: [icon: 1]
 
+  alias Destila.AI.ResponseProcessor
   alias Destila.Workflows
 
   defp markdown_to_html(text) when is_binary(text) do
@@ -244,7 +245,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :phase_status, :atom, default: nil
 
   def chat_message(assigns) do
-    processed = Destila.AI.process_message(assigns.message, assigns.workflow_session)
+    processed = ResponseProcessor.process_message(assigns.message, assigns.workflow_session)
     assigns = assign(assigns, :message, processed)
     render_chat_message(assigns)
   end
