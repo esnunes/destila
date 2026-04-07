@@ -34,12 +34,12 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "creation", "example_step", %{
           "status" => "in_progress"
         })
 
       {:ok, updated} =
-        Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "creation", "example_step", %{
           "status" => "completed"
         })
 
@@ -47,7 +47,7 @@ defmodule Destila.WorkflowsMetadataTest do
 
       # Only one row exists
       metadata = Workflows.get_metadata(ws.id)
-      assert metadata == %{"repo_sync" => %{"status" => "completed"}}
+      assert metadata == %{"example_step" => %{"status" => "completed"}}
     end
 
     test "different keys in the same phase create separate entries" do
@@ -59,7 +59,7 @@ defmodule Destila.WorkflowsMetadataTest do
         })
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{
+        Workflows.upsert_metadata(ws.id, "creation", "example_step", %{
           "status" => "in_progress"
         })
 
@@ -67,7 +67,7 @@ defmodule Destila.WorkflowsMetadataTest do
 
       assert metadata == %{
                "title_gen" => %{"status" => "completed"},
-               "repo_sync" => %{"status" => "in_progress"}
+               "example_step" => %{"status" => "in_progress"}
              }
     end
 

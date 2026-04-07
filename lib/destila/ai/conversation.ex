@@ -123,8 +123,9 @@ defmodule Destila.AI.Conversation do
       %{session_strategy: :new} ->
         AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
-        metadata = Workflows.get_metadata(ws.id)
-        worktree_path = get_in(metadata, ["worktree", "worktree_path"])
+        # Read worktree_path from the CURRENT AI session before creating a new one
+        current_session = AI.get_ai_session_for_workflow(ws.id)
+        worktree_path = current_session && current_session.worktree_path
 
         AI.create_ai_session(%{
           workflow_session_id: ws.id,
@@ -143,9 +144,7 @@ defmodule Destila.AI.Conversation do
   end
 
   defp ensure_ai_session(ws) do
-    metadata = Workflows.get_metadata(ws.id)
-    worktree_path = get_in(metadata, ["worktree", "worktree_path"])
-    {:ok, session} = AI.get_or_create_ai_session(ws.id, %{worktree_path: worktree_path})
+    {:ok, session} = AI.get_or_create_ai_session(ws.id, %{})
     session
   end
 

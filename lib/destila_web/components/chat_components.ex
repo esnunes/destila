@@ -71,6 +71,12 @@ defmodule DestilaWeb.ChatComponents do
                 workflow_session={@workflow_session}
                 phase_status={@phase_status}
               />
+              <%= if phase == @phase_number && @phase_status == :setup do %>
+                <div class="flex items-center gap-3 text-sm pl-2 mt-2">
+                  <span class="loading loading-spinner loading-xs shrink-0" />
+                  <span class="text-base-content/60">Preparing workspace...</span>
+                </div>
+              <% end %>
               <%= if phase == @phase_number && @phase_status == :processing do %>
                 <%= if @streaming_chunks && @streaming_chunks != [] do %>
                   <.chat_stream_debug chunks={@streaming_chunks} />

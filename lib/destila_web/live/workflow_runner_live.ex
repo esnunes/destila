@@ -62,6 +62,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:total_phases, workflow_session.total_phases)
        |> assign(:editing_title, false)
        |> assign_metadata(workflow_session.id)
+       |> assign_worktree_path(workflow_session.id)
        |> assign(:page_title, workflow_session.title)
        |> assign(:streaming_chunks, nil)
        |> assign(:alive_session, alive_session)
@@ -183,7 +184,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("retry_setup", _params, socket) do
-    Workflows.prepare_workflow_session(socket.assigns.workflow_session)
+    ws = socket.assigns.workflow_session
+    Destila.Executions.Engine.start_session(ws)
     {:noreply, socket}
   end
 
@@ -330,6 +332,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
            else: nil
          )
        )
+       |> assign_metadata(ws.id)
+       |> assign_worktree_path(ws.id)
        |> assign_ai_state(ws)}
     else
       {:noreply, socket}
@@ -395,6 +399,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     phase_status = Session.phase_status(ws)
 
     cond do
+      phase_status == :setup ->
+        %{input_type: nil, options: nil, questions: [], question_title: nil, completed: false}
+
       Session.done?(ws) ->
         %{input_type: nil, options: nil, questions: [], question_title: nil, completed: true}
 
@@ -605,7 +612,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
               <div id="metadata-sidebar-content" class="w-80 overflow-y-auto flex-1 bg-base-100">
                 <%!-- Source code section --%>
                 <div
-                  :if={get_in(@metadata, ["worktree", "worktree_path"])}
+                  :if={@worktree_path}
                   class="p-4 border-b border-base-300/60"
                 >
                   <div class="flex items-center gap-2 mb-3">
@@ -618,7 +625,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                     </h3>
                   </div>
                   <code class="text-xs text-base-content/50 break-all leading-relaxed">
-                    {get_in(@metadata, ["worktree", "worktree_path"])}
+                    {@worktree_path}
                   </code>
                 </div>
 
@@ -738,15 +745,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     do_render_phase(assigns)
   end
 
-  defp do_render_phase(%{phase_status: :setup} = assigns) do
-    ~H"""
-    <DestilaWeb.SetupComponents.setup
-      workflow_session={@workflow_session}
-      metadata={@metadata}
-    />
-    """
-  end
-
   defp do_render_phase(%{phases: phases, current_phase: current_phase} = assigns) do
     case Enum.at(phases, current_phase - 1) do
       %Destila.Workflows.Phase{} = phase ->
@@ -781,6 +779,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     socket
     |> assign(:metadata, Enum.reduce(all, %{}, fn m, acc -> Map.put(acc, m.key, m.value) end))
     |> assign(:exported_metadata, Enum.filter(all, & &1.exported))
+  end
+
+  defp assign_worktree_path(socket, ws_id) do
+    ai_session = AI.get_ai_session_for_workflow(ws_id)
+    assign(socket, :worktree_path, ai_session && ai_session.worktree_path)
   end
 
   defp metadata_value_block(assigns) do

@@ -127,7 +127,7 @@ defmodule Destila.Workflows do
         |> Oban.insert()
       end
 
-      prepare_workflow_session(ws)
+      Destila.Executions.Engine.start_session(ws)
 
       {:ok, ws}
     end
@@ -145,14 +145,6 @@ defmodule Destila.Workflows do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
-
-  def prepare_workflow_session(%Session{} = ws) do
-    %{"workflow_session_id" => ws.id}
-    |> Destila.Workers.PrepareWorkflowSession.new()
-    |> Oban.insert()
-
-    :ok
-  end
 
   def update_workflow_session(%Session{} = workflow_session, attrs) do
     workflow_session
