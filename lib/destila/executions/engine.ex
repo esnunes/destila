@@ -50,11 +50,10 @@ defmodule Destila.Executions.Engine do
   execution and calling `AI.Conversation.phase_start/1` so workers get enqueued.
   """
   def start_session(ws) do
-    phase = ws.current_phase
-    {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
-
     case ensure_worktree_ready(ws) do
       :ready ->
+        phase = ws.current_phase
+        {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
         AI.Conversation.phase_start(ws)
 
         reloaded = Workflows.get_workflow_session!(ws.id)
@@ -64,7 +63,8 @@ defmodule Destila.Executions.Engine do
         end
 
       :preparing ->
-        # Broadcast so the LiveView shows the preparing state
+        # No phase execution yet — current_status returns :setup so the UI
+        # shows the "Preparing workspace…" screen
         Workflows.broadcast({:ok, ws}, :workflow_session_updated)
     end
   end
@@ -102,7 +102,8 @@ defmodule Destila.Executions.Engine do
   def phase_update(workflow_session_id, _phase, %{worktree_ready: true}) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
 
-    # Worktree is ready — start the current phase
+    # Worktree is ready — create the phase execution and start the phase
+    {:ok, _pe} = Executions.ensure_phase_execution(ws, ws.current_phase)
     AI.Conversation.phase_start(ws)
 
     reloaded = Workflows.get_workflow_session!(ws.id)
@@ -157,11 +158,11 @@ defmodule Destila.Executions.Engine do
   end
 
   defp transition_to_phase(ws, next_phase) do
-    {:ok, _pe} = Executions.ensure_phase_execution(ws, next_phase)
     {:ok, ws} = Workflows.update_workflow_session(ws, %{current_phase: next_phase})
 
     case ensure_worktree_ready(ws) do
       :ready ->
+        {:ok, _pe} = Executions.ensure_phase_execution(ws, next_phase)
         AI.Conversation.phase_start(ws)
 
         reloaded = Workflows.get_workflow_session!(ws.id)
