@@ -14,6 +14,12 @@ Title generation is purely cosmetic but currently participates in setup coordina
 
 None — this is a simplification refactor with no schema changes.
 
+## Key design decision: no-project sessions skip setup entirely
+
+Currently, when `title_generating == true` and `project_id == nil`, the only setup worker is title generation. After decoupling title gen from setup, such sessions have **no setup workers at all**. No worker will call `Engine.phase_update(setup_step_completed)`, so `Engine.start_session/1` would never be called and the session would stay stuck in setup.
+
+**Fix:** `Setup.start/1` returns `:setup_complete` when there are no workers to enqueue (no `project_id`). The caller (`prepare_workflow_session/1`) then calls `Engine.start_session/1` directly.
+
 ## Changes
 
 ### Step 1: Simplify `TitleGenerationWorker`
@@ -55,17 +61,44 @@ end
 ```
 
 **Removals:**
-- `Workflows.upsert_metadata(workflow_session_id, "setup", "title_gen", %{"status" => "in_progress"})` (line 16-18)
-- `Workflows.upsert_metadata(workflow_session_id, "setup", "title_gen", %{"status" => "completed"})` (line 31-33)
+- `Workflows.upsert_metadata(workflow_session_id, "setup", "title_gen", %{"status" => "in_progress"})` (lines 16-18)
+- `Workflows.upsert_metadata(workflow_session_id, "setup", "title_gen", %{"status" => "completed"})` (lines 31-33)
 - `Destila.Executions.Engine.phase_update(...)` with `setup_step_completed: "title_gen"` (lines 35-39)
 
-### Step 2: Move title generation enqueue to `create_workflow_session/1`
+### Step 2: Update `Setup` module
+
+**File:** `lib/destila/workflows/setup.ex`
+
+Two changes:
+
+1. Remove `"title_gen"` from `@setup_keys` (line 6):
+   ```elixir
+   @setup_keys ~w(repo_sync worktree)
+   ```
+
+2. Replace `start/1` entirely (lines 12-30). Remove the title gen enqueue and the `get_metadata` call (only needed for the title gen idea text). Return `:setup_complete` when no workers are needed:
+
+   ```elixir
+   def start(ws) do
+     if ws.project_id do
+       %{"workflow_session_id" => ws.id}
+       |> Destila.Workers.PrepareWorkflowSession.new()
+       |> Oban.insert()
+
+       :processing
+     else
+       :setup_complete
+     end
+   end
+   ```
+
+   `update/2` requires no code changes — removing `"title_gen"` from `@setup_keys` is sufficient. It will now only check `repo_sync` and `worktree` metadata status.
+
+### Step 3: Move title gen enqueue to `create_workflow_session/1` and update `prepare_workflow_session/1`
 
 **File:** `lib/destila/workflows.ex`
 
-In `create_workflow_session/1` (line 87-128), enqueue the title generation worker directly after session insert, before calling `prepare_workflow_session/1`. The `input_text` is already available in the function params — no need to read it back from metadata like `Setup.start/1` does.
-
-Change the `with` block (lines 117-127) to:
+**3a.** In `create_workflow_session/1`, enqueue the title generation worker directly after session insert, before calling `prepare_workflow_session/1`. The `input_text` is already in scope — no need to read it back from metadata. Change the `with` block (lines 117-127):
 
 ```elixir
 with {:ok, ws} <- insert_workflow_session(session_attrs) do
@@ -87,38 +120,27 @@ with {:ok, ws} <- insert_workflow_session(session_attrs) do
 end
 ```
 
-### Step 3: Remove title generation from `Setup.start/1`
+**3b.** Update `prepare_workflow_session/1` (lines 143-145) to handle the `:setup_complete` return from `Setup.start/1`:
 
-**File:** `lib/destila/workflows/setup.ex`
+```elixir
+def prepare_workflow_session(%Session{} = ws) do
+  case Destila.Workflows.Setup.start(ws) do
+    :setup_complete ->
+      Destila.Executions.Engine.start_session(ws)
 
-1. Remove `"title_gen"` from `@setup_keys` (line 6):
-   ```elixir
-   # Before
-   @setup_keys ~w(title_gen repo_sync worktree)
-   # After
-   @setup_keys ~w(repo_sync worktree)
-   ```
+    :processing ->
+      :ok
+  end
+end
+```
 
-2. Remove the title generation enqueue block from `start/1` (lines 13-21). The function becomes:
-   ```elixir
-   def start(ws) do
-     if ws.project_id do
-       %{"workflow_session_id" => ws.id}
-       |> Destila.Workers.PrepareWorkflowSession.new()
-       |> Oban.insert()
-     end
-
-     :processing
-   end
-   ```
-
-   Note: The metadata fetch (`get_metadata(ws.id)`) on line 13 was only used to derive the `idea` for title generation. With that removed, the metadata fetch is no longer needed in `start/1`.
+This ensures sessions with no project immediately start phase 1 without going through setup.
 
 ### Step 4: Remove title_gen from `SetupComponents`
 
 **File:** `lib/destila_web/components/setup_components.ex`
 
-Remove the title generation step from `build_steps/2` (lines 63-76). The function becomes:
+Remove the title generation step from `build_steps/2` (lines 62-76). The `title_steps` variable and `ws.title_generating` check are no longer needed:
 
 ```elixir
 defp build_steps(ws, metadata) do
@@ -143,86 +165,57 @@ defp build_steps(ws, metadata) do
 end
 ```
 
-This means sessions without a project will have no setup steps displayed. The setup phase will complete immediately when `Setup.update/2` finds no matching metadata keys (the `setup_keys != []` guard on line 44 returns `false`, so `:processing` is returned — but there will be no metadata keys to check against). **Important**: This changes the flow for no-project sessions. Since `Setup.start/1` will no longer enqueue any workers and `Setup.update/2` will never be called (no workers call `Engine.phase_update`), we need to handle this case.
+### Step 5: Update feature files
 
-**Wait — flow analysis for no-project sessions:**
+**File:** `features/implement_general_prompt_workflow.feature`
 
-Currently, when `title_generating == true` and `project_id == nil`:
-- `Setup.start/1` enqueues title gen worker → worker completes → calls `Engine.phase_update(setup_step_completed)` → `Setup.update/2` checks all setup metadata → all complete → returns `:setup_complete` → `Engine.start_session/1` kicks off phase 1
+Remove the two title-generation-in-setup scenarios (lines 53-60):
 
-After our change:
-- Title gen is enqueued in `create_workflow_session/1` (fire-and-forget)
-- `Setup.start/1` has nothing to enqueue (no project_id)
-- No worker calls `Engine.phase_update(setup_step_completed)` → `Engine.start_session/1` is never called
-- Session stays stuck in setup forever
+```gherkin
+# REMOVE these two scenarios:
+Scenario: Setup skips title generation for source session
+  Given I started an implementation from an existing session
+  Then the setup should not show "Generating title..."
+  And the session title should match the source session title
 
-**Fix:** When `Setup.start/1` has no workers to enqueue (no project_id), it should return `:setup_complete` instead of `:processing`. The caller (`prepare_workflow_session`) must then call `Engine.start_session/1`.
-
-### Step 3 (revised): Update `Setup.start/1` to handle immediate completion
-
-**File:** `lib/destila/workflows/setup.ex`
-
-```elixir
-def start(ws) do
-  if ws.project_id do
-    %{"workflow_session_id" => ws.id}
-    |> Destila.Workers.PrepareWorkflowSession.new()
-    |> Oban.insert()
-
-    :processing
-  else
-    :setup_complete
-  end
-end
+Scenario: Setup generates title for manual prompt
+  Given I started an implementation with a manual prompt
+  Then the setup should show "Generating title..."
 ```
 
-### Step 2 (revised): Update `prepare_workflow_session` to handle immediate setup completion
+Title generation still happens — it's just no longer visible in setup. The session title still updates once the worker completes.
 
-**File:** `lib/destila/workflows.ex`
+**File:** `features/brainstorm_idea_workflow.feature`
 
-Update `prepare_workflow_session/1` (line 143-145) to handle the `:setup_complete` case:
-
-```elixir
-def prepare_workflow_session(%Session{} = ws) do
-  case Destila.Workflows.Setup.start(ws) do
-    :setup_complete ->
-      Destila.Executions.Engine.start_session(ws)
-
-    :processing ->
-      :ok
-  end
-end
-```
-
-This ensures that sessions with no project (and thus no setup workers) immediately start phase 1.
-
-### Step 5: Update `Setup.update/2` — remove `"title_gen"` from `@setup_keys`
-
-Already covered in Step 3. With `"title_gen"` removed from `@setup_keys`, the `update/2` function will only check `repo_sync` and `worktree` metadata. This is correct — only `PrepareWorkflowSession` writes these entries and calls `Engine.phase_update(setup_step_completed)`.
+No changes needed. The "Setup displays progress" scenario (line 35) refers to setup progress generically and still applies (repo sync/worktree steps remain).
 
 ### Step 6: Update tests
 
 #### Engine tests (`test/destila/executions/engine_test.exs`)
 
-The three tests in `describe "phase_update/3 with setup_step_completed"` (lines 177-218) all set up `title_gen` metadata with `"status" => "completed"`. Remove those `upsert_metadata` calls for `title_gen`. The tests should now only use `repo_sync` and `worktree` metadata.
+In `describe "phase_update/3 with setup_step_completed"` (lines 177-218), remove the `title_gen` metadata upsert from all three tests. They should only use `repo_sync` and `worktree` metadata:
 
 - **Line 181**: Remove `Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})`
 - **Line 196**: Remove `Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})`
 - **Line 208**: Remove `Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})`
 
-#### LiveView tests — brainstorm workflow (`test/destila_web/live/brainstorm_idea_workflow_live_test.exs`)
-
-- **Lines 185-212** ("shows setup progress steps"): This test creates a session with `title_generating: true` and `project_id`, sets `title_gen` metadata, and asserts `html =~ "Generating title..."`. Since we're removing title_gen from setup display, remove the `title_gen` metadata upsert (line 198-200) and the `assert html =~ "Generating title..."` assertion (line 210).
-- **Lines 430-445** (setup failure test): Remove `title_gen` metadata upsert (line 438-440).
-- **Line 740**: Remove `Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "done"})` — this was setting up non-exported metadata for the empty-state test and is now unnecessary.
-
 #### LiveView tests — implement workflow (`test/destila_web/live/implement_general_prompt_workflow_live_test.exs`)
 
-- **Lines 195-210** ("shows title generation for manual prompt"): Remove `title_gen` metadata upsert (lines 204-206) and remove the `assert html =~ "Generating title..."` assertion (line 209). The test can be removed entirely since title generation is no longer displayed in setup, or repurposed to verify title_generating sessions work.
+Remove the entire `describe "Setup"` block (lines 185-211), which contains two tests:
+- "skips title generation when source session selected" (lines 188-193) — tests `refute html =~ "Generating title..."`, no longer applicable since title gen is never in setup
+- "shows title generation for manual prompt" (lines 196-210) — tests `assert html =~ "Generating title..."`, no longer applicable
+
+Both tests have `@tag` linking to the feature scenarios being removed in Step 5.
+
+#### LiveView tests — brainstorm workflow (`test/destila_web/live/brainstorm_idea_workflow_live_test.exs`)
+
+- **Lines 185-212** ("shows setup progress steps"): Remove the `title_gen` metadata upsert (lines 198-200) and the `assert html =~ "Generating title..."` assertion (line 210). Keep the test — it still validates that setup shows repo_sync/worktree steps.
+- **Lines 430-445** (setup failure test): Remove the `title_gen` metadata upsert (lines 438-440). The test still validates that `repo_sync` failure is shown.
+- **Line 740** (exported metadata empty state test): Remove `Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "done"})` — this was setting up non-exported metadata unrelated to the test's purpose.
 
 #### Metadata tests (`test/destila/workflows_metadata_test.exs`)
 
-Lines that use `"title_gen"` as a metadata key in tests are just using it as a convenient test key name — they're testing `upsert_metadata` mechanics, not title generation logic. These can be left as-is since they're testing generic metadata CRUD (the key name is arbitrary). However, review each to confirm none depend on `title_gen` being in `@setup_keys`.
+No changes needed. These tests use `"title_gen"` as an arbitrary metadata key name to test generic `upsert_metadata` CRUD mechanics. None depend on `title_gen` being in `@setup_keys`.
 
 ### Step 7: Run `mix precommit`
 
@@ -236,13 +229,14 @@ Run `mix precommit` and fix any issues.
 | `lib/destila/workflows.ex` | Enqueue title gen in `create_workflow_session/1`; update `prepare_workflow_session/1` to handle `:setup_complete` |
 | `lib/destila/workflows/setup.ex` | Remove `"title_gen"` from `@setup_keys`; remove title gen enqueue from `start/1`; return `:setup_complete` when no workers needed |
 | `lib/destila_web/components/setup_components.ex` | Remove title_gen step from `build_steps/2` |
+| `features/implement_general_prompt_workflow.feature` | Remove two title-gen-in-setup scenarios |
 | `test/destila/executions/engine_test.exs` | Remove `title_gen` metadata from setup tests |
 | `test/destila_web/live/brainstorm_idea_workflow_live_test.exs` | Remove `title_gen` metadata and assertions |
-| `test/destila_web/live/implement_general_prompt_workflow_live_test.exs` | Remove `title_gen` metadata and assertions |
+| `test/destila_web/live/implement_general_prompt_workflow_live_test.exs` | Remove entire `describe "Setup"` block |
 
 ## Risks and edge cases
 
-1. **No-project sessions**: Without the revised `prepare_workflow_session` handling `:setup_complete`, sessions without a project would get stuck in setup. The plan addresses this by having `Setup.start/1` return `:setup_complete` when there are no workers to enqueue, and `prepare_workflow_session/1` calling `Engine.start_session/1` in that case.
+1. **No-project sessions**: Addressed by having `Setup.start/1` return `:setup_complete` and `prepare_workflow_session/1` call `Engine.start_session/1` directly.
 
 2. **Title gen failure**: If the worker fails after max retries, `title_generating` stays `true` on the session. This is existing behavior — the boolean was already the source of truth. No change needed.
 
