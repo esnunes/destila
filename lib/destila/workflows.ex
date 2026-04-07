@@ -151,11 +151,13 @@ defmodule Destila.Workflows do
       %{"workflow_session_id" => ws.id}
       |> Destila.Workers.PrepareWorkflowSession.new()
       |> Oban.insert()
-
-      :ok
     else
-      Destila.Executions.Engine.start_session(ws)
+      Destila.Executions.Engine.phase_update(ws.id, ws.current_phase, %{
+        setup_step_completed: true
+      })
     end
+
+    :ok
   end
 
   def update_workflow_session(%Session{} = workflow_session, attrs) do

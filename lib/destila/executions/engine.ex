@@ -103,7 +103,7 @@ defmodule Destila.Executions.Engine do
       |> Map.keys()
       |> Enum.filter(&(&1 in @setup_keys))
 
-    if setup_keys != [] &&
+    if setup_keys == [] ||
          Enum.all?(setup_keys, &(get_in(metadata, [&1, "status"]) == "completed")) do
       start_session(ws)
     else
