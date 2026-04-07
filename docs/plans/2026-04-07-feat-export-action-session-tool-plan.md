@@ -348,7 +348,155 @@ multiple times in a single response and may combine it with a phase transition a
 """
 ```
 
-### Step 8: Run `mix precommit`
+### Step 8: Update `@non_interactive_tool_instructions` in ImplementGeneralPromptWorkflow
+
+**File:** `lib/destila/workflows/implement_general_prompt_workflow.ex`
+
+The `ImplementGeneralPromptWorkflow` has its own tool instructions module attribute (`@non_interactive_tool_instructions`, line 36) used by all non-interactive phases. Add the `export` action documentation so autonomous phases can also export metadata:
+
+```elixir
+@non_interactive_tool_instructions """
+
+## Phase Transitions
+
+When you have completed this phase's work, call `mcp__destila__session` \
+with `action: "phase_complete"` and a `message` summarizing what was done.
+
+Do NOT use `suggest_phase_complete` — this phase runs autonomously.
+Do NOT call `mcp__destila__ask_user_question` — no user is present.
+
+## Exporting Data
+
+To store a key-value pair as session metadata, call `mcp__destila__session` with \
+`action: "export"`, a `key` string, and a `value` string. You may call export \
+multiple times in a single response and may combine it with a phase transition action.
+"""
+```
+
+### Step 9: Add engine tests for export processing
+
+**File:** `test/destila/executions/engine_test.exs`
+
+The existing engine tests exercise `suggest_phase_complete`, `phase_complete`, and `worktree_ready` through `Engine.phase_update/3`. Add a new `describe` block for `export` actions:
+
+```elixir
+describe "phase_update/3 with export action" do
+  test "stores exported metadata from AI result" do
+    ws = create_session_with_ai(%{pe_status: :processing})
+
+    Engine.phase_update(ws.id, 1, %{
+      ai_result: %{
+        text: "Here is the output",
+        result: "Here is the output",
+        mcp_tool_uses: [
+          %{
+            name: "mcp__destila__session",
+            input: %{action: "export", key: "prompt_generated", value: "The prompt text"}
+          }
+        ]
+      }
+    })
+
+    # Metadata should be created with exported: true
+    all_metadata = Workflows.get_all_metadata(ws.id)
+    exported = Enum.find(all_metadata, &(&1.key == "prompt_generated"))
+    assert exported != nil
+    assert exported.exported == true
+    assert exported.value == %{"text" => "The prompt text"}
+    assert exported.phase_name == "Task Description"
+
+    # Should remain in awaiting_input since no phase transition action
+    pe = Executions.get_current_phase_execution(ws.id)
+    assert pe.status == :awaiting_input
+  end
+
+  test "processes export alongside phase_complete in same response" do
+    ws = create_session_with_ai(%{current_phase: 4, total_phases: 4})
+    {:ok, _pe} = Executions.create_phase_execution(ws, 4)
+
+    Engine.phase_update(ws.id, 4, %{
+      ai_result: %{
+        text: "Final output",
+        result: "Final output",
+        mcp_tool_uses: [
+          %{
+            name: "mcp__destila__session",
+            input: %{action: "export", key: "result", value: "The result"}
+          },
+          %{
+            name: "mcp__destila__session",
+            input: %{action: "phase_complete", message: "All done"}
+          }
+        ]
+      }
+    })
+
+    # Metadata should be stored before phase transition
+    all_metadata = Workflows.get_all_metadata(ws.id)
+    exported = Enum.find(all_metadata, &(&1.key == "result"))
+    assert exported != nil
+    assert exported.exported == true
+
+    # Workflow should be marked done (phase_complete on final phase)
+    updated_ws = Workflows.get_workflow_session!(ws.id)
+    assert updated_ws.done_at != nil
+  end
+
+  test "processes multiple export actions in a single response" do
+    ws = create_session_with_ai(%{pe_status: :processing})
+
+    Engine.phase_update(ws.id, 1, %{
+      ai_result: %{
+        text: "Exporting multiple items",
+        result: "Exporting multiple items",
+        mcp_tool_uses: [
+          %{
+            name: "mcp__destila__session",
+            input: %{action: "export", key: "key_one", value: "value one"}
+          },
+          %{
+            name: "mcp__destila__session",
+            input: %{action: "export", key: "key_two", value: "value two"}
+          }
+        ]
+      }
+    })
+
+    all_metadata = Workflows.get_all_metadata(ws.id)
+    keys = Enum.map(all_metadata, & &1.key) |> Enum.sort()
+    assert "key_one" in keys
+    assert "key_two" in keys
+  end
+
+  test "skips export with nil key" do
+    ws = create_session_with_ai(%{pe_status: :processing})
+
+    Engine.phase_update(ws.id, 1, %{
+      ai_result: %{
+        text: "Malformed export",
+        result: "Malformed export",
+        mcp_tool_uses: [
+          %{
+            name: "mcp__destila__session",
+            input: %{action: "export", key: nil, value: "orphan value"}
+          }
+        ]
+      }
+    })
+
+    all_metadata = Workflows.get_all_metadata(ws.id)
+    assert all_metadata == []
+  end
+end
+```
+
+These tests verify:
+- Single export creates metadata with correct phase_name, value wrapping, and `exported: true`
+- Export + phase_complete co-occurrence: exports persist AND phase transition happens
+- Multiple exports in one response all get processed
+- Malformed exports (nil key) are skipped gracefully
+
+### Step 10: Run `mix precommit`
 
 Verify compilation, formatting, and tests pass.
 
@@ -358,14 +506,17 @@ Verify compilation, formatting, and tests pass.
 - **`Workflows.upsert_metadata/5`**: The function stays — it's still called by `Conversation.phase_update/2` (now for export processing) and by `create_workflow_session/1` (for storing initial input metadata).
 - **`Workflows.create_workflow_session/1` metadata calls**: The `upsert_metadata` calls at lines 118-121 store the user's initial input and source session reference during creation. These are NOT exports from the AI — they stay.
 - **`ResponseProcessor.derive_message_type/3`**: The `_ ->` fallback clause (line 160-161) already returns `{nil, nil}` for unknown actions. With Step 3's change to skip `export` in `extract_session_action/1`, this fallback won't even see `export` actions.
+- **`message_type: :generated_prompt`**: The Phase definition for "Prompt Generation" keeps `message_type: :generated_prompt`. This is used by `derive_message_type/3` (returns `{nil, :generated_prompt}`) and `process_message/2` (forces stored content for display). It controls how the message is DISPLAYED, not how metadata is stored. Removing `handle_response` doesn't affect this — the AI's text output is still shown correctly in the chat.
 
 ## Execution order
 
 1. Steps 1-3 (tool definition + ResponseProcessor) — extend the tool and add extraction logic
 2. Step 4 (Conversation) — wire up export processing
 3. Steps 5-6 (remove handle_response + update prompt) — migration from programmatic to AI-driven exports
-4. Step 7 (tool instructions) — document the new action
-5. Step 8 (precommit) — validate
+4. Step 7 (BrainstormIdeaWorkflow tool instructions) — document the new action
+5. Step 8 (ImplementGeneralPromptWorkflow tool instructions) — document the new action
+6. Step 9 (engine tests) — verify export processing
+7. Step 10 (precommit) — validate
 
 ## Done when
 
@@ -376,5 +527,6 @@ Verify compilation, formatting, and tests pass.
 - `BrainstormIdeaWorkflow.handle_response/3` is removed
 - The `handle_response` callback is removed from the `Workflow` behaviour
 - The "Prompt Generation" prompt instructs the AI to use `export`
-- `@tool_instructions` documents the `export` action
+- Both `@tool_instructions` and `@non_interactive_tool_instructions` document the `export` action
+- Engine tests cover export processing (single, multiple, co-occurrence, malformed)
 - `mix precommit` passes
