@@ -110,7 +110,6 @@ defmodule Destila.Workflows do
         workflow_type: workflow_type,
         current_phase: 1,
         total_phases: total_phases(workflow_type),
-        phase_status: :setup,
         title_generating: title_generating
       }
       |> maybe_put(:project_id, project_id)
@@ -159,7 +158,7 @@ defmodule Destila.Workflows do
   def classify(%Session{} = ws) do
     cond do
       Session.done?(ws) -> :done
-      ws.phase_status in [:awaiting_input, :advance_suggested] -> :waiting_for_user
+      Session.phase_status(ws) in [:awaiting_input, :awaiting_confirmation] -> :waiting_for_user
       true -> :processing
     end
   end
@@ -210,13 +209,15 @@ defmodule Destila.Workflows do
   end
 
   def unarchive_workflow_session(%Session{} = ws) do
-    attrs =
-      if ws.phase_status == :processing,
-        do: %{archived_at: nil, phase_status: :awaiting_input},
-        else: %{archived_at: nil}
+    # If PE was processing when archived, transition to awaiting_input
+    # since the ClaudeSession was killed during archival
+    case Destila.Executions.get_current_phase_execution(ws.id) do
+      %{status: :processing} = pe -> Destila.Executions.await_input(pe)
+      _ -> :ok
+    end
 
     ws
-    |> Session.changeset(attrs)
+    |> Session.changeset(%{archived_at: nil})
     |> Repo.update()
     |> broadcast(:workflow_session_updated)
   end

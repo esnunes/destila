@@ -3,6 +3,7 @@ defmodule Destila.Executions.EngineTest do
 
   alias Destila.{AI, Executions, Workflows}
   alias Destila.Executions.Engine
+  alias Destila.Workflows.Session
 
   setup do
     ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
@@ -16,15 +17,21 @@ defmodule Destila.Executions.EngineTest do
   end
 
   defp create_session(attrs) do
+    {pe_status, attrs} = Map.pop(attrs, :pe_status)
+
     default = %{
       title: "Test Session",
       workflow_type: :brainstorm_idea,
       current_phase: 1,
-      total_phases: 4,
-      phase_status: :awaiting_input
+      total_phases: 4
     }
 
     {:ok, ws} = Workflows.insert_workflow_session(Map.merge(default, attrs))
+
+    if pe_status do
+      {:ok, _pe} = Executions.create_phase_execution(ws, ws.current_phase, %{status: pe_status})
+    end
+
     ws
   end
 
@@ -35,10 +42,9 @@ defmodule Destila.Executions.EngineTest do
   end
 
   describe "phase_update/3 with suggest_phase_complete" do
-    test "sets phase_status to advance_suggested" do
+    test "sets PE to awaiting_confirmation" do
       ws = create_session_with_ai(%{})
       {:ok, pe} = Executions.create_phase_execution(ws, 1)
-      Executions.start_phase(pe)
 
       # Simulate AI response that suggests phase complete
       ai_session = AI.get_ai_session_for_workflow(ws.id)
@@ -62,28 +68,27 @@ defmodule Destila.Executions.EngineTest do
         }
       })
 
-      updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :advance_suggested
-
       updated_pe = Executions.get_phase_execution!(pe.id)
       assert updated_pe.status == :awaiting_confirmation
+
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert Session.phase_status(updated_ws) == :awaiting_confirmation
     end
   end
 
   describe "phase_update/3 with continue conversation" do
-    test "sets phase_status to conversing" do
-      ws = create_session_with_ai(%{phase_status: :processing})
-      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :processing})
+    test "sets PE to awaiting_input" do
+      ws = create_session_with_ai(%{pe_status: :processing})
 
       Engine.phase_update(ws.id, 1, %{
         ai_result: %{text: "More questions", result: "More questions"}
       })
 
-      updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :awaiting_input
+      pe = Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :awaiting_input
 
-      updated_pe = Executions.get_phase_execution!(pe.id)
-      assert updated_pe.status == :awaiting_input
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert Session.phase_status(updated_ws) == :awaiting_input
     end
   end
 
@@ -107,7 +112,7 @@ defmodule Destila.Executions.EngineTest do
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.done_at != nil
-      assert is_nil(updated_ws.phase_status)
+      assert is_nil(Session.phase_status(updated_ws))
     end
   end
 
@@ -115,7 +120,6 @@ defmodule Destila.Executions.EngineTest do
     test "auto-advances to next phase and creates phase execution" do
       ws = create_session_with_ai(%{current_phase: 1, total_phases: 4})
       {:ok, pe} = Executions.create_phase_execution(ws, 1)
-      Executions.start_phase(pe)
 
       Engine.phase_update(ws.id, 1, %{
         ai_result: %{
@@ -147,32 +151,31 @@ defmodule Destila.Executions.EngineTest do
   end
 
   describe "phase_update/3 with user message" do
-    test "enqueues worker and sets status to generating" do
-      ws = create_session_with_ai(%{})
+    test "enqueues worker and sets PE status to processing" do
+      ws = create_session_with_ai(%{pe_status: :awaiting_input})
 
       Engine.phase_update(ws.id, 1, %{message: "Hello"})
 
+      pe = Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :processing
+
       updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :processing
+      assert Session.phase_status(updated_ws) == :processing
     end
 
     test "updates phase_execution status from awaiting_input to processing" do
-      ws = create_session_with_ai(%{phase_status: :awaiting_input})
-      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
+      ws = create_session_with_ai(%{pe_status: :awaiting_input})
 
       Engine.phase_update(ws.id, 1, %{message: "Hello"})
 
-      updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :processing
-
-      updated_pe = Executions.get_phase_execution!(pe.id)
-      assert updated_pe.status == :processing
+      pe = Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :processing
     end
   end
 
   describe "phase_update/3 with setup_step_completed" do
     test "transitions from setup to phase 1 when all setup steps complete" do
-      ws = create_session_with_ai(%{phase_status: :setup})
+      ws = create_session_with_ai(%{})
 
       Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
       Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "completed"})
@@ -182,12 +185,12 @@ defmodule Destila.Executions.EngineTest do
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
       assert updated_ws.current_phase == 1
-      assert updated_ws.phase_status == :processing
-      refute updated_ws.phase_status == :setup
+      # Phase execution exists (not in :setup), status depends on AI worker outcome
+      assert Session.phase_status(updated_ws) != :setup
     end
 
     test "stays in setup when not all steps complete" do
-      ws = create_session(%{phase_status: :setup})
+      ws = create_session(%{})
 
       Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
       Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "in_progress"})
@@ -195,11 +198,11 @@ defmodule Destila.Executions.EngineTest do
       Engine.phase_update(ws.id, 1, %{setup_step_completed: true})
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :setup
+      assert Session.phase_status(updated_ws) == :setup
     end
 
     test "creates phase execution for phase 1 after setup completes" do
-      ws = create_session_with_ai(%{phase_status: :setup})
+      ws = create_session_with_ai(%{})
 
       Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "completed"})
       Workflows.upsert_metadata(ws.id, "creation", "repo_sync", %{"status" => "completed"})
@@ -260,33 +263,31 @@ defmodule Destila.Executions.EngineTest do
 
   describe "phase_retry/1" do
     test "retries from awaiting_confirmation state" do
-      ws = create_session_with_ai(%{phase_status: :advance_suggested})
-      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_confirmation})
+      ws = create_session_with_ai(%{pe_status: :awaiting_confirmation})
 
       Engine.phase_retry(ws)
 
-      updated_pe = Executions.get_phase_execution!(pe.id)
-      assert updated_pe.status == :processing
+      pe = Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :processing
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :processing
+      assert Session.phase_status(updated_ws) == :processing
     end
 
     test "retries from awaiting_input state" do
-      ws = create_session_with_ai(%{phase_status: :awaiting_input})
-      {:ok, pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
+      ws = create_session_with_ai(%{pe_status: :awaiting_input})
 
       Engine.phase_retry(ws)
 
-      updated_pe = Executions.get_phase_execution!(pe.id)
-      assert updated_pe.status == :processing
+      pe = Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :processing
 
       updated_ws = Workflows.get_workflow_session!(ws.id)
-      assert updated_ws.phase_status == :processing
+      assert Session.phase_status(updated_ws) == :processing
     end
 
     test "returns noop when already processing" do
-      ws = create_session_with_ai(%{phase_status: :processing})
+      ws = create_session_with_ai(%{pe_status: :processing})
 
       assert Engine.phase_retry(ws) == :noop
     end

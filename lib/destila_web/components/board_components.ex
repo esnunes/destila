@@ -37,9 +37,11 @@ defmodule DestilaWeb.BoardComponents do
 
   attr :session, :map, required: true
   attr :alive?, :boolean, required: true
+  attr :phase_status, :atom, default: nil
 
   def aliveness_dot(assigns) do
-    assigns = assign(assigns, :aliveness_state, aliveness_state(assigns.session, assigns.alive?))
+    phase_status = assigns[:phase_status] || Session.phase_status(assigns.session)
+    assigns = assign(assigns, :aliveness_state, aliveness_state(phase_status, assigns.alive?))
 
     ~H"""
     <span
@@ -49,17 +51,16 @@ defmodule DestilaWeb.BoardComponents do
     """
   end
 
-  defp aliveness_state(_session, true), do: :alive
+  defp aliveness_state(_phase_status, true), do: :alive
 
-  defp aliveness_state(session, false) do
-    if should_be_alive?(session), do: :unexpected_down, else: :expected_down
+  defp aliveness_state(phase_status, false) do
+    if should_be_alive?(phase_status), do: :unexpected_down, else: :expected_down
   end
 
   @doc """
   Returns true if the session is in a state where a ClaudeSession GenServer should be running.
   """
-  def should_be_alive?(%{phase_status: :processing}), do: true
-  def should_be_alive?(_session), do: false
+  def should_be_alive?(phase_status) when is_atom(phase_status), do: phase_status == :processing
 
   defp aliveness_color(:alive), do: "bg-success"
   defp aliveness_color(:expected_down), do: "bg-base-content/20"
@@ -75,6 +76,9 @@ defmodule DestilaWeb.BoardComponents do
   attr :alive?, :boolean, default: false
 
   def crafting_card(assigns) do
+    card_phase_status = Session.phase_status(assigns.card)
+    assigns = assign(assigns, :card_phase_status, card_phase_status)
+
     ~H"""
     <div
       id={"crafting-card-#{@card.id}"}
@@ -82,7 +86,7 @@ defmodule DestilaWeb.BoardComponents do
     >
       <div class={["card-body gap-2", if(@compact, do: "p-3", else: "p-4")]}>
         <div class={["flex gap-2", if(@compact, do: "items-start", else: "items-center")]}>
-          <.aliveness_dot session={@card} alive?={@alive?} />
+          <.aliveness_dot session={@card} alive?={@alive?} phase_status={@card_phase_status} />
           <.link
             navigate={"/sessions/#{@card.id}"}
             class={[
@@ -97,7 +101,7 @@ defmodule DestilaWeb.BoardComponents do
             </span>
           </.link>
           <div :if={@compact} class="flex items-center gap-1 shrink-0">
-            <.status_dot card={@card} />
+            <.status_dot card={@card} phase_status={@card_phase_status} />
           </div>
         </div>
 
@@ -139,9 +143,10 @@ defmodule DestilaWeb.BoardComponents do
   end
 
   attr :card, :map, required: true
+  attr :phase_status, :atom, default: nil
 
   defp status_dot(assigns) do
-    {color, title} = status_dot_style(assigns.card)
+    {color, title} = status_dot_style(assigns.card, assigns.phase_status)
     assigns = assigns |> assign(:dot_color, color) |> assign(:dot_title, title)
 
     ~H"""
@@ -149,17 +154,19 @@ defmodule DestilaWeb.BoardComponents do
     """
   end
 
-  defp status_dot_style(%{phase_status: s}) when s in [:awaiting_input, :advance_suggested],
-    do: {"bg-warning", "Waiting for you"}
+  defp status_dot_style(card, phase_status) do
+    cond do
+      Session.done?(card) ->
+        {"bg-success", "Done"}
 
-  defp status_dot_style(%{phase_status: :processing}),
-    do: {"bg-info animate-pulse", "AI is responding"}
+      phase_status in [:awaiting_input, :awaiting_confirmation] ->
+        {"bg-warning", "Waiting for you"}
 
-  defp status_dot_style(card) do
-    if Session.done?(card) do
-      {"bg-success", "Done"}
-    else
-      {"bg-primary/40", "In progress"}
+      phase_status == :processing ->
+        {"bg-info animate-pulse", "AI is responding"}
+
+      true ->
+        {"bg-primary/40", "In progress"}
     end
   end
 

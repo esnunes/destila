@@ -7,6 +7,8 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Destila.Executions
+
   @feature "brainstorm_idea_workflow"
 
   setup %{conn: conn} do
@@ -37,7 +39,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
   # Creates a brainstorm_idea session in the given phase with appropriate state.
   defp create_session_in_phase(phase, opts \\ []) do
-    phase_status = Keyword.get(opts, :phase_status, :awaiting_input)
+    pe_status = Keyword.get(opts, :pe_status, :awaiting_input)
     last_message_type = Keyword.get(opts, :last_message_type)
 
     {last_content, session_tool_uses} =
@@ -76,9 +78,11 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
         workflow_type: :brainstorm_idea,
         project_id: nil,
         current_phase: phase,
-        total_phases: 4,
-        phase_status: phase_status
+        total_phases: 4
       })
+
+    # Create PE to derive the phase status
+    {:ok, _pe} = Executions.create_phase_execution(ws, phase, %{status: pe_status})
 
     {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -182,10 +186,11 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
           workflow_type: :brainstorm_idea,
           current_phase: 1,
           total_phases: 4,
-          phase_status: :setup,
           title_generating: true,
           project_id: create_project().id
         })
+
+      # No PE created — derived status is :setup
 
       Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
         "status" => "completed"
@@ -233,7 +238,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     test "shows advance button and advances on confirm", %{conn: conn} do
       ws =
         create_session_in_phase(1,
-          phase_status: :advance_suggested,
+          pe_status: :awaiting_confirmation,
           last_message_type: :phase_advance
         )
 
@@ -252,7 +257,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     test "re-enables input when declining advance", %{conn: conn} do
       ws =
         create_session_in_phase(1,
-          phase_status: :advance_suggested,
+          pe_status: :awaiting_confirmation,
           last_message_type: :phase_advance
         )
 
@@ -291,7 +296,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       ws =
         create_session_in_phase(1,
-          phase_status: :advance_suggested,
+          pe_status: :awaiting_confirmation,
           last_message_type: :phase_advance
         )
 
@@ -363,10 +368,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       ws = create_session_in_phase(4)
       # Mark as done first
       {:ok, ws} =
-        Destila.Workflows.update_workflow_session(ws, %{
-          done_at: DateTime.utc_now(),
-          phase_status: nil
-        })
+        Destila.Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -425,9 +427,10 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
           workflow_type: :brainstorm_idea,
           current_phase: 1,
           total_phases: 4,
-          phase_status: :setup,
           project_id: project.id
         })
+
+      # No PE — derived status is :setup
 
       Destila.Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{
         "status" => "completed"
@@ -527,7 +530,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
   describe "AI streaming" do
     @tag feature: @feature, scenario: "Streams AI response chunks to the chat UI"
     test "streams AI response chunks to the chat UI", %{conn: conn} do
-      ws = create_session_in_phase(1, phase_status: :processing)
+      ws = create_session_in_phase(1, pe_status: :processing)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # Initially shows typing indicator
@@ -597,9 +600,10 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
         title: "Test Options",
         workflow_type: :brainstorm_idea,
         current_phase: 1,
-        total_phases: 4,
-        phase_status: :awaiting_input
+        total_phases: 4
       })
+
+    {:ok, _pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
 
     {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -649,9 +653,10 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
         title: "Test Questions",
         workflow_type: :brainstorm_idea,
         current_phase: 1,
-        total_phases: 4,
-        phase_status: :awaiting_input
+        total_phases: 4
       })
+
+    {:ok, _pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
 
     {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -776,7 +781,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Workflow runner shows gray indicator when GenServer is not expected"
     test "shows gray dot when GenServer is not running and not expected", %{conn: conn} do
-      ws = create_session_in_phase(1, phase_status: :awaiting_input)
+      ws = create_session_in_phase(1, pe_status: :awaiting_input)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -787,7 +792,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
          scenario:
            "Workflow runner shows red indicator when GenServer is unexpectedly not running"
     test "shows red dot when GenServer should be running but is not", %{conn: conn} do
-      ws = create_session_in_phase(1, phase_status: :processing)
+      ws = create_session_in_phase(1, pe_status: :processing)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -797,7 +802,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Workflow runner shows green indicator when Claude Code GenServer is running"
     test "shows green dot when GenServer is running", %{conn: conn} do
-      ws = create_session_in_phase(1, phase_status: :processing)
+      ws = create_session_in_phase(1, pe_status: :processing)
 
       {:ok, _pid} =
         Agent.start_link(fn -> nil end,
@@ -812,7 +817,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Workflow runner indicator updates in real-time when GenServer stops"
     test "updates from green to red when GenServer stops", %{conn: conn} do
-      ws = create_session_in_phase(1, phase_status: :processing)
+      ws = create_session_in_phase(1, pe_status: :processing)
 
       {:ok, pid} =
         Agent.start_link(fn -> nil end,

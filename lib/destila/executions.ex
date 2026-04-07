@@ -47,6 +47,21 @@ defmodule Destila.Executions do
     )
   end
 
+  @doc """
+  Derives the phase status from the latest phase execution.
+  Returns the status that `Session.phase_status/1` uses for classification and UI rendering.
+  """
+  def current_status(workflow_session_id) do
+    case get_current_phase_execution(workflow_session_id) do
+      nil -> :setup
+      %{status: :processing} -> :processing
+      %{status: :awaiting_input} -> :awaiting_input
+      %{status: :awaiting_confirmation} -> :awaiting_confirmation
+      %{status: :failed} -> :processing
+      %{status: :completed} -> nil
+    end
+  end
+
   # --- Mutations ---
 
   def create_phase_execution(workflow_session, phase_number, attrs \\ %{}) do
@@ -61,7 +76,8 @@ defmodule Destila.Executions do
           workflow_session_id: workflow_session.id,
           phase_number: phase_number,
           phase_name: phase_name,
-          status: :pending
+          status: :processing,
+          started_at: DateTime.utc_now() |> DateTime.truncate(:second)
         },
         attrs
       )
@@ -97,12 +113,6 @@ defmodule Destila.Executions do
 
   def reject_completion(%PhaseExecution{} = pe) do
     StateMachine.transition(pe, :awaiting_input, %{staged_result: nil})
-  end
-
-  def start_phase(%PhaseExecution{} = pe) do
-    StateMachine.transition(pe, :processing, %{
-      started_at: DateTime.utc_now() |> DateTime.truncate(:second)
-    })
   end
 
   @doc """

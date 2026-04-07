@@ -7,6 +7,8 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Destila.Executions
+
   @feature "crafting_board"
 
   setup %{conn: conn} do
@@ -28,6 +30,8 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
   end
 
   defp create_prompt(attrs) do
+    {pe_status, attrs} = Map.pop(attrs, :pe_status)
+
     defaults = %{
       title: "Test Prompt",
       workflow_type: :brainstorm_idea,
@@ -37,6 +41,12 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
     }
 
     {:ok, prompt} = Destila.Workflows.insert_workflow_session(Map.merge(defaults, attrs))
+
+    if pe_status do
+      {:ok, _pe} =
+        Executions.create_phase_execution(prompt, prompt.current_phase, %{status: pe_status})
+    end
+
     prompt
   end
 
@@ -57,28 +67,29 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       setup_prompt =
         create_prompt(%{
           title: "Setup Prompt",
-          phase_status: :setup,
           project_id: project.id
         })
+
+      # No PE — derived status is :setup → classified as :processing
 
       waiting_prompt =
         create_prompt(%{
           title: "Waiting Prompt",
-          phase_status: :awaiting_input,
+          pe_status: :awaiting_input,
           project_id: project.id
         })
 
       generating_prompt =
         create_prompt(%{
           title: "Generating Prompt",
-          phase_status: :processing,
+          pe_status: :processing,
           project_id: project.id
         })
 
       in_progress_prompt =
         create_prompt(%{
           title: "Active Prompt",
-          phase_status: nil,
+          pe_status: :completed,
           workflow_type: :brainstorm_idea,
           project_id: project.id
         })
@@ -95,10 +106,10 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
       # Setup sessions now appear in Processing section
       assert has_element?(view, "#section-processing #crafting-card-#{setup_prompt.id}")
 
-      # Waiting for You section (conversing and advance_suggested)
+      # Waiting for You section (awaiting_input and awaiting_confirmation)
       assert has_element?(view, "#section-waiting_for_user #crafting-card-#{waiting_prompt.id}")
 
-      # Processing section (generating and catch-all)
+      # Processing section (processing and catch-all)
       assert has_element?(view, "#section-processing #crafting-card-#{generating_prompt.id}")
       assert has_element?(view, "#section-processing #crafting-card-#{in_progress_prompt.id}")
 
@@ -107,14 +118,14 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
     end
 
     @tag feature: @feature, scenario: "View sessions in sectioned list"
-    test "advance_suggested appears in waiting for user section", %{
+    test "awaiting_confirmation appears in waiting for user section", %{
       conn: conn,
       project_a: project
     } do
       prompt =
         create_prompt(%{
           title: "Advance Prompt",
-          phase_status: :advance_suggested,
+          pe_status: :awaiting_confirmation,
           project_id: project.id
         })
 
@@ -448,7 +459,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
         create_prompt(%{
           title: "Idle Session",
           project_id: project.id,
-          phase_status: :awaiting_input
+          pe_status: :awaiting_input
         })
 
       {:ok, view, _html} = live(conn, ~p"/crafting")
@@ -467,7 +478,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
           title: "Stuck Session",
           project_id: project.id,
           current_phase: 1,
-          phase_status: :processing,
+          pe_status: :processing,
           workflow_type: :brainstorm_idea
         })
 
@@ -487,7 +498,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
           title: "Active Session",
           project_id: project.id,
           current_phase: 1,
-          phase_status: :processing,
+          pe_status: :processing,
           workflow_type: :brainstorm_idea
         })
 
@@ -510,7 +521,7 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
           title: "Active Session",
           project_id: project.id,
           current_phase: 1,
-          phase_status: :processing,
+          pe_status: :processing,
           workflow_type: :brainstorm_idea
         })
 
