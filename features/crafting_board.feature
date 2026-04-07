@@ -13,11 +13,11 @@ Feature: Crafting Board
     Given there are sessions in various phases and statuses
     When I navigate to the crafting board
     Then I should see five sections: "Setup", "Waiting for You", "AI Processing", "In Progress", and "Done"
-    And sessions with phase_status "setup" should appear under "Setup"
-    And sessions with phase_status "conversing" or "advance_suggested" should appear under "Waiting for You"
-    And sessions with phase_status "generating" should appear under "AI Processing"
+    And sessions with no phase execution should appear under "Processing" (setup)
+    And sessions with awaiting_input or awaiting_confirmation phase execution should appear under "Waiting for You"
+    And sessions with processing phase execution should appear under "Processing"
     And sessions marked as done should appear under "Done"
-    And remaining sessions should appear under "In Progress"
+    And remaining sessions should appear under "Processing"
 
   Scenario: Session card displays title, project, and phase
     Given there is a session with title "Fix login bug", project "destila", and steps completed 2

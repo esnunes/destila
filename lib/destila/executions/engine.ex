@@ -5,17 +5,15 @@ defmodule Destila.Executions.Engine do
   The Engine is responsible for:
   - Advancing workflows to the next phase
   - Routing phase updates to `AI.Conversation` and acting on the result
-  - Updating phase execution and workflow session status
+  - Updating phase execution status
   - Broadcasting state changes via PubSub
 
   AI conversation mechanics (enqueuing workers, saving messages, parsing
   AI responses) are handled by `Destila.AI.Conversation`.
-
-  The Engine writes to both `phase_executions` (for execution history) and
-  `workflow_sessions.phase_status` (for classification and UI rendering).
   """
 
   alias Destila.{AI, Executions, Workflows}
+  alias Destila.Workflows.Session
 
   @doc """
   Advances the workflow to the next phase after the current phase completes.
@@ -53,15 +51,14 @@ defmodule Destila.Executions.Engine do
   """
   def start_session(ws) do
     phase = ws.current_phase
-    {:ok, pe} = Executions.ensure_phase_execution(ws, phase)
+    {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
     AI.Conversation.phase_start(ws)
 
     # Reload to check if an inline worker already advanced past this phase.
     reloaded = Workflows.get_workflow_session!(ws.id)
 
     if reloaded.current_phase == phase do
-      Executions.start_phase(pe)
-      Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
+      Workflows.broadcast({:ok, reloaded}, :workflow_session_updated)
     end
   end
 
@@ -72,7 +69,7 @@ defmodule Destila.Executions.Engine do
   - `:resume` — stops the running ClaudeSession (prompt may be re-sent by the worker)
   - `:new` — stops the ClaudeSession and creates a fresh AI session
 
-  Updates both phase execution and workflow session status.
+  Updates phase execution status.
   Returns `{:ok, ws}` on success, or `:noop` if the phase is already processing.
   """
   def phase_retry(workflow_session_id) when is_binary(workflow_session_id) do
@@ -81,7 +78,7 @@ defmodule Destila.Executions.Engine do
   end
 
   def phase_retry(ws) do
-    if ws.phase_status == :processing do
+    if Session.phase_status(ws) == :processing do
       :noop
     else
       handle_retry(ws)
@@ -100,11 +97,12 @@ defmodule Destila.Executions.Engine do
 
     case Destila.Workflows.Setup.update(ws, params) do
       :setup_complete ->
-        {:ok, ws} = Workflows.update_workflow_session(ws, %{phase_status: nil})
         start_session(ws)
 
       :processing ->
-        Workflows.update_workflow_session(ws, %{phase_status: :setup})
+        # Setup status is derived from no PE existing — no write needed.
+        # Broadcast so the LiveView refreshes setup step progress.
+        Workflows.broadcast({:ok, ws}, :workflow_session_updated)
     end
   end
 
@@ -117,7 +115,7 @@ defmodule Destila.Executions.Engine do
           Executions.process_phase(pe)
         end
 
-        Workflows.update_workflow_session(ws, %{phase_status: :processing})
+        Workflows.broadcast({:ok, ws}, :workflow_session_updated)
 
       :awaiting_input ->
         handle_awaiting_input(ws)
@@ -133,10 +131,7 @@ defmodule Destila.Executions.Engine do
   # --- Private ---
 
   defp complete_workflow(ws) do
-    Workflows.update_workflow_session(ws, %{
-      done_at: DateTime.utc_now(),
-      phase_status: nil
-    })
+    Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
   end
 
   defp handle_suggest_advance(ws) do
@@ -144,7 +139,7 @@ defmodule Destila.Executions.Engine do
       Executions.await_confirmation(pe, nil)
     end
 
-    Workflows.update_workflow_session(ws, %{phase_status: :advance_suggested})
+    Workflows.broadcast({:ok, ws}, :workflow_session_updated)
   end
 
   defp handle_awaiting_input(ws) do
@@ -152,41 +147,28 @@ defmodule Destila.Executions.Engine do
       Executions.await_input(pe)
     end
 
-    Workflows.update_workflow_session(ws, %{phase_status: :awaiting_input})
+    Workflows.broadcast({:ok, ws}, :workflow_session_updated)
   end
 
   defp transition_to_phase(ws, next_phase) do
-    # Get or create phase execution for the new phase (idempotent to handle concurrent calls)
-    {:ok, pe} = Executions.ensure_phase_execution(ws, next_phase)
-
-    # Update current_phase BEFORE starting the phase so that any inline
-    # worker execution (Oban testing mode) sees the correct state.
+    {:ok, _pe} = Executions.ensure_phase_execution(ws, next_phase)
     {:ok, ws} = Workflows.update_workflow_session(ws, %{current_phase: next_phase})
 
-    # Delegate phase startup to the workflow. In test/inline mode, this may
-    # trigger a full worker execution chain (including nested transitions).
     AI.Conversation.phase_start(ws)
 
-    # Reload to check if a nested transition (from an inline worker auto-advancing)
-    # has already moved past this phase. If so, skip the status update.
     reloaded = Workflows.get_workflow_session!(ws.id)
 
     if reloaded.current_phase == next_phase do
-      Executions.start_phase(pe)
-      Workflows.update_workflow_session(reloaded, %{phase_status: :processing})
+      Workflows.broadcast({:ok, reloaded}, :workflow_session_updated)
     end
   end
 
   defp handle_retry(ws) do
     phase = ws.current_phase
 
-    # Stop the running ClaudeSession for all strategies
     AI.ClaudeSession.stop_for_workflow_session(ws.id)
-
-    # Apply the phase's session strategy (create fresh AI session if :new)
     AI.Conversation.handle_session_strategy(ws, phase)
 
-    # Reload from DB to get fresh state after stopping the session
     ws = Workflows.get_workflow_session!(ws.id)
     AI.Conversation.phase_start(ws)
 
@@ -202,6 +184,6 @@ defmodule Destila.Executions.Engine do
         Executions.process_phase(pe)
     end
 
-    Workflows.update_workflow_session(ws, %{phase_status: :processing})
+    Workflows.broadcast({:ok, ws}, :workflow_session_updated)
   end
 end

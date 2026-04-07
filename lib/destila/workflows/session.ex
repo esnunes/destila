@@ -11,10 +11,6 @@ defmodule Destila.Workflows.Session do
     field(:current_phase, :integer, default: 1)
     field(:total_phases, :integer)
 
-    field(:phase_status, Ecto.Enum,
-      values: [:setup, :processing, :awaiting_input, :advance_suggested]
-    )
-
     field(:title_generating, :boolean, default: false)
     field(:position, :integer)
     field(:done_at, :utc_datetime)
@@ -41,7 +37,6 @@ defmodule Destila.Workflows.Session do
       :done_at,
       :current_phase,
       :total_phases,
-      :phase_status,
       :title_generating,
       :position,
       :archived_at
@@ -50,4 +45,8 @@ defmodule Destila.Workflows.Session do
   end
 
   def done?(%__MODULE__{done_at: done_at}), do: not is_nil(done_at)
+
+  def phase_status(%__MODULE__{} = ws) do
+    if done?(ws), do: nil, else: Destila.Executions.current_status(ws.id)
+  end
 end

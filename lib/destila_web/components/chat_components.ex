@@ -34,6 +34,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :question_answers, :map, required: true
   attr :metadata, :map, required: true
   attr :current_step, :map, required: true
+  attr :phase_status, :atom, default: nil
 
   def chat_phase(assigns) do
     non_interactive = assigns.phase_config.non_interactive
@@ -67,8 +68,9 @@ defmodule DestilaWeb.ChatComponents do
                 :for={msg <- group}
                 message={msg}
                 workflow_session={@workflow_session}
+                phase_status={@phase_status}
               />
-              <%= if phase == @phase_number && @workflow_session.phase_status == :processing do %>
+              <%= if phase == @phase_number && @phase_status == :processing do %>
                 <%= if @streaming_chunks && @streaming_chunks != [] do %>
                   <.chat_stream_debug chunks={@streaming_chunks} />
                 <% else %>
@@ -121,7 +123,7 @@ defmodule DestilaWeb.ChatComponents do
       >
         <div class="flex items-center justify-center gap-3">
           <button
-            :if={@workflow_session.phase_status == :processing}
+            :if={@phase_status == :processing}
             phx-click="cancel_phase"
             id="cancel-phase-btn"
             class="btn btn-outline btn-error btn-sm"
@@ -129,7 +131,7 @@ defmodule DestilaWeb.ChatComponents do
             <.icon name="hero-stop-micro" class="size-4" /> Cancel
           </button>
           <button
-            :if={@workflow_session.phase_status == :awaiting_input}
+            :if={@phase_status == :awaiting_input}
             phx-click="retry_phase"
             id="retry-phase-btn"
             class="btn btn-primary btn-sm"
@@ -144,14 +146,14 @@ defmodule DestilaWeb.ChatComponents do
         :if={
           !@non_interactive &&
             !@current_step.completed &&
-            @workflow_session.phase_status not in [:advance_suggested]
+            @phase_status not in [:awaiting_confirmation]
         }
         class="max-w-2xl mx-auto w-full px-6 pb-4"
       >
         <.text_input
-          disabled={@workflow_session.phase_status == :processing}
-          show_cancel={@workflow_session.phase_status == :processing}
-          show_retry={@workflow_session.phase_status == :awaiting_input}
+          disabled={@phase_status == :processing}
+          show_cancel={@phase_status == :processing}
+          show_retry={@phase_status == :awaiting_input}
         />
       </div>
 
@@ -239,6 +241,7 @@ defmodule DestilaWeb.ChatComponents do
 
   attr :message, :map, required: true
   attr :workflow_session, :map, default: %{}
+  attr :phase_status, :atom, default: nil
 
   def chat_message(assigns) do
     processed = Destila.AI.process_message(assigns.message, assigns.workflow_session)
@@ -269,7 +272,7 @@ defmodule DestilaWeb.ChatComponents do
           {raw(markdown_to_html(@message.content))}
         </div>
 
-        <%= if @workflow_session.phase_status == :advance_suggested do %>
+        <%= if @phase_status == :awaiting_confirmation do %>
           <div class="flex gap-2 mt-2">
             <button
               phx-click="confirm_advance"

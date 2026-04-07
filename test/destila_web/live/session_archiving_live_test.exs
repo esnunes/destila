@@ -28,11 +28,17 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
       workflow_type: :brainstorm_idea,
       current_phase: 1,
       total_phases: 4,
-      phase_status: :awaiting_input,
       position: System.unique_integer([:positive])
     }
 
     {:ok, session} = Destila.Workflows.insert_workflow_session(Map.merge(defaults, attrs))
+
+    # Create PE so derived status is :awaiting_input
+    {:ok, _pe} =
+      Destila.Executions.create_phase_execution(session, session.current_phase, %{
+        status: :awaiting_input
+      })
+
     session
   end
 
@@ -97,6 +103,56 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
       assert has_element?(view, "#archive-btn")
       refute has_element?(view, "#unarchive-btn")
       assert render(view) =~ "Session restored"
+    end
+  end
+
+  # --- Unarchive PE transition ---
+
+  describe "unarchive PE transition" do
+    @tag feature: @feature, scenario: "Unarchive transitions processing PE to awaiting_input"
+    test "transitions PE from processing to awaiting_input on unarchive", %{
+      conn: _conn,
+      project: project
+    } do
+      # Create session with a processing PE
+      {:ok, ws} =
+        Destila.Workflows.insert_workflow_session(%{
+          title: "Processing Session",
+          workflow_type: :brainstorm_idea,
+          current_phase: 1,
+          total_phases: 4,
+          project_id: project.id
+        })
+
+      {:ok, _pe} =
+        Destila.Executions.create_phase_execution(ws, 1, %{status: :processing})
+
+      # Archive (kills ClaudeSession, but PE stays :processing)
+      {:ok, archived} = Destila.Workflows.archive_workflow_session(ws)
+
+      pe = Destila.Executions.get_current_phase_execution(archived.id)
+      assert pe.status == :processing
+
+      # Unarchive should transition PE to awaiting_input
+      {:ok, _restored} = Destila.Workflows.unarchive_workflow_session(archived)
+
+      pe = Destila.Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :awaiting_input
+    end
+
+    @tag feature: @feature, scenario: "Unarchive preserves non-processing PE status"
+    test "does not change PE when status is not processing", %{
+      conn: _conn,
+      project: project
+    } do
+      ws = create_session(%{project_id: project.id})
+      # PE is created with :awaiting_input in create_session helper
+
+      {:ok, archived} = Destila.Workflows.archive_workflow_session(ws)
+      {:ok, _restored} = Destila.Workflows.unarchive_workflow_session(archived)
+
+      pe = Destila.Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :awaiting_input
     end
   end
 

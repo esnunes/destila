@@ -10,14 +10,13 @@ defmodule Destila.Executions.PhaseExecution do
 
     field(:status, Ecto.Enum,
       values: [
-        :pending,
         :processing,
         :awaiting_input,
         :awaiting_confirmation,
         :completed,
         :failed
       ],
-      default: :pending
+      default: :processing
     )
 
     field(:result, :map)

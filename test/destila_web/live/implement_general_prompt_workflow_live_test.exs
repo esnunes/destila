@@ -60,7 +60,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
   end
 
   defp create_implement_session(phase, opts) do
-    phase_status = Keyword.get(opts, :phase_status, :processing)
+    pe_status = Keyword.get(opts, :pe_status, :processing)
     project_id = Keyword.get(opts, :project_id)
 
     {:ok, ws} =
@@ -70,9 +70,13 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         project_id: project_id,
         current_phase: phase,
         total_phases: 7,
-        phase_status: phase_status,
         title_generating: Keyword.get(opts, :title_generating, true)
       })
+
+    # Create PE unless we want setup status (no PE)
+    unless pe_status == :setup do
+      {:ok, _pe} = Destila.Executions.create_phase_execution(ws, phase, %{status: pe_status})
+    end
 
     Destila.Workflows.upsert_metadata(ws.id, "creation", "prompt", %{
       "text" => "Implement the login feature"
@@ -182,7 +186,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     @tag feature: @feature,
          scenario: "Setup skips title generation for source session"
     test "skips title generation when source session selected", %{conn: conn} do
-      ws = create_implement_session(1, phase_status: :setup, title_generating: false)
+      ws = create_implement_session(1, pe_status: :setup, title_generating: false)
 
       {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
       refute html =~ "Generating title..."
@@ -192,7 +196,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     test "shows title generation for manual prompt", %{conn: conn} do
       ws =
         create_implement_session(1,
-          phase_status: :setup,
+          pe_status: :setup,
           title_generating: true,
           project_id: create_project().id
         )
@@ -211,7 +215,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
   describe "Non-interactive AI phases" do
     @tag feature: @feature, scenario: "Phase 1 - Non-interactive AI generates plan"
     test "non-interactive phase hides text input", %{conn: conn} do
-      ws = create_implement_session(1, phase_status: :processing)
+      ws = create_implement_session(1, pe_status: :processing)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -232,7 +236,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Non-interactive phase shows retry on error"
     test "non-interactive phase shows retry when conversing (error state)", %{conn: conn} do
-      ws = create_implement_session(1, phase_status: :awaiting_input)
+      ws = create_implement_session(1, pe_status: :awaiting_input)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -253,10 +257,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     test "retry transitions both workflow session and phase execution to processing", %{
       conn: conn
     } do
-      ws = create_implement_session(1, phase_status: :awaiting_input)
-
-      {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
+      ws = create_implement_session(1, pe_status: :awaiting_input)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -273,21 +274,18 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
       view |> element("#retry-phase-btn") |> render_click()
 
-      # Verify workflow session phase_status updated
-      ws = Destila.Workflows.get_workflow_session!(ws.id)
-      assert ws.phase_status == :processing
-
       # Verify phase execution status updated
       pe = Destila.Executions.get_current_phase_execution(ws.id)
       assert pe.status == :processing
+
+      # Verify derived phase_status
+      ws = Destila.Workflows.get_workflow_session!(ws.id)
+      assert Destila.Workflows.Session.phase_status(ws) == :processing
     end
 
     @tag feature: @feature, scenario: "Non-interactive phase shows retry on error"
     test "retry shows processing UI (typing indicator, cancel button)", %{conn: conn} do
-      ws = create_implement_session(1, phase_status: :awaiting_input)
-
-      {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
+      ws = create_implement_session(1, pe_status: :awaiting_input)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -309,10 +307,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
 
     @tag feature: @feature, scenario: "Non-interactive phase shows retry on error"
     test "workflow classified as :processing after retry", %{conn: conn} do
-      ws = create_implement_session(1, phase_status: :awaiting_input)
-
-      {:ok, _pe} =
-        Destila.Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
+      ws = create_implement_session(1, pe_status: :awaiting_input)
 
       {:ok, ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
 
@@ -359,7 +354,7 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
   describe "Crafting board" do
     @tag feature: @feature, scenario: "Crafting board shows implementation workflow"
     test "shows implementation badge on crafting board", %{conn: conn} do
-      _ws = create_implement_session(1, phase_status: :processing)
+      _ws = create_implement_session(1, pe_status: :processing)
 
       {:ok, _view, html} = live(conn, ~p"/crafting")
       assert html =~ "Implementation"

@@ -23,7 +23,6 @@ defmodule Destila.Executions.StateMachineTest do
 
   describe "valid_transition?/2" do
     test "allows valid transitions" do
-      assert StateMachine.valid_transition?(:pending, :processing)
       assert StateMachine.valid_transition?(:processing, :awaiting_input)
       assert StateMachine.valid_transition?(:processing, :awaiting_confirmation)
       assert StateMachine.valid_transition?(:processing, :completed)
@@ -35,8 +34,6 @@ defmodule Destila.Executions.StateMachineTest do
     end
 
     test "rejects invalid transitions" do
-      refute StateMachine.valid_transition?(:pending, :completed)
-      refute StateMachine.valid_transition?(:pending, :awaiting_input)
       refute StateMachine.valid_transition?(:completed, :processing)
       refute StateMachine.valid_transition?(:awaiting_input, :completed)
       refute StateMachine.valid_transition?(:failed, :completed)
@@ -63,15 +60,13 @@ defmodule Destila.Executions.StateMachineTest do
   end
 
   describe "transition/3 happy paths" do
-    test "pending -> processing with started_at" do
+    test "processing -> awaiting_input" do
       ws = create_session()
       pe = create_pe(ws, 1)
-      now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      {:ok, updated} = StateMachine.transition(pe, :processing, %{started_at: now})
+      {:ok, updated} = StateMachine.transition(pe, :awaiting_input)
 
-      assert updated.status == :processing
-      assert updated.started_at == now
+      assert updated.status == :awaiting_input
     end
 
     test "processing -> completed with result and completed_at" do
@@ -121,12 +116,12 @@ defmodule Destila.Executions.StateMachineTest do
       assert message =~ "invalid phase execution transition: completed -> processing"
     end
 
-    test "pending -> awaiting_input returns error" do
+    test "processing -> processing returns error (self-transition)" do
       ws = create_session()
       pe = create_pe(ws, 1)
 
-      assert {:error, message} = StateMachine.transition(pe, :awaiting_input)
-      assert message =~ "invalid phase execution transition: pending -> awaiting_input"
+      assert {:error, message} = StateMachine.transition(pe, :processing)
+      assert message =~ "invalid phase execution transition: processing -> processing"
     end
   end
 

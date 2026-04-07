@@ -23,8 +23,8 @@ defmodule Destila.ExecutionsTest do
       assert pe.workflow_session_id == ws.id
       assert pe.phase_number == 1
       assert pe.phase_name == "Task Description"
-      assert pe.status == :pending
-      assert is_nil(pe.started_at)
+      assert pe.status == :processing
+      assert pe.started_at != nil
       assert is_nil(pe.completed_at)
     end
 
@@ -66,7 +66,6 @@ defmodule Destila.ExecutionsTest do
     test "complete_phase sets status and completed_at" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
-      {:ok, pe} = Executions.start_phase(pe)
       {:ok, pe} = Executions.complete_phase(pe, %{"summary" => "done"})
 
       assert pe.status == :completed
@@ -77,7 +76,6 @@ defmodule Destila.ExecutionsTest do
     test "await_confirmation and confirm_completion" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
-      {:ok, pe} = Executions.start_phase(pe)
 
       {:ok, pe} = Executions.await_confirmation(pe, %{"msg" => "ready"})
       assert pe.status == :awaiting_confirmation
@@ -91,7 +89,6 @@ defmodule Destila.ExecutionsTest do
     test "await_confirmation and reject_completion" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
-      {:ok, pe} = Executions.start_phase(pe)
 
       {:ok, pe} = Executions.await_confirmation(pe, %{"msg" => "ready"})
       {:ok, pe} = Executions.reject_completion(pe)
@@ -100,13 +97,64 @@ defmodule Destila.ExecutionsTest do
       assert is_nil(pe.staged_result)
     end
 
-    test "start_phase sets started_at and status" do
+    test "create_phase_execution sets started_at and processing status by default" do
       ws = create_session()
       {:ok, pe} = Executions.create_phase_execution(ws, 3)
-      {:ok, pe} = Executions.start_phase(pe)
 
       assert pe.status == :processing
       assert pe.started_at != nil
+    end
+  end
+
+  describe "current_status/1" do
+    test "returns :setup when no phase execution exists" do
+      ws = create_session()
+      assert Executions.current_status(ws.id) == :setup
+    end
+
+    test "returns :processing for processing PE (default status)" do
+      ws = create_session()
+      {:ok, _pe} = Executions.create_phase_execution(ws, 1)
+      assert Executions.current_status(ws.id) == :processing
+    end
+
+    test "returns :processing for explicitly processing PE" do
+      ws = create_session()
+      {:ok, _pe} = Executions.create_phase_execution(ws, 1, %{status: :processing})
+      assert Executions.current_status(ws.id) == :processing
+    end
+
+    test "returns :awaiting_input for awaiting_input PE" do
+      ws = create_session()
+      {:ok, _pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_input})
+      assert Executions.current_status(ws.id) == :awaiting_input
+    end
+
+    test "returns :awaiting_confirmation for awaiting_confirmation PE" do
+      ws = create_session()
+      {:ok, _pe} = Executions.create_phase_execution(ws, 1, %{status: :awaiting_confirmation})
+      assert Executions.current_status(ws.id) == :awaiting_confirmation
+    end
+
+    test "returns :processing for failed PE" do
+      ws = create_session()
+      {:ok, _pe} = Executions.create_phase_execution(ws, 1)
+      # Simulate failure by direct status set
+      {:ok, _pe} = Executions.create_phase_execution(ws, 2, %{status: :failed})
+      assert Executions.current_status(ws.id) == :processing
+    end
+
+    test "returns nil for completed PE" do
+      ws = create_session()
+      {:ok, _pe} = Executions.create_phase_execution(ws, 1, %{status: :completed})
+      assert is_nil(Executions.current_status(ws.id))
+    end
+
+    test "returns status of highest phase number PE" do
+      ws = create_session()
+      {:ok, _pe1} = Executions.create_phase_execution(ws, 1, %{status: :completed})
+      {:ok, _pe2} = Executions.create_phase_execution(ws, 2, %{status: :awaiting_input})
+      assert Executions.current_status(ws.id) == :awaiting_input
     end
   end
 

@@ -49,8 +49,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
         project_id: nil,
         done_at: DateTime.utc_now(),
         current_phase: 4,
-        total_phases: 4,
-        phase_status: nil
+        total_phases: 4
       })
 
     {:ok, ai_session} = Destila.AI.get_or_create_ai_session(workflow_session.id)

@@ -1,8 +1,8 @@
 defmodule DestilaWeb.SetupComponents do
   @moduledoc """
   Function component for setup status — displays setup progress (title generation,
-  repo sync, worktree creation). Rendered by WorkflowRunnerLive when
-  `phase_status` is `:setup`.
+  repo sync, worktree creation). Rendered by WorkflowRunnerLive when no phase
+  execution exists yet (derived status is `:setup`).
   """
 
   use DestilaWeb, :html
