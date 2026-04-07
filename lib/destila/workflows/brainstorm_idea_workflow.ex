@@ -43,26 +43,6 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     "Your implementation prompt is ready! The task has been clarified, the technical approach defined, and Gherkin scenarios reviewed."
   end
 
-  def handle_response(ws, phase_number, response_text) do
-    case Enum.at(phases(), phase_number - 1) do
-      %Phase{message_type: :generated_prompt} ->
-        phase_name = phase_name(phase_number)
-
-        Destila.Workflows.upsert_metadata(
-          ws.id,
-          phase_name,
-          "prompt_generated",
-          %{"text" => String.trim(response_text)},
-          exported: true
-        )
-
-        :ok
-
-      _ ->
-        :ok
-    end
-  end
-
   # --- AI system prompts ---
 
   @tool_instructions """
@@ -87,12 +67,18 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   - Use `action: "phase_complete"` when the phase is definitively not applicable or already \
   satisfied (e.g., no Gherkin scenarios needed). This auto-advances without user confirmation.
 
-  IMPORTANT: Never call `mcp__destila__session` in the same response as unanswered questions. \
-  If you still need information from the user, ask your questions and wait for their answers \
-  before signaling phase completion.
+  IMPORTANT: Never call `mcp__destila__session` with a phase transition action in the same \
+  response as unanswered questions. If you still need information from the user, ask your \
+  questions and wait for their answers before signaling phase completion.
 
   IMPORTANT: Never call both `mcp__destila__ask_user_question` and `mcp__destila__session` \
-  in the same response.
+  with a phase transition action in the same response.
+
+  ## Exporting Data
+
+  To store a key-value pair as session metadata, call `mcp__destila__session` with \
+  `action: "export"`, a `key` string, and a `value` string. You may call export \
+  multiple times in a single response and may combine it with a phase transition action.
   """
 
   defp task_description_prompt(workflow_session) do
@@ -217,8 +203,14 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     or commentary around it. Do not wrap it in a code block. Do not say "Here is the prompt:" \
     or "Let me know if you'd like changes." Just the prompt content, nothing else.
 
-    The user may ask you to refine it. \
-    Do NOT call the `mcp__destila__session` tool — the user will mark this phase as done manually.
+    After outputting the prompt, call `mcp__destila__session` with `action: "export"`, \
+    `key: "prompt_generated"`, and `value` set to the full prompt text you just generated.
+
+    The user may ask you to refine it. Each time you output a revised prompt, export it again \
+    with the same key to update the stored value.
+
+    Do NOT call the `mcp__destila__session` tool with `suggest_phase_complete` or \
+    `phase_complete` — the user will mark this phase as done manually.
     """
   end
 end

@@ -154,24 +154,29 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   def handle_event("mark_done", _params, socket) do
     ws = socket.assigns.workflow_session
-    ai_session = AI.get_ai_session_for_workflow(ws.id)
 
-    if ai_session do
-      AI.create_message(ai_session.id, %{
-        role: :system,
-        content: Workflows.completion_message(ws.workflow_type),
-        phase: ws.current_phase,
-        workflow_session_id: ws.id
-      })
+    if Session.phase_status(ws) == :processing do
+      {:noreply, socket}
+    else
+      ai_session = AI.get_ai_session_for_workflow(ws.id)
+
+      if ai_session do
+        AI.create_message(ai_session.id, %{
+          role: :system,
+          content: Workflows.completion_message(ws.workflow_type),
+          phase: ws.current_phase,
+          workflow_session_id: ws.id
+        })
+      end
+
+      {:ok, ws} =
+        Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      {:noreply,
+       socket
+       |> assign(:workflow_session, ws)
+       |> assign_ai_state(ws)}
     end
-
-    {:ok, ws} =
-      Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
-
-    {:noreply,
-     socket
-     |> assign(:workflow_session, ws)
-     |> assign_ai_state(ws)}
   end
 
   def handle_event("mark_undone", _params, socket) do
@@ -534,7 +539,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 :if={
                   @workflow_session &&
                     @workflow_session.current_phase == @workflow_session.total_phases &&
-                    !Session.done?(@workflow_session)
+                    !Session.done?(@workflow_session) &&
+                    Session.phase_status(@workflow_session) != :processing
                 }
                 phx-click="mark_done"
                 id="mark-done-btn"

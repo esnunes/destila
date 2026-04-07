@@ -4,6 +4,7 @@ defmodule Destila.AI do
   """
 
   import Ecto.Query
+  require Logger
 
   alias Destila.Repo
   alias Destila.AI.{Message, Session}
@@ -91,13 +92,24 @@ defmodule Destila.AI do
       max_turns: 1
     ]
 
-    case ClaudeCode.query(prompt, opts) do
-      {:ok, result} ->
-        title = String.trim(to_string(result))
-        if title != "", do: {:ok, title}, else: {:error, :empty_response}
+    try do
+      case ClaudeCode.query(prompt, opts) do
+        {:ok, result} ->
+          title = String.trim(to_string(result))
+          if title != "", do: {:ok, title}, else: {:error, :empty_response}
 
-      {:error, reason} ->
-        {:error, reason}
+        {:error, reason} ->
+          Logger.warning("Title generation failed: #{inspect(reason)}")
+          {:error, reason}
+      end
+    catch
+      kind, reason ->
+        Logger.warning(
+          "Title generation crashed: #{inspect(kind)} #{inspect(reason)}\n" <>
+            Exception.format_stacktrace(__STACKTRACE__)
+        )
+
+        {:error, {kind, reason}}
     end
   end
 

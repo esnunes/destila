@@ -51,18 +51,6 @@ defmodule Destila.Workflows.Workflow do
               {source_metadata_key :: String.t() | nil, label :: String.t(),
                dest_metadata_key :: String.t()}
 
-  @doc """
-  Optional hook called after saving an AI response message.
-
-  Allows workflows to intercept responses for workflow-specific purposes
-  (e.g. saving generated prompt metadata). Default implementation is a no-op.
-  """
-  @callback handle_response(
-              workflow_session :: map(),
-              phase_number :: integer(),
-              response_text :: String.t()
-            ) :: :ok
-
   defmacro __using__(_opts) do
     quote do
       @behaviour Destila.Workflows.Workflow
@@ -87,9 +75,7 @@ defmodule Destila.Workflows.Workflow do
         columns ++ [{:done, "Done"}]
       end
 
-      def handle_response(_workflow_session, _phase_number, _response_text), do: :ok
-
-      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0, handle_response: 3
+      defoverridable total_phases: 0, phase_name: 1, phase_columns: 0
     end
   end
 end

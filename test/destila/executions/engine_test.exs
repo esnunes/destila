@@ -187,6 +187,115 @@ defmodule Destila.Executions.EngineTest do
     end
   end
 
+  describe "phase_update/3 with export action" do
+    test "stores exported metadata from AI result" do
+      ws = create_session_with_ai(%{pe_status: :processing})
+
+      Engine.phase_update(ws.id, 1, %{
+        ai_result: %{
+          text: "Here is the output",
+          result: "Here is the output",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: "prompt_generated", value: "The prompt text"}
+            }
+          ]
+        }
+      })
+
+      # Metadata should be created with exported: true
+      all_metadata = Workflows.get_all_metadata(ws.id)
+      exported = Enum.find(all_metadata, &(&1.key == "prompt_generated"))
+      assert exported != nil
+      assert exported.exported == true
+      assert exported.value == %{"text" => "The prompt text"}
+      assert exported.phase_name == "Task Description"
+
+      # Should remain in awaiting_input since no phase transition action
+      pe = Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :awaiting_input
+    end
+
+    test "processes export alongside phase_complete in same response" do
+      ws = create_session_with_ai(%{current_phase: 4, total_phases: 4})
+      {:ok, _pe} = Executions.create_phase_execution(ws, 4)
+
+      Engine.phase_update(ws.id, 4, %{
+        ai_result: %{
+          text: "Final output",
+          result: "Final output",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: "result", value: "The result"}
+            },
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "phase_complete", message: "All done"}
+            }
+          ]
+        }
+      })
+
+      # Metadata should be stored before phase transition
+      all_metadata = Workflows.get_all_metadata(ws.id)
+      exported = Enum.find(all_metadata, &(&1.key == "result"))
+      assert exported != nil
+      assert exported.exported == true
+
+      # Workflow should be marked done (phase_complete on final phase)
+      updated_ws = Workflows.get_workflow_session!(ws.id)
+      assert updated_ws.done_at != nil
+    end
+
+    test "processes multiple export actions in a single response" do
+      ws = create_session_with_ai(%{pe_status: :processing})
+
+      Engine.phase_update(ws.id, 1, %{
+        ai_result: %{
+          text: "Exporting multiple items",
+          result: "Exporting multiple items",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: "key_one", value: "value one"}
+            },
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: "key_two", value: "value two"}
+            }
+          ]
+        }
+      })
+
+      all_metadata = Workflows.get_all_metadata(ws.id)
+      keys = Enum.map(all_metadata, & &1.key) |> Enum.sort()
+      assert "key_one" in keys
+      assert "key_two" in keys
+    end
+
+    test "skips export with nil key" do
+      ws = create_session_with_ai(%{pe_status: :processing})
+
+      Engine.phase_update(ws.id, 1, %{
+        ai_result: %{
+          text: "Malformed export",
+          result: "Malformed export",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: nil, value: "orphan value"}
+            }
+          ]
+        }
+      })
+
+      all_metadata = Workflows.get_all_metadata(ws.id)
+      assert all_metadata == []
+    end
+  end
+
   describe "advance_to_next/1" do
     test "completes workflow when on last phase" do
       ws = create_session(%{current_phase: 4, total_phases: 4})

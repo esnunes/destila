@@ -42,6 +42,12 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   Do NOT use `suggest_phase_complete` — this phase runs autonomously.
   Do NOT call `mcp__destila__ask_user_question` — no user is present.
+
+  ## Exporting Data
+
+  To store a key-value pair as session metadata, call `mcp__destila__session` with \
+  `action: "export"`, a `key` string, and a `value` string. You may call export \
+  multiple times in a single response and may combine it with a phase transition action.
   """
 
   def phases do

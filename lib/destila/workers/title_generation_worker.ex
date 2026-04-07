@@ -1,6 +1,8 @@
 defmodule Destila.Workers.TitleGenerationWorker do
   use Oban.Worker, queue: :default, max_attempts: 3
 
+  require Logger
+
   alias Destila.Workflows
 
   @impl Oban.Worker
@@ -14,9 +16,28 @@ defmodule Destila.Workers.TitleGenerationWorker do
     workflow_type = workflow_session.workflow_type
 
     title =
-      case Destila.AI.generate_title(workflow_type, idea) do
-        {:ok, title} -> title
-        {:error, _reason} -> Destila.Workflows.default_title(workflow_type)
+      try do
+        case Destila.AI.generate_title(workflow_type, idea) do
+          {:ok, title} ->
+            title
+
+          {:error, reason} ->
+            Logger.warning(
+              "Title generation returned error for workflow_session #{workflow_session_id}: " <>
+                inspect(reason)
+            )
+
+            Workflows.default_title(workflow_type)
+        end
+      catch
+        kind, reason ->
+          Logger.warning(
+            "Title generation crashed for workflow_session #{workflow_session_id}: " <>
+              "#{inspect(kind)} #{inspect(reason)}\n" <>
+              Exception.format_stacktrace(__STACKTRACE__)
+          )
+
+          Workflows.default_title(workflow_type)
       end
 
     Workflows.update_workflow_session(workflow_session_id, %{
