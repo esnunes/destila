@@ -331,6 +331,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
            else: nil
          )
        )
+       |> assign_metadata(ws.id)
        |> assign_ai_state(ws)}
     else
       {:noreply, socket}
