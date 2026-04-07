@@ -127,7 +127,7 @@ defmodule Destila.Workflows do
         |> Oban.insert()
       end
 
-      Destila.Executions.Engine.start_session(ws)
+      {:ok, _pid} = Destila.Sessions.SessionProcess.ensure_started(ws.id)
 
       {:ok, ws}
     end
