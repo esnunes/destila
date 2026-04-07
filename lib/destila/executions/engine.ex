@@ -92,18 +92,15 @@ defmodule Destila.Executions.Engine do
   when the user sends a message. `AI.Conversation.phase_update/2` processes
   the params and returns a status the Engine uses to update state.
   """
-  def phase_update(workflow_session_id, _phase, %{setup_step_completed: _} = params) do
+  def phase_update(workflow_session_id, _phase, %{setup: :completed}) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
+    start_session(ws)
+  end
 
-    case Destila.Workflows.Setup.update(ws, params) do
-      :setup_complete ->
-        start_session(ws)
-
-      :processing ->
-        # Setup status is derived from no PE existing — no write needed.
-        # Broadcast so the LiveView refreshes setup step progress.
-        Workflows.broadcast({:ok, ws}, :workflow_session_updated)
-    end
+  def phase_update(workflow_session_id, _phase, %{setup: :processing}) do
+    ws = Workflows.get_workflow_session!(workflow_session_id)
+    # Broadcast so the LiveView refreshes setup step progress.
+    Workflows.broadcast({:ok, ws}, :workflow_session_updated)
   end
 
   def phase_update(workflow_session_id, phase, params) do

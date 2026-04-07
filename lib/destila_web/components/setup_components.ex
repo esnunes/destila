@@ -1,8 +1,8 @@
 defmodule DestilaWeb.SetupComponents do
   @moduledoc """
-  Function component for setup status — displays setup progress (title generation,
-  repo sync, worktree creation). Rendered by WorkflowRunnerLive when no phase
-  execution exists yet (derived status is `:setup`).
+  Function component for setup status — displays setup progress (repo sync,
+  worktree creation). Rendered by WorkflowRunnerLive when no phase execution
+  exists yet (derived status is `:setup`).
   """
 
   use DestilaWeb, :html
@@ -60,42 +60,24 @@ defmodule DestilaWeb.SetupComponents do
   end
 
   defp build_steps(ws, metadata) do
-    # Only include title gen step if title generation was requested
-    title_steps =
-      if ws.title_generating do
-        [
-          %{
-            key: "title_gen",
-            label: "Generating title...",
-            status: get_step_status(metadata, "title_gen"),
-            error: get_step_error(metadata, "title_gen")
-          }
-        ]
-      else
-        []
-      end
-
-    repo_steps =
-      if ws.project_id do
-        [
-          %{
-            key: "repo_sync",
-            label: "Syncing repository...",
-            status: get_step_status(metadata, "repo_sync"),
-            error: get_step_error(metadata, "repo_sync")
-          },
-          %{
-            key: "worktree",
-            label: "Creating worktree...",
-            status: get_step_status(metadata, "worktree"),
-            error: get_step_error(metadata, "worktree")
-          }
-        ]
-      else
-        []
-      end
-
-    title_steps ++ repo_steps
+    if ws.project_id do
+      [
+        %{
+          key: "repo_sync",
+          label: "Syncing repository...",
+          status: get_step_status(metadata, "repo_sync"),
+          error: get_step_error(metadata, "repo_sync")
+        },
+        %{
+          key: "worktree",
+          label: "Creating worktree...",
+          status: get_step_status(metadata, "worktree"),
+          error: get_step_error(metadata, "worktree")
+        }
+      ]
+    else
+      []
+    end
   end
 
   defp get_step_status(metadata, key) do

@@ -7,20 +7,24 @@ defmodule Destila.Workers.PrepareWorkflowSession do
   def perform(%Oban.Job{args: %{"workflow_session_id" => workflow_session_id}}) do
     workflow_session = Workflows.get_workflow_session!(workflow_session_id)
 
-    project =
-      if workflow_session.project_id,
-        do: Destila.Projects.get_project(workflow_session.project_id)
+    if workflow_session.project_id do
+      project = Destila.Projects.get_project(workflow_session.project_id)
 
-    with :ok <- sync_repo(workflow_session, project),
-         :ok <- create_worktree(workflow_session, project) do
-      Destila.Executions.Engine.phase_update(
-        workflow_session_id,
-        workflow_session.current_phase,
-        %{setup_step_completed: "worktree"}
-      )
-
+      with :ok <- sync_repo(workflow_session, project),
+           :ok <- notify_engine(workflow_session, :processing),
+           :ok <- create_worktree(workflow_session, project) do
+        notify_engine(workflow_session, :completed)
+        :ok
+      end
+    else
+      notify_engine(workflow_session, :completed)
       :ok
     end
+  end
+
+  defp notify_engine(ws, status) do
+    Destila.Executions.Engine.phase_update(ws.id, ws.current_phase, %{setup: status})
+    :ok
   end
 
   defp sync_repo(_workflow_session, nil), do: :ok
