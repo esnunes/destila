@@ -9,7 +9,6 @@ defmodule Destila.Sessions.SessionProcess do
   @behaviour :gen_statem
 
   alias Destila.{AI, Executions, Workflows}
-  alias Destila.Executions.StateMachine
   alias Destila.Workflows.Session
 
   @inactivity_timeout :timer.minutes(30)
@@ -99,7 +98,7 @@ defmodule Destila.Sessions.SessionProcess do
       when status in [:awaiting_input, :awaiting_confirmation] do
     case AI.Conversation.phase_update(data.ws, %{message: content}) do
       :processing ->
-        transition_pe(data, n, :processing)
+        with_pe(data, n, &Executions.process_phase/1)
         ws = reload(data)
         broadcast_updated(ws)
 
@@ -122,7 +121,7 @@ defmodule Destila.Sessions.SessionProcess do
 
   # --- Decline advance ---
   def handle_event({:call, from}, :decline_advance, {:phase, n, :awaiting_confirmation}, data) do
-    transition_pe(data, n, :awaiting_input, %{staged_result: nil})
+    with_pe(data, n, &Executions.reject_completion/1)
     ws = reload(data)
     broadcast_updated(ws)
 
@@ -135,13 +134,13 @@ defmodule Destila.Sessions.SessionProcess do
       when phase == n do
     case AI.Conversation.phase_update(data.ws, %{ai_result: result}) do
       :awaiting_input ->
-        transition_pe(data, n, :awaiting_input)
+        with_pe(data, n, &Executions.await_input/1)
         ws = reload(data)
         broadcast_updated(ws)
         {:next_state, {:phase, n, :awaiting_input}, %{data | ws: ws}, [inactivity_timeout()]}
 
       :suggest_phase_complete ->
-        transition_pe(data, n, :awaiting_confirmation, %{staged_result: nil})
+        with_pe(data, n, &Executions.await_confirmation(&1, nil))
         ws = reload(data)
         broadcast_updated(ws)
 
@@ -162,7 +161,7 @@ defmodule Destila.Sessions.SessionProcess do
   def handle_event(:cast, {:ai_error, reason, phase}, {:phase, n, :processing}, data)
       when phase == n do
     AI.Conversation.phase_update(data.ws, %{ai_error: reason})
-    transition_pe(data, n, :awaiting_input)
+    with_pe(data, n, &Executions.await_input/1)
     ws = reload(data)
     broadcast_updated(ws)
     {:next_state, {:phase, n, :awaiting_input}, %{data | ws: ws}, [inactivity_timeout()]}
@@ -215,7 +214,7 @@ defmodule Destila.Sessions.SessionProcess do
   # --- Cancel ---
   def handle_event({:call, from}, :cancel, {:phase, n, :processing}, data) do
     AI.ClaudeSession.stop_for_workflow_session(data.session_id)
-    transition_pe(data, n, :awaiting_input)
+    with_pe(data, n, &Executions.await_input/1)
     ws = reload(data)
     broadcast_updated(ws)
 
@@ -306,10 +305,10 @@ defmodule Destila.Sessions.SessionProcess do
 
   defp reload(data), do: Workflows.get_workflow_session!(data.session_id)
 
-  defp transition_pe(data, phase_number, status, extra_attrs \\ %{}) do
+  defp with_pe(data, phase_number, fun) do
     case Executions.get_phase_execution_by_number(data.session_id, phase_number) do
       nil -> :ok
-      pe -> StateMachine.transition(pe, status, extra_attrs)
+      pe -> fun.(pe)
     end
   end
 
