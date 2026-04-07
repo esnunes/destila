@@ -221,7 +221,7 @@ custom classes must fully style the input
 ## Phoenix LiveView guidelines
 
 - **Never** use the deprecated `live_redirect` and `live_patch` functions, instead **always** use the `<.link navigate={href}>` and  `<.link patch={href}>` in templates, and `push_navigate` and `push_patch` functions LiveViews
-- **Chat UI is a function component** — `DestilaWeb.ChatComponents.chat_phase/1` renders the full chat interface (messages, structured inputs, streaming). All chat events (`send_text`, `select_single`, etc.) are handled directly by `WorkflowRunnerLive`. Setup status is rendered via `DestilaWeb.SetupComponents.setup/1`, a function component in `components/setup_components.ex`.
+- **Chat UI is a function component** — `DestilaWeb.ChatComponents.chat_phase/1` renders the full chat interface (messages, structured inputs, streaming, and the "Preparing workspace..." banner during setup). All chat events (`send_text`, `select_single`, etc.) are handled directly by `WorkflowRunnerLive`.
 - LiveViews should be named like `AppWeb.WeatherLive`, with a `Live` suffix. When you go to add LiveView routes to the router, the default `:browser` scope is **already aliased** with the `AppWeb` module, so you can just do `live "/weather", WeatherLive`
 
 ### LiveView streams

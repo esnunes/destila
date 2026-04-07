@@ -396,6 +396,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     phase_status = Session.phase_status(ws)
 
     cond do
+      phase_status == :setup ->
+        %{input_type: nil, options: nil, questions: [], question_title: nil, completed: false}
+
       Session.done?(ws) ->
         %{input_type: nil, options: nil, questions: [], question_title: nil, completed: true}
 
@@ -737,12 +740,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     phase_status = Session.phase_status(assigns.workflow_session)
     assigns = assign(assigns, :phase_status, phase_status)
     do_render_phase(assigns)
-  end
-
-  defp do_render_phase(%{phase_status: :setup} = assigns) do
-    ~H"""
-    <DestilaWeb.SetupComponents.setup workflow_session={@workflow_session} />
-    """
   end
 
   defp do_render_phase(%{phases: phases, current_phase: current_phase} = assigns) do
