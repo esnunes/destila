@@ -77,9 +77,23 @@ defmodule Destila.AI.Conversation do
         AI.update_ai_session(ai_session, %{claude_session_id: result[:session_id]})
       end
 
-      # Call optional workflow hook
-      workflow_module = Workflows.workflow_module(ws.workflow_type)
-      workflow_module.handle_response(ws, phase_number, response_text)
+      # Process export actions
+      export_actions = ResponseProcessor.extract_export_actions(result)
+
+      if export_actions != [] do
+        phase_name =
+          Workflows.phase_name(ws.workflow_type, phase_number) || "Phase #{phase_number}"
+
+        for %{key: key, value: value} <- export_actions, key != nil do
+          Workflows.upsert_metadata(
+            ws.id,
+            phase_name,
+            key,
+            %{"text" => value},
+            exported: true
+          )
+        end
+      end
 
       case session_action do
         %{action: "phase_complete"} -> :phase_complete

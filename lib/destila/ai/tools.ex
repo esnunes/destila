@@ -40,23 +40,32 @@ defmodule Destila.AI.Tools do
   end
 
   tool :session,
-       "Signal a phase transition in the workflow session. " <>
-         "Call this tool when you believe the current phase is complete." do
+       "Signal a phase transition or export metadata in the workflow session. " <>
+         "Call this tool to advance phases or store key-value outputs." do
     field(:action, :string,
       required: true,
       description:
         "One of: suggest_phase_complete (phase work is done, ask user to confirm), " <>
-          "phase_complete (phase is definitively done or not applicable, auto-advance)"
+          "phase_complete (phase is definitively done or not applicable, auto-advance), " <>
+          "export (store a key-value pair as exported session metadata)"
     )
 
     field(:message, :string,
-      required: true,
       description:
-        "Context or reason for the action, e.g. 'No Gherkin scenarios needed for this task'"
+        "Context or reason for the action. Required for suggest_phase_complete and phase_complete."
+    )
+
+    field(:key, :string,
+      description:
+        "Metadata key for the export action, e.g. 'prompt_generated'. Required for export."
+    )
+
+    field(:value, :string,
+      description: "Metadata value for the export action. Required for export."
     )
 
     def execute(_params) do
-      {:ok, "Phase action recorded. Stop here and wait."}
+      {:ok, "Action recorded."}
     end
   end
 end

@@ -111,6 +111,21 @@ defmodule Destila.AI.ResponseProcessor do
 
   def extract_session_action(_), do: nil
 
+  @doc """
+  Extracts all export actions from an AI result's MCP tool uses.
+
+  Returns a list of `%{key: key, value: value}` maps.
+  """
+  def extract_export_actions(%{mcp_tool_uses: tool_uses}) when is_list(tool_uses) do
+    do_extract_export_actions(tool_uses)
+  end
+
+  def extract_export_actions(%{"mcp_tool_uses" => tool_uses}) when is_list(tool_uses) do
+    do_extract_export_actions(tool_uses)
+  end
+
+  def extract_export_actions(_), do: []
+
   def response_text(result) do
     if result.text != nil and result.text != "" do
       result.text
@@ -127,7 +142,30 @@ defmodule Destila.AI.ResponseProcessor do
 
       if name in @session_tool_names do
         input = access(tool, :input) || %{}
-        %{action: access(input, :action), message: access(input, :message)}
+        action = access(input, :action)
+
+        # Skip export actions — they're handled by extract_export_actions/1
+        if action != "export" do
+          %{action: action, message: access(input, :message)}
+        end
+      end
+    end)
+  end
+
+  defp do_extract_export_actions(tool_uses) do
+    Enum.flat_map(tool_uses, fn tool ->
+      name = access(tool, :name)
+
+      if name in @session_tool_names do
+        input = access(tool, :input) || %{}
+
+        if access(input, :action) == "export" do
+          [%{key: access(input, :key), value: access(input, :value)}]
+        else
+          []
+        end
+      else
+        []
       end
     end)
   end
