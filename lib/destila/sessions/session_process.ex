@@ -53,7 +53,11 @@ defmodule Destila.Sessions.SessionProcess do
   def mark_done(session_id), do: call(session_id, :mark_done)
   def mark_undone(session_id), do: call(session_id, :mark_undone)
 
-  def cast(session_id, event) do
+  def ai_response(session_id, result, phase), do: cast(session_id, {:ai_response, result, phase})
+  def ai_error(session_id, reason, phase), do: cast(session_id, {:ai_error, reason, phase})
+  def worktree_ready(session_id), do: cast(session_id, :worktree_ready)
+
+  defp cast(session_id, event) do
     {:ok, _pid} = ensure_started(session_id)
     :gen_statem.cast(via(session_id), event)
   end

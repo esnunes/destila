@@ -81,19 +81,19 @@ defmodule Destila.Sessions.SessionProcessTest do
         workflow_session_id: ws.id
       })
 
-      SessionProcess.cast(
+      SessionProcess.ai_response(
         ws.id,
-        {:ai_response,
-         %{
-           text: "Ready to advance",
-           result: "Ready to advance",
-           mcp_tool_uses: [
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "suggest_phase_complete", message: "Done"}
-             }
-           ]
-         }, 1}
+        %{
+          text: "Ready to advance",
+          result: "Ready to advance",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "suggest_phase_complete", message: "Done"}
+            }
+          ]
+        },
+        1
       )
 
       sync_process(ws.id)
@@ -111,9 +111,10 @@ defmodule Destila.Sessions.SessionProcessTest do
       ws = create_session_with_ai(%{pe_status: :processing})
       start_process(ws.id)
 
-      SessionProcess.cast(
+      SessionProcess.ai_response(
         ws.id,
-        {:ai_response, %{text: "More questions", result: "More questions"}, 1}
+        %{text: "More questions", result: "More questions"},
+        1
       )
 
       sync_process(ws.id)
@@ -133,19 +134,19 @@ defmodule Destila.Sessions.SessionProcessTest do
 
       start_process(ws.id)
 
-      SessionProcess.cast(
+      SessionProcess.ai_response(
         ws.id,
-        {:ai_response,
-         %{
-           text: "Done",
-           result: "Done",
-           mcp_tool_uses: [
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "phase_complete", message: "All done"}
-             }
-           ]
-         }, 4}
+        %{
+          text: "Done",
+          result: "Done",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "phase_complete", message: "All done"}
+            }
+          ]
+        },
+        4
       )
 
       sync_process(ws.id)
@@ -163,19 +164,19 @@ defmodule Destila.Sessions.SessionProcessTest do
 
       start_process(ws.id)
 
-      SessionProcess.cast(
+      SessionProcess.ai_response(
         ws.id,
-        {:ai_response,
-         %{
-           text: "Phase done",
-           result: "Phase done",
-           mcp_tool_uses: [
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "phase_complete", message: "Moving on"}
-             }
-           ]
-         }, 1}
+        %{
+          text: "Phase done",
+          result: "Phase done",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "phase_complete", message: "Moving on"}
+            }
+          ]
+        },
+        1
       )
 
       sync_process(ws.id)
@@ -212,19 +213,19 @@ defmodule Destila.Sessions.SessionProcessTest do
       ws = create_session_with_ai(%{pe_status: :processing})
       start_process(ws.id)
 
-      SessionProcess.cast(
+      SessionProcess.ai_response(
         ws.id,
-        {:ai_response,
-         %{
-           text: "Here is the output",
-           result: "Here is the output",
-           mcp_tool_uses: [
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "export", key: "prompt_generated", value: "The prompt text"}
-             }
-           ]
-         }, 1}
+        %{
+          text: "Here is the output",
+          result: "Here is the output",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: "prompt_generated", value: "The prompt text"}
+            }
+          ]
+        },
+        1
       )
 
       sync_process(ws.id)
@@ -246,23 +247,23 @@ defmodule Destila.Sessions.SessionProcessTest do
 
       start_process(ws.id)
 
-      SessionProcess.cast(
+      SessionProcess.ai_response(
         ws.id,
-        {:ai_response,
-         %{
-           text: "Final output",
-           result: "Final output",
-           mcp_tool_uses: [
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "export", key: "result", value: "The result"}
-             },
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "phase_complete", message: "All done"}
-             }
-           ]
-         }, 4}
+        %{
+          text: "Final output",
+          result: "Final output",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: "result", value: "The result"}
+            },
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "phase_complete", message: "All done"}
+            }
+          ]
+        },
+        4
       )
 
       sync_process(ws.id)
@@ -280,23 +281,23 @@ defmodule Destila.Sessions.SessionProcessTest do
       ws = create_session_with_ai(%{pe_status: :processing})
       start_process(ws.id)
 
-      SessionProcess.cast(
+      SessionProcess.ai_response(
         ws.id,
-        {:ai_response,
-         %{
-           text: "Exporting multiple items",
-           result: "Exporting multiple items",
-           mcp_tool_uses: [
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "export", key: "key_one", value: "value one"}
-             },
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "export", key: "key_two", value: "value two"}
-             }
-           ]
-         }, 1}
+        %{
+          text: "Exporting multiple items",
+          result: "Exporting multiple items",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: "key_one", value: "value one"}
+            },
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: "key_two", value: "value two"}
+            }
+          ]
+        },
+        1
       )
 
       sync_process(ws.id)
@@ -311,19 +312,19 @@ defmodule Destila.Sessions.SessionProcessTest do
       ws = create_session_with_ai(%{pe_status: :processing})
       start_process(ws.id)
 
-      SessionProcess.cast(
+      SessionProcess.ai_response(
         ws.id,
-        {:ai_response,
-         %{
-           text: "Malformed export",
-           result: "Malformed export",
-           mcp_tool_uses: [
-             %{
-               name: "mcp__destila__session",
-               input: %{action: "export", key: nil, value: "orphan value"}
-             }
-           ]
-         }, 1}
+        %{
+          text: "Malformed export",
+          result: "Malformed export",
+          mcp_tool_uses: [
+            %{
+              name: "mcp__destila__session",
+              input: %{action: "export", key: nil, value: "orphan value"}
+            }
+          ]
+        },
+        1
       )
 
       sync_process(ws.id)
@@ -470,7 +471,7 @@ defmodule Destila.Sessions.SessionProcessTest do
       ws = create_session_with_ai(%{current_phase: 2, total_phases: 4, pe_status: :processing})
       start_process(ws.id)
 
-      SessionProcess.cast(ws.id, {:ai_response, %{text: "Stale", result: "Stale"}, 1})
+      SessionProcess.ai_response(ws.id, %{text: "Stale", result: "Stale"}, 1)
       sync_process(ws.id)
 
       pe = Executions.get_current_phase_execution(ws.id)

@@ -13,7 +13,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
          {:ok, worktree_path} <- create_worktree(workflow_session, project) do
       AI.get_or_create_ai_session(workflow_session.id, %{worktree_path: worktree_path})
 
-      SessionProcess.cast(workflow_session.id, :worktree_ready)
+      SessionProcess.worktree_ready(workflow_session.id)
 
       :ok
     end

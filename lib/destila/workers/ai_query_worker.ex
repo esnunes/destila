@@ -28,16 +28,16 @@ defmodule Destila.Workers.AiQueryWorker do
 
         case AI.ClaudeSession.query_streaming(session, query, stream_topic: stream_topic) do
           {:ok, result} ->
-            SessionProcess.cast(ws.id, {:ai_response, result, phase})
+            SessionProcess.ai_response(ws.id, result, phase)
             :ok
 
           {:error, reason} ->
-            SessionProcess.cast(ws.id, {:ai_error, reason, phase})
+            SessionProcess.ai_error(ws.id, reason, phase)
             :ok
         end
 
       {:error, reason} ->
-        SessionProcess.cast(ws.id, {:ai_error, reason, phase})
+        SessionProcess.ai_error(ws.id, reason, phase)
         {:error, reason}
     end
   end

@@ -59,8 +59,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:workflow_session, workflow_session)
        |> assign(:project, project)
        |> assign(:phases, phases)
-       |> assign(:current_phase, workflow_session.current_phase)
-       |> assign(:total_phases, workflow_session.total_phases)
        |> assign(:editing_title, false)
        |> assign_metadata(workflow_session.id)
        |> assign_worktree_path(workflow_session.id)
@@ -123,7 +121,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         {:noreply,
          socket
          |> assign(:workflow_session, ws)
-         |> assign(:current_phase, ws.current_phase)
          |> assign(:page_title, ws.title)
          |> assign(:question_answers, %{})
          |> assign_ai_state(ws)}
@@ -300,7 +297,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       {:noreply,
        socket
        |> assign(:workflow_session, ws)
-       |> assign(:current_phase, ws.current_phase)
        |> assign(:page_title, ws.title)
        |> assign(
          :streaming_chunks,
@@ -493,15 +489,18 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             <div class="flex items-center gap-3 ml-4">
               <div class="flex items-center gap-2">
                 <div class="w-24">
-                  <.progress_indicator completed={@current_phase} total={@total_phases} />
+                  <.progress_indicator
+                    completed={@workflow_session.current_phase}
+                    total={@workflow_session.total_phases}
+                  />
                 </div>
                 <span class="text-xs text-base-content/40">
-                  Phase {@current_phase}/{@total_phases}
+                  Phase {@workflow_session.current_phase}/{@workflow_session.total_phases}
                   <span
-                    :if={Workflows.phase_name(@workflow_type, @current_phase)}
+                    :if={Workflows.phase_name(@workflow_type, @workflow_session.current_phase)}
                     class="hidden sm:inline"
                   >
-                    — {Workflows.phase_name(@workflow_type, @current_phase)}
+                    — {Workflows.phase_name(@workflow_type, @workflow_session.current_phase)}
                   </span>
                 </span>
               </div>
@@ -723,8 +722,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     do_render_phase(assigns)
   end
 
-  defp do_render_phase(%{phases: phases, current_phase: current_phase} = assigns) do
-    case Enum.at(phases, current_phase - 1) do
+  defp do_render_phase(%{phases: phases, workflow_session: ws} = assigns) do
+    case Enum.at(phases, ws.current_phase - 1) do
       %Destila.Workflows.Phase{} = phase ->
         assigns = assign(assigns, :phase_config, phase)
 
@@ -732,7 +731,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         <.chat_phase
           workflow_session={@workflow_session}
           messages={@messages}
-          phase_number={@current_phase}
+          phase_number={@workflow_session.current_phase}
           phase_config={@phase_config}
           streaming_chunks={@streaming_chunks}
           question_answers={@question_answers}
@@ -745,7 +744,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       nil ->
         ~H"""
         <div class="text-base-content/50 text-center py-12">
-          Phase {@current_phase}
+          Phase {@workflow_session.current_phase}
         </div>
         """
     end
