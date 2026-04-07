@@ -3,7 +3,7 @@ defmodule Destila.AI.Conversation do
   Handles all AI conversation mechanics -- phase starts, user messages,
   AI results, and AI errors.
 
-  The Engine calls this module directly instead of delegating to workflow
+  SessionProcess calls this module directly instead of delegating to workflow
   modules. Workflow modules remain purely declarative.
   """
 
@@ -129,7 +129,7 @@ defmodule Destila.AI.Conversation do
   For `:new` -- stops the existing ClaudeSession and creates a fresh AI session.
   For `:resume` -- no-op.
 
-  This is also used by `Engine.handle_retry/1` to apply the phase's strategy
+  This is also used by `SessionProcess` retry to apply the phase's strategy
   before restarting.
   """
   def handle_session_strategy(ws, phase_number) do
