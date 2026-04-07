@@ -64,7 +64,8 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
           "mcp_tool_uses" => [],
           "is_error" => false
         },
-        phase: 4
+        phase: 4,
+        workflow_session_id: workflow_session.id
       })
 
     workflow_session

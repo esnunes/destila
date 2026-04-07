@@ -49,8 +49,7 @@ defmodule Destila.AI do
   def list_messages_for_workflow_session(workflow_session_id) do
     Repo.all(
       from(m in Message,
-        join: a in assoc(m, :ai_session),
-        where: a.workflow_session_id == ^workflow_session_id,
+        where: m.workflow_session_id == ^workflow_session_id,
         order_by: m.inserted_at
       )
     )

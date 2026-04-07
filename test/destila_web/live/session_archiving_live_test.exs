@@ -55,7 +55,8 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
       Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: "Welcome",
-        phase: 1
+        phase: 1,
+        workflow_session_id: ws.id
       })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -85,7 +86,8 @@ defmodule DestilaWeb.SessionArchivingLiveTest do
       Destila.AI.create_message(ai_session.id, %{
         role: :system,
         content: "Welcome",
-        phase: 1
+        phase: 1,
+        workflow_session_id: ws.id
       })
 
       {:ok, archived} = Destila.Workflows.archive_workflow_session(ws)

@@ -158,7 +158,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       AI.create_message(ai_session.id, %{
         role: :system,
         content: Workflows.completion_message(ws.workflow_type),
-        phase: ws.current_phase
+        phase: ws.current_phase,
+        workflow_session_id: ws.id
       })
     end
 
