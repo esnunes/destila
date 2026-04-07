@@ -19,7 +19,7 @@ defmodule Destila.Workers.AiQueryWorker do
         }
       }) do
     ws = Workflows.get_workflow_session!(workflow_session_id)
-    session_opts = AI.ClaudeSession.session_opts_for_workflow(ws, phase)
+    session_opts = AI.SessionConfig.session_opts_for_workflow(ws, phase)
 
     case AI.ClaudeSession.for_workflow_session(workflow_session_id, session_opts) do
       {:ok, session} ->
