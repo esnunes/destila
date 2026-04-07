@@ -50,10 +50,6 @@ defmodule DestilaWeb.ChatComponents do
       <%!-- Scrollable chat area --%>
       <div class="flex-1 min-h-0 overflow-y-auto px-6 py-6" id="chat-messages" phx-hook="ScrollBottom">
         <div class="max-w-2xl mx-auto">
-          <div :if={@phase_status == :setup} class="flex items-center gap-3 text-sm pl-2 mb-4">
-            <span class="loading loading-spinner loading-xs shrink-0" />
-            <span class="text-base-content/60">Preparing workspace...</span>
-          </div>
           <%= for {phase, group} <- @phase_groups do %>
             <details
               id={"phase-section-#{phase}"}
@@ -75,6 +71,12 @@ defmodule DestilaWeb.ChatComponents do
                 workflow_session={@workflow_session}
                 phase_status={@phase_status}
               />
+              <%= if phase == @phase_number && @phase_status == :setup do %>
+                <div class="flex items-center gap-3 text-sm pl-2 mt-2">
+                  <span class="loading loading-spinner loading-xs shrink-0" />
+                  <span class="text-base-content/60">Preparing workspace...</span>
+                </div>
+              <% end %>
               <%= if phase == @phase_number && @phase_status == :processing do %>
                 <%= if @streaming_chunks && @streaming_chunks != [] do %>
                   <.chat_stream_debug chunks={@streaming_chunks} />
