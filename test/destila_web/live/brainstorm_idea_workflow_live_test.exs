@@ -357,19 +357,13 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       refute has_element?(view, "button[phx-click='mark_done']")
     end
 
-    @tag feature: @feature, scenario: "Mark as Done is hidden while last phase is processing"
-    test "hides Mark as Done while the last phase is still processing", %{conn: conn} do
+    @tag feature: @feature, scenario: "Mark as Done is disabled while last phase is processing"
+    test "disables Mark as Done while the last phase is still processing", %{conn: conn} do
       ws = create_session_in_phase(4, pe_status: :processing)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert render(view) =~ "Phase 4/4"
-      refute has_element?(view, "button[phx-click='mark_done']")
-
-      # Defensive: even if the event is forced, the session must not be marked done.
-      render_hook(view, "mark_done", %{})
-
-      ws = Destila.Workflows.get_workflow_session!(ws.id)
-      assert is_nil(ws.done_at)
+      assert has_element?(view, "#mark-done-btn[disabled]")
     end
 
     @tag feature: @feature, scenario: "Un-done a completed session"

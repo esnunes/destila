@@ -511,11 +511,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 :if={
                   @workflow_session &&
                     @workflow_session.current_phase == @workflow_session.total_phases &&
-                    !Session.done?(@workflow_session) &&
-                    @phase_status != :processing
+                    !Session.done?(@workflow_session)
                 }
                 phx-click="mark_done"
                 id="mark-done-btn"
+                disabled={@phase_status == :processing}
                 class="btn btn-success btn-sm"
               >
                 <.icon name="hero-check-micro" class="size-4" /> Mark as Done
