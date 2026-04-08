@@ -19,8 +19,6 @@ defmodule Destila.AI.AlivenessTracker do
       [{^session_id, true}] -> true
       _ -> false
     end
-  rescue
-    ArgumentError -> false
   end
 
   @doc "PubSub topic for aliveness change notifications."
@@ -60,15 +58,10 @@ defmodule Destila.AI.AlivenessTracker do
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
-    case Map.pop(state.refs, ref) do
-      {nil, _state} ->
-        {:noreply, state}
-
-      {session_id, refs} ->
-        :ets.delete(@ets_table, session_id)
-        broadcast(session_id, false)
-        {:noreply, %{state | refs: refs}}
-    end
+    {session_id, refs} = Map.pop!(state.refs, ref)
+    :ets.delete(@ets_table, session_id)
+    broadcast(session_id, false)
+    {:noreply, %{state | refs: refs}}
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
