@@ -79,21 +79,27 @@ defmodule Destila.Sessions.SessionProcess do
     state = reconstruct_state(ws)
     data = %{session_id: session_id, ws: ws}
 
-    # For new sessions (no PE yet), kick off the first phase.
-    {state, data} =
+    actions =
       if state == :setup do
-        start_first_phase(data)
-        ws = reload(data)
-        {reconstruct_state(ws), %{data | ws: ws}}
+        [inactivity_timeout(), {:next_event, :internal, :start_phase}]
       else
-        {state, data}
+        [inactivity_timeout()]
       end
 
-    {:ok, state, data, [inactivity_timeout()]}
+    {:ok, state, data, actions}
+  end
+
+  # --- Start phase (internal event) ---
+  # Used by init (from :setup) and retry_setup.
+  # Deferred so init returns quickly; callers that need synchronous
+  # completion (confirm_advance, phase_complete) use do_start_phase/1 directly.
+  @impl true
+  def handle_event(:internal, :start_phase, _state, data) do
+    {state, data} = do_start_phase(data)
+    {:next_state, state, data, [inactivity_timeout()]}
   end
 
   # --- User message ---
-  @impl true
   def handle_event({:call, from}, {:send_message, content}, {:phase, n, status}, data)
       when status in [:awaiting_input, :awaiting_confirmation] do
     case AI.Conversation.send_message(data.ws, content) do
@@ -114,6 +120,7 @@ defmodule Destila.Sessions.SessionProcess do
 
   # --- Confirm advance ---
   def handle_event({:call, from}, :confirm_advance, {:phase, n, :awaiting_confirmation}, data) do
+    complete_current_pe(data)
     {next_state, data} = advance(data, n)
 
     {:next_state, next_state, data, [{:reply, from, {:ok, data.ws}}, inactivity_timeout()]}
@@ -148,7 +155,9 @@ defmodule Destila.Sessions.SessionProcess do
          [inactivity_timeout()]}
 
       :phase_complete ->
-        complete_and_advance(data, n)
+        complete_current_pe(data)
+        {next_state, data} = advance(data, n)
+        {:next_state, next_state, data, [inactivity_timeout()]}
     end
   end
 
@@ -204,11 +213,8 @@ defmodule Destila.Sessions.SessionProcess do
 
   # --- Retry setup ---
   def handle_event({:call, from}, :retry_setup, :setup, data) do
-    start_first_phase(data)
-    ws = reload(data)
-    broadcast_updated(ws)
-
-    {:keep_state, %{data | ws: ws}, [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+    {:keep_state_and_data,
+     [{:reply, from, {:ok, data.ws}}, {:next_event, :internal, :start_phase}]}
   end
 
   # --- Cancel ---
@@ -225,7 +231,6 @@ defmodule Destila.Sessions.SessionProcess do
   # --- Mark done ---
   def handle_event({:call, from}, :mark_done, {:phase, _n, status}, data)
       when status != :processing do
-    # Create completion message (moved from LiveView)
     ai_session = AI.get_ai_session_for_workflow(data.session_id)
 
     if ai_session do
@@ -279,7 +284,6 @@ defmodule Destila.Sessions.SessionProcess do
     :keep_state_and_data
   end
 
-  # Also handle plain :info messages (e.g., from Process.monitor, if any)
   def handle_event(:info, _msg, _state, _data) do
     :keep_state_and_data
   end
@@ -312,14 +316,38 @@ defmodule Destila.Sessions.SessionProcess do
     end
   end
 
-  defp advance(data, current_phase) do
-    # Complete current phase execution
+  defp complete_current_pe(data) do
     case Executions.get_current_phase_execution(data.session_id) do
       nil -> :ok
       pe when pe.status in [:completed, :skipped] -> :ok
       pe -> Executions.complete_phase(pe)
     end
+  end
 
+  # Creates PE, checks worktree readiness, kicks off AI.
+  # Returns {state, data} with updated ws.
+  defp do_start_phase(data) do
+    ws = reload(data)
+    data = %{data | ws: ws}
+    phase = ws.current_phase
+
+    case ensure_worktree_ready(ws) do
+      :ready ->
+        {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
+        AI.Conversation.phase_start(ws)
+        ws = reload(data)
+        broadcast_updated(ws)
+        {{:phase, phase, :processing}, %{data | ws: ws}}
+
+      :preparing ->
+        broadcast_updated(ws)
+        {{:phase, phase, :preparing}, data}
+    end
+  end
+
+  # Completes current phase and either finishes the session or starts the next phase.
+  # Returns {next_state, updated_data}.
+  defp advance(data, current_phase) do
     next = current_phase + 1
     ws = data.ws
 
@@ -330,42 +358,7 @@ defmodule Destila.Sessions.SessionProcess do
     else
       {:ok, ws} = Workflows.update_workflow_session(ws, %{current_phase: next})
       data = %{data | ws: ws}
-      start_phase(data, next)
-    end
-  end
-
-  defp complete_and_advance(data, current_phase) do
-    {next_state, data} = advance(data, current_phase)
-    {:next_state, next_state, data, [inactivity_timeout()]}
-  end
-
-  defp start_first_phase(data) do
-    ws = data.ws
-
-    case ensure_worktree_ready(ws) do
-      :ready ->
-        {:ok, _pe} = Executions.ensure_phase_execution(ws, ws.current_phase)
-        AI.Conversation.phase_start(ws)
-
-      :preparing ->
-        :ok
-    end
-  end
-
-  defp start_phase(data, phase_number) do
-    ws = data.ws
-
-    case ensure_worktree_ready(ws) do
-      :ready ->
-        {:ok, _pe} = Executions.ensure_phase_execution(ws, phase_number)
-        AI.Conversation.phase_start(ws)
-        ws = reload(data)
-        broadcast_updated(ws)
-        {{:phase, phase_number, :processing}, %{data | ws: ws}}
-
-      :preparing ->
-        broadcast_updated(ws)
-        {{:phase, phase_number, :preparing}, data}
+      do_start_phase(data)
     end
   end
 
