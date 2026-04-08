@@ -7,10 +7,34 @@ Destila is an AI-powered workflow orchestration tool for software development. I
 To start your Phoenix server:
 
 * Run `mix setup` to install and setup dependencies
+* Run `mix destila.setup` to verify the Claude CLI is available (see [Claude CLI](#claude-cli))
 * Set the required environment variables (see below)
 * Start Phoenix endpoint with `elixir --sname destila -S mix phx.server`
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+
+### Claude CLI
+
+Destila shells out to the `claude` CLI to drive AI sessions. It resolves the
+binary from your system (`$PATH` and common install locations like
+`~/.local/bin/claude`) via `config :claude_code, cli_path: :global`, so you
+must have Claude Code installed before starting the server.
+
+Check availability with:
+
+```sh
+mix destila.setup
+```
+
+If the CLI is missing, install it with the official script:
+
+```sh
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+This places the binary at `~/.local/bin/claude`. Make sure `~/.local/bin` is
+on your `$PATH`, then re-run `mix destila.setup`. Other install methods are
+documented at https://docs.anthropic.com/en/docs/claude-code.
 
 ### Remote shell
 

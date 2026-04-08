@@ -16,6 +16,12 @@ config :destila, Oban,
   queues: [default: 2, setup: 1],
   repo: Destila.Repo
 
+# Resolve the Claude CLI from the system ($PATH and common locations like
+# ~/.local/bin) instead of the bundled priv/bin/ binary. Setup is handled by
+# `mix destila.setup`, which checks availability and points to install docs
+# if missing.
+config :claude_code, cli_path: :global
+
 # Configure the endpoint
 config :destila, DestilaWeb.Endpoint,
   url: [host: "localhost"],
