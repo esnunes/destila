@@ -96,8 +96,21 @@ defmodule Destila.Sessions.SessionProcess do
   # =====================================================================
 
   def setup(:internal, :start_phase, data) do
-    {state, data} = do_start_phase(data)
-    {:next_state, state, data, [inactivity_timeout()]}
+    ws = reload(data)
+    data = %{data | ws: ws}
+
+    case ensure_worktree_ready(ws) do
+      :ready ->
+        {:ok, _pe} = Executions.ensure_phase_execution(ws, ws.current_phase)
+        AI.Conversation.phase_start(ws)
+        ws = reload(data)
+        broadcast_updated(ws)
+        {:next_state, :processing, %{data | ws: ws}, [inactivity_timeout()]}
+
+      :preparing ->
+        broadcast_updated(ws)
+        {:keep_state, data, [inactivity_timeout()]}
+    end
   end
 
   def setup({:call, from}, :retry_setup, data) do
@@ -371,9 +384,26 @@ defmodule Destila.Sessions.SessionProcess do
     end
   end
 
+  # Completes current phase and either finishes the session or starts the next phase.
+  # Returns {next_state, updated_data}.
+  defp advance(data) do
+    ws = data.ws
+    next = ws.current_phase + 1
+
+    if next > ws.total_phases do
+      {:ok, ws} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+      broadcast_updated(ws)
+      {:done, %{data | ws: ws}}
+    else
+      {:ok, ws} = Workflows.update_workflow_session(ws, %{current_phase: next})
+      data = %{data | ws: ws}
+      start_phase(data)
+    end
+  end
+
   # Creates PE, checks worktree readiness, kicks off AI.
-  # Returns {state, data} with updated ws.
-  defp do_start_phase(data) do
+  # Returns {state, data}.
+  defp start_phase(data) do
     ws = reload(data)
     data = %{data | ws: ws}
 
@@ -388,23 +418,6 @@ defmodule Destila.Sessions.SessionProcess do
       :preparing ->
         broadcast_updated(ws)
         {:setup, data}
-    end
-  end
-
-  # Completes current phase and either finishes the session or starts the next phase.
-  # Returns {next_state, updated_data}.
-  defp advance(data) do
-    ws = data.ws
-    next = ws.current_phase + 1
-
-    if next > ws.total_phases do
-      {:ok, ws} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
-      broadcast_updated(ws)
-      {:done, %{data | ws: ws}}
-    else
-      {:ok, ws} = Workflows.update_workflow_session(ws, %{current_phase: next})
-      data = %{data | ws: ws}
-      do_start_phase(data)
     end
   end
 
