@@ -96,7 +96,7 @@ defmodule Destila.Sessions.SessionProcess do
   @impl true
   def handle_event({:call, from}, {:send_message, content}, {:phase, n, status}, data)
       when status in [:awaiting_input, :awaiting_confirmation] do
-    case AI.Conversation.phase_update(data.ws, %{message: content}) do
+    case AI.Conversation.send_message(data.ws, content) do
       :processing ->
         with_pe(data, n, &Executions.process_phase/1)
         ws = reload(data)
@@ -132,7 +132,7 @@ defmodule Destila.Sessions.SessionProcess do
   # --- AI response (phase must match to reject stale worker results) ---
   def handle_event(:cast, {:ai_response, result, phase}, {:phase, n, :processing}, data)
       when phase == n do
-    case AI.Conversation.phase_update(data.ws, %{ai_result: result}) do
+    case AI.Conversation.handle_ai_result(data.ws, result) do
       :awaiting_input ->
         with_pe(data, n, &Executions.await_input/1)
         ws = reload(data)
@@ -160,7 +160,7 @@ defmodule Destila.Sessions.SessionProcess do
   # --- AI error (phase must match) ---
   def handle_event(:cast, {:ai_error, reason, phase}, {:phase, n, :processing}, data)
       when phase == n do
-    AI.Conversation.phase_update(data.ws, %{ai_error: reason})
+    AI.Conversation.handle_ai_error(data.ws, reason)
     with_pe(data, n, &Executions.await_input/1)
     ws = reload(data)
     broadcast_updated(ws)

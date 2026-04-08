@@ -28,11 +28,11 @@ defmodule Destila.AI.Conversation do
   end
 
   @doc """
-  Processes a phase update (user message, AI result, AI error, or unknown).
+  Sends a user message for the current phase.
 
-  Returns `:processing`, `:awaiting_input`, `:phase_complete`, or `:suggest_phase_complete`.
+  Returns `:processing` or `:awaiting_input`.
   """
-  def phase_update(ws, %{message: message}) do
+  def send_message(ws, message) do
     phase_number = ws.current_phase
     ai_session = AI.get_ai_session_for_workflow(ws.id)
 
@@ -51,7 +51,12 @@ defmodule Destila.AI.Conversation do
     end
   end
 
-  def phase_update(ws, %{ai_result: result}) do
+  @doc """
+  Processes an AI result for the current phase.
+
+  Returns `:awaiting_input`, `:phase_complete`, or `:suggest_phase_complete`.
+  """
+  def handle_ai_result(ws, result) do
     phase_number = ws.current_phase
     ai_session = AI.get_ai_session_for_workflow(ws.id)
 
@@ -105,7 +110,12 @@ defmodule Destila.AI.Conversation do
     end
   end
 
-  def phase_update(ws, %{ai_error: _reason}) do
+  @doc """
+  Handles an AI error for the current phase.
+
+  Returns `:awaiting_input`.
+  """
+  def handle_ai_error(ws, _reason) do
     phase_number = ws.current_phase
     ai_session = AI.get_ai_session_for_workflow(ws.id)
 
@@ -120,8 +130,6 @@ defmodule Destila.AI.Conversation do
 
     :awaiting_input
   end
-
-  def phase_update(_ws, _params), do: :awaiting_input
 
   @doc """
   Handles session strategy for a given phase.
