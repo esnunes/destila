@@ -185,6 +185,10 @@ end
 
 Place this before the catch-all `def handle_info(_msg, socket)` on line 361.
 
+**3e. Templates — no changes needed:**
+
+The template references `@alive_session` (line 430: `<.aliveness_dot session={@workflow_session} alive?={@alive_session} />`), which remains the same assign name. No template changes required.
+
 ### Step 4 — Simplify `CraftingBoardLive`
 
 **File:** `lib/destila_web/live/crafting_board_live.ex`
@@ -208,9 +212,9 @@ With:
 Phoenix.PubSub.subscribe(Destila.PubSub, Destila.AI.AlivenessTracker.topic())
 ```
 
-**4c. Replace `monitor_alive_sessions/1` (lines 105-135) with an ETS-based version:**
+**4c. Replace `monitor_alive_sessions/1` (lines 103-135) with an ETS-based version:**
 
-Replace the entire function with:
+Remove the entire `# --- Aliveness monitoring ---` comment (line 103) and the `monitor_alive_sessions/1` function (lines 105-135). Replace with:
 ```elixir
 defp load_alive_sessions(socket) do
   if not connected?(socket) do
@@ -247,6 +251,10 @@ end
 ```
 
 Place this before the catch-all `def handle_info(_msg, socket)` on line 101.
+
+**4f. Templates — no changes needed:**
+
+Both the list view (line 331: `alive?={Map.get(@alive_sessions, card.id, false)}`) and workflow view (line 378) reference `@alive_sessions`, which remains the same assign name. No template changes required.
 
 ### Step 5 — Update feature files
 
@@ -329,36 +337,97 @@ defmodule Destila.AI.AlivenessTrackerTest do
 end
 ```
 
-### Step 7 — Verify existing tests still pass
+### Step 7 — Update existing tests in `crafting_board_live_test.exs`
 
-The existing tests in `test/destila_web/live/crafting_board_live_test.exs` (aliveness indicator describe block, lines 448-546) should continue to pass because:
+**File:** `test/destila_web/live/crafting_board_live_test.exs`
 
-1. Tests that register agents in `Destila.AI.SessionRegistry` will trigger `AlivenessTracker` to detect and track them (when the tracker subscribes to `claude_sessions` PubSub). However, the tests currently rely on per-LiveView monitoring. With the tracker, the LiveView will get aliveness via ETS + PubSub instead.
+**Problem:** The existing aliveness tests register dummy agents in `Destila.AI.SessionRegistry` without broadcasting `{:claude_session_started, ...}`. The old LiveView code discovered these agents via direct `GenServer.whereis` lookups. With the tracker, discovery depends on PubSub notification. Tests must broadcast after registering agents and sync with the tracker via `:sys.get_state/1`.
 
-2. The "green dot" test registers an agent and then mounts the LiveView. The tracker will pick up the agent if a `:claude_session_started` broadcast occurs. Since the test agents don't broadcast, we need to ensure the test either:
-   - Broadcasts `{:claude_session_started, ws.id}` after registering the agent, OR
-   - The tracker's behavior is such that the LiveView's `load_alive_sessions/1` call in `handle_params` does the ETS lookup, which requires the tracker to already know about the agent.
+**Gray dot and red dot tests (lines 450-491):** No changes — these tests don't register agents, so they work as-is. The LiveView calls `load_alive_sessions/1` which does ETS lookups and finds nothing.
 
-   **Important consideration:** The existing tests register agents manually without broadcasting `{:claude_session_started, ...}`. The `monitor_alive_sessions/1` function currently does a direct `GenServer.whereis` + `Process.monitor` which catches these agents. With the tracker, the LiveView uses `AlivenessTracker.alive?/1` instead, which depends on the tracker having been notified via PubSub.
+**"shows green dot" test (lines 493-515):** Add broadcast + sync after `start_supervised!`:
 
-   **Fix:** After registering the test agent, broadcast the session started event so the tracker picks it up:
+```elixir
+    @tag feature: @feature,
+         scenario: "Session card shows green indicator when Claude Code GenServer is running"
+    test "shows green dot when GenServer is running", %{conn: conn, project_a: project} do
+      ws =
+        create_prompt(%{
+          title: "Active Session",
+          project_id: project.id,
+          current_phase: 1,
+          pe_status: :processing,
+          workflow_type: :brainstorm_idea
+        })
 
-   ```elixir
-   # In tests that register a dummy agent:
-   Phoenix.PubSub.broadcast(
-     Destila.PubSub,
-     Destila.PubSubHelper.claude_session_topic(),
-     {:claude_session_started, ws.id}
-   )
-   # Ensure tracker processes the message
-   _ = :sys.get_state(Destila.AI.AlivenessTracker)
-   ```
+      start_supervised!(%{
+        id: {:test_agent, ws.id},
+        start:
+          {Agent, :start_link,
+           [fn -> nil end, [name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}]]}
+      })
 
-   This needs to be added to:
-   - `crafting_board_live_test.exs` — "shows green dot when GenServer is running" test (after `start_supervised!`, line ~510)
-   - `crafting_board_live_test.exs` — "updates from green to red when GenServer stops" test (after `Agent.start_link`, line ~530)
+      # Notify the tracker so it monitors the agent and updates ETS
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        Destila.PubSubHelper.claude_session_topic(),
+        {:claude_session_started, ws.id}
+      )
 
-   The `:DOWN` path will work automatically since the tracker monitors the agent and broadcasts `{:aliveness_changed, ...}` on death.
+      _ = :sys.get_state(Destila.AI.AlivenessTracker)
+
+      {:ok, view, _html} = live(conn, ~p"/crafting")
+
+      assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session running']")
+    end
+```
+
+**"updates from green to red" test (lines 517-545):** Add broadcast + sync after `Agent.start_link`:
+
+```elixir
+    @tag feature: @feature, scenario: "Session card indicator updates when GenServer stops"
+    test "updates from green to red when GenServer stops", %{conn: conn, project_a: project} do
+      ws =
+        create_prompt(%{
+          title: "Active Session",
+          project_id: project.id,
+          current_phase: 1,
+          pe_status: :processing,
+          workflow_type: :brainstorm_idea
+        })
+
+      {:ok, pid} =
+        Agent.start_link(fn -> nil end,
+          name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
+        )
+
+      # Notify the tracker so it monitors the agent and updates ETS
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        Destila.PubSubHelper.claude_session_topic(),
+        {:claude_session_started, ws.id}
+      )
+
+      _ = :sys.get_state(Destila.AI.AlivenessTracker)
+
+      {:ok, view, _html} = live(conn, ~p"/crafting")
+
+      assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session running']")
+
+      # Stop the agent — tracker receives :DOWN, broadcasts {:aliveness_changed, ws.id, false}
+      Agent.stop(pid)
+      _ = render(view)
+
+      assert has_element?(
+               view,
+               "#crafting-card-#{ws.id} span[title='AI session not running (unexpected)']"
+             )
+    end
+```
+
+**Why `:sys.get_state/1`:** This synchronous call to the tracker ensures it has processed the `{:claude_session_started, ...}` PubSub message and inserted into ETS before the LiveView mounts and calls `AlivenessTracker.alive?/1`.
+
+**Why the `:DOWN` path works without sync:** When `Agent.stop(pid)` is called, the tracker receives `:DOWN`, deletes from ETS, and broadcasts `{:aliveness_changed, ws_id, false}`. The LiveView receives this broadcast and re-renders. The `_ = render(view)` call flushes the LiveView's mailbox, ensuring the re-render has happened before the assertion.
 
 ### Step 8 — Run `mix precommit`
 
