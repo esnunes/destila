@@ -276,19 +276,13 @@ defmodule Destila.Sessions.SessionProcess do
   # --- Shared event handlers ---
 
   defp handle_send_message(from, content, data) do
-    case AI.Conversation.send_message(data.ws, content) do
-      :processing ->
-        with_current_pe(data, &Executions.process_phase/1)
-        ws = reload(data)
-        broadcast_updated(ws)
+    :processing = AI.Conversation.send_message(data.ws, content)
+    with_current_pe(data, &Executions.process_phase/1)
+    ws = reload(data)
+    broadcast_updated(ws)
 
-        {:next_state, :processing, %{data | ws: ws},
-         [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
-
-      :awaiting_input ->
-        ws = reload(data)
-        {:keep_state, %{data | ws: ws}, [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
-    end
+    {:next_state, :processing, %{data | ws: ws},
+     [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
   end
 
   defp handle_retry(from, data) do

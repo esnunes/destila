@@ -21,6 +21,16 @@ defmodule Destila.AI do
     )
   end
 
+  def get_ai_session_for_workflow!(workflow_session_id) do
+    Repo.one!(
+      from(s in Session,
+        where: s.workflow_session_id == ^workflow_session_id,
+        order_by: [desc: s.inserted_at],
+        limit: 1
+      )
+    )
+  end
+
   def get_or_create_ai_session(workflow_session_id, attrs \\ %{}) do
     case get_ai_session_for_workflow(workflow_session_id) do
       nil ->
