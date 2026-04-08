@@ -20,23 +20,12 @@ defmodule Destila.Application do
         {Registry, keys: :unique, name: Destila.Sessions.Registry},
         {DynamicSupervisor, name: Destila.Sessions.Supervisor, strategy: :one_for_one},
         DestilaWeb.Endpoint
-      ] ++ claude_cli_warmer()
+      ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Destila.Supervisor]
     Supervisor.start_link(children, opts)
-  end
-
-  # The Claude CLI warmer pre-installs and exercises the bundled CLI binary so
-  # the first real user request does not pay the install cost or hit the macOS
-  # Gatekeeper SIGKILL race. Skipped under the test adapter, which never spawns
-  # the real CLI.
-  defp claude_cli_warmer do
-    case Application.get_env(:claude_code, :adapter) do
-      {ClaudeCode.Test, _} -> []
-      _ -> [Destila.AI.CliWarmer]
-    end
   end
 
   # Tell Phoenix to update the endpoint configuration

@@ -78,7 +78,14 @@ defmodule Destila.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build", "git.hooks"],
+      setup: [
+        "deps.get",
+        "destila.setup",
+        "ecto.setup",
+        "assets.setup",
+        "assets.build",
+        "git.hooks"
+      ],
       "ecto.setup": ["ecto.create --quiet", "ecto.migrate --quiet"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       "git.hooks": ["cmd git config core.hooksPath .githooks"],
