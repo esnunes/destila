@@ -44,10 +44,7 @@ Replace lines 509-522 with:
   phx-click="mark_done"
   id="mark-done-btn"
   disabled={@phase_status == :processing}
-  class={[
-    "btn btn-sm",
-    if(@phase_status == :processing, do: "btn-disabled", else: "btn-success")
-  ]}
+  class="btn btn-success btn-sm"
 >
   <.icon name="hero-check-micro" class="size-4" /> Mark as Done
 </button>
@@ -56,9 +53,13 @@ Replace lines 509-522 with:
 Key changes:
 - Remove `@phase_status != :processing` from the `:if` guard
 - Add `disabled={@phase_status == :processing}` HTML attribute (prevents click + provides a11y)
-- Use class list to swap `btn-success` ↔ `btn-disabled` so the button visually appears inactive
+- Keep the existing `btn btn-success btn-sm` class unchanged — daisyUI's `.btn` already styles
+  `:disabled` / `[disabled]` buttons with muted colors, `pointer-events: none`, and no box-shadow,
+  so no class-swapping is needed
 
-Note: the HTML `disabled` attribute already prevents `phx-click` from firing in LiveView, and the `SessionProcess` gen_statem also rejects `mark_done` calls in `:processing` state as a backend safeguard.
+Notes:
+- The HTML `disabled` attribute prevents `phx-click` from firing in LiveView
+- The `SessionProcess` gen_statem also rejects `mark_done` calls in `:processing` state as a backend safeguard
 
 ### Step 2 — Update the feature file scenario
 
