@@ -16,6 +16,7 @@ defmodule Destila.Application do
         {Oban, Application.fetch_env!(:destila, Oban)},
         {Registry, keys: :unique, name: Destila.AI.SessionRegistry},
         {DynamicSupervisor, name: Destila.AI.SessionSupervisor, strategy: :one_for_one},
+        Destila.AI.AlivenessTracker,
         {Registry, keys: :unique, name: Destila.Sessions.Registry},
         {DynamicSupervisor, name: Destila.Sessions.Supervisor, strategy: :one_for_one},
         DestilaWeb.Endpoint

@@ -509,6 +509,15 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
            [fn -> nil end, [name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}]]}
       })
 
+      # Notify the tracker so it monitors the agent and updates ETS
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        Destila.PubSubHelper.claude_session_topic(),
+        {:claude_session_started, ws.id}
+      )
+
+      _ = :sys.get_state(Destila.AI.AlivenessTracker)
+
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
       assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session running']")
@@ -530,11 +539,20 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
           name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
         )
 
+      # Notify the tracker so it monitors the agent and updates ETS
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        Destila.PubSubHelper.claude_session_topic(),
+        {:claude_session_started, ws.id}
+      )
+
+      _ = :sys.get_state(Destila.AI.AlivenessTracker)
+
       {:ok, view, _html} = live(conn, ~p"/crafting")
 
       assert has_element?(view, "#crafting-card-#{ws.id} span[title='AI session running']")
 
-      # Stop the agent — triggers :DOWN in the LiveView
+      # Stop the agent — tracker receives :DOWN, broadcasts {:aliveness_changed, ws.id, false}
       Agent.stop(pid)
       _ = render(view)
 

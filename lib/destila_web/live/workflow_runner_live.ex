@@ -31,18 +31,15 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     workflow_session = Workflows.get_workflow_session(id)
 
     if workflow_session do
-      {alive_session, alive_session_ref} =
+      alive_session =
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
           Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.ai_stream_topic(id))
-          Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.claude_session_topic())
+          Phoenix.PubSub.subscribe(Destila.PubSub, Destila.AI.AlivenessTracker.topic())
 
-          case GenServer.whereis({:via, Registry, {Destila.AI.SessionRegistry, id}}) do
-            nil -> {false, nil}
-            pid -> {true, Process.monitor(pid)}
-          end
+          Destila.AI.AlivenessTracker.alive?(id)
         else
-          {false, nil}
+          false
         end
 
       workflow_type = workflow_session.workflow_type
@@ -65,7 +62,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:page_title, workflow_session.title)
        |> assign(:streaming_chunks, nil)
        |> assign(:alive_session, alive_session)
-       |> assign(:alive_session_ref, alive_session_ref)
        |> assign(:question_answers, %{})
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
@@ -74,7 +70,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        socket
        |> put_flash(:error, "Session not found")
        |> assign(:alive_session, false)
-       |> assign(:alive_session_ref, nil)
        |> push_navigate(to: ~p"/crafting")}
     end
   end
@@ -333,26 +328,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     {:noreply, assign(socket, :streaming_chunks, chunks ++ [chunk])}
   end
 
-  def handle_info({:claude_session_started, ws_id}, socket) do
+  def handle_info({:aliveness_changed, ws_id, alive?}, socket) do
     if socket.assigns[:workflow_session] && ws_id == socket.assigns.workflow_session.id do
-      name = {:via, Registry, {Destila.AI.SessionRegistry, ws_id}}
-
-      case GenServer.whereis(name) do
-        nil ->
-          {:noreply, socket}
-
-        pid ->
-          ref = Process.monitor(pid)
-          {:noreply, assign(socket, alive_session: true, alive_session_ref: ref)}
-      end
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
-    if ref == socket.assigns[:alive_session_ref] do
-      {:noreply, assign(socket, alive_session: false, alive_session_ref: nil)}
+      {:noreply, assign(socket, :alive_session, alive?)}
     else
       {:noreply, socket}
     end
