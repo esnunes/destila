@@ -44,7 +44,6 @@ defmodule DestilaWeb.ChatComponents do
       assigns
       |> assign(:phase_groups, phase_groups(assigns.messages, assigns.phase_number))
       |> assign(:non_interactive, non_interactive)
-      |> assign(:total_phases, assigns.workflow_session.total_phases)
 
     ~H"""
     <div class="flex flex-col h-full">
@@ -52,7 +51,7 @@ defmodule DestilaWeb.ChatComponents do
       <div class="flex-1 min-h-0 overflow-y-auto px-6 py-6" id="chat-messages" phx-hook="ScrollBottom">
         <div class="max-w-2xl mx-auto">
           <%= for {phase, group} <- @phase_groups do %>
-            <%= if @total_phases > 1 do %>
+            <%= if @workflow_session.total_phases > 1 do %>
               <details
                 id={"phase-section-#{phase}"}
                 phx-hook=".PhaseToggle"
