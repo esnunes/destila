@@ -83,7 +83,7 @@ defmodule Destila.Sessions.SessionProcess do
 
     actions =
       if state == :setup do
-        [inactivity_timeout(), {:next_event, :internal, :start_phase}]
+        [inactivity_timeout(), {:next_event, :internal, :initialize}]
       else
         [inactivity_timeout()]
       end
@@ -95,7 +95,7 @@ defmodule Destila.Sessions.SessionProcess do
   # State: :setup
   # =====================================================================
 
-  def setup(:internal, :start_phase, data) do
+  def setup(:internal, :initialize, data) do
     ws = reload(data)
     data = %{data | ws: ws}
 
@@ -115,7 +115,7 @@ defmodule Destila.Sessions.SessionProcess do
 
   def setup({:call, from}, :retry_setup, data) do
     {:keep_state_and_data,
-     [{:reply, from, {:ok, data.ws}}, {:next_event, :internal, :start_phase}]}
+     [{:reply, from, {:ok, data.ws}}, {:next_event, :internal, :initialize}]}
   end
 
   def setup(:cast, :worktree_ready, data) do
