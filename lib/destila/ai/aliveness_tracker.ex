@@ -19,6 +19,8 @@ defmodule Destila.AI.AlivenessTracker do
       [{^session_id, true}] -> true
       _ -> false
     end
+  rescue
+    ArgumentError -> false
   end
 
   @doc "PubSub topic for aliveness change notifications."
