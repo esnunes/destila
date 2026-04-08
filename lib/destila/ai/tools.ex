@@ -64,6 +64,12 @@ defmodule Destila.AI.Tools do
       description: "Metadata value for the export action. Required for export."
     )
 
+    field(:type, :string,
+      description:
+        "Type of the exported value. One of: text (default), text_file, markdown, video_file. " <>
+          "Determines how the value is interpreted and rendered."
+    )
+
     def execute(_params) do
       {:ok, "Action recorded."}
     end

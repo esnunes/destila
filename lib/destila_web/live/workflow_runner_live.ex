@@ -761,6 +761,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   defp format_metadata_value(%{"text" => text}) when is_binary(text), do: text
+  defp format_metadata_value(%{"markdown" => md}) when is_binary(md), do: md
+  defp format_metadata_value(%{"text_file" => path}) when is_binary(path), do: path
+  defp format_metadata_value(%{"video_file" => path}) when is_binary(path), do: path
   defp format_metadata_value(value) when is_map(value), do: Jason.encode!(value, pretty: true)
   defp format_metadata_value(value), do: inspect(value)
 
