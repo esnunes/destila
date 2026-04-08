@@ -16,15 +16,14 @@ defmodule DestilaWeb.CraftingBoardLive do
   def mount(_params, session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
-      Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.claude_session_topic())
+      Phoenix.PubSub.subscribe(Destila.PubSub, Destila.AI.AlivenessTracker.topic())
     end
 
     {:ok,
      socket
      |> assign(:current_user, session["current_user"])
      |> assign(:page_title, "Crafting Board")
-     |> assign(:alive_sessions, %{})
-     |> assign(:monitored_refs, %{})}
+     |> assign(:alive_sessions, %{})}
   end
 
   def handle_params(params, _uri, socket) do
@@ -38,7 +37,7 @@ defmodule DestilaWeb.CraftingBoardLive do
      |> assign(:project_filter, project_filter)
      |> assign(:all_prompts, prompts)
      |> assign_derived_state()
-     |> monitor_alive_sessions()}
+     |> load_alive_sessions()}
   end
 
   def handle_event("toggle_view", %{"mode" => mode}, socket) do
@@ -65,72 +64,29 @@ defmodule DestilaWeb.CraftingBoardLive do
      socket
      |> assign(:all_prompts, prompts)
      |> assign_derived_state()
-     |> monitor_alive_sessions()}
+     |> load_alive_sessions()}
   end
 
-  def handle_info({:claude_session_started, ws_id}, socket) do
-    name = {:via, Registry, {Destila.AI.SessionRegistry, ws_id}}
-
-    case GenServer.whereis(name) do
-      nil ->
-        {:noreply, socket}
-
-      pid ->
-        ref = Process.monitor(pid)
-
-        {:noreply,
-         socket
-         |> update(:alive_sessions, &Map.put(&1, ws_id, true))
-         |> update(:monitored_refs, &Map.put(&1, ref, ws_id))}
-    end
-  end
-
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
-    case Map.get(socket.assigns.monitored_refs, ref) do
-      nil ->
-        {:noreply, socket}
-
-      ws_id ->
-        {:noreply,
-         socket
-         |> update(:alive_sessions, &Map.delete(&1, ws_id))
-         |> update(:monitored_refs, &Map.delete(&1, ref))}
+  def handle_info({:aliveness_changed, ws_id, alive?}, socket) do
+    if alive? do
+      {:noreply, update(socket, :alive_sessions, &Map.put(&1, ws_id, true))}
+    else
+      {:noreply, update(socket, :alive_sessions, &Map.delete(&1, ws_id))}
     end
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
 
-  # --- Aliveness monitoring ---
-
-  defp monitor_alive_sessions(socket) do
+  defp load_alive_sessions(socket) do
     if not connected?(socket) do
       socket
     else
-      sessions = socket.assigns.all_prompts
-      alive_map = socket.assigns[:alive_sessions] || %{}
-      monitored = socket.assigns[:monitored_refs] || %{}
+      alive_map =
+        socket.assigns.all_prompts
+        |> Enum.filter(fn session -> Destila.AI.AlivenessTracker.alive?(session.id) end)
+        |> Map.new(fn session -> {session.id, true} end)
 
-      {alive_map, monitored} =
-        Enum.reduce(sessions, {alive_map, monitored}, fn session, {alive, refs} ->
-          if Map.has_key?(alive, session.id) do
-            {alive, refs}
-          else
-            name = {:via, Registry, {Destila.AI.SessionRegistry, session.id}}
-
-            case GenServer.whereis(name) do
-              nil ->
-                {alive, refs}
-
-              pid ->
-                ref = Process.monitor(pid)
-                {Map.put(alive, session.id, true), Map.put(refs, ref, session.id)}
-            end
-          end
-        end)
-
-      socket
-      |> assign(:alive_sessions, alive_map)
-      |> assign(:monitored_refs, monitored)
+      assign(socket, :alive_sessions, alive_map)
     end
   end
 

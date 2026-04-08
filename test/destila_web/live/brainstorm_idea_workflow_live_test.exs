@@ -779,6 +779,15 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
           name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
         )
 
+      # Notify the tracker so it monitors the agent and updates ETS
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        Destila.PubSubHelper.claude_session_topic(),
+        {:claude_session_started, ws.id}
+      )
+
+      _ = :sys.get_state(Destila.AI.AlivenessTracker)
+
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "span[title='AI session running']")
@@ -794,11 +803,20 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
           name: {:via, Registry, {Destila.AI.SessionRegistry, ws.id}}
         )
 
+      # Notify the tracker so it monitors the agent and updates ETS
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        Destila.PubSubHelper.claude_session_topic(),
+        {:claude_session_started, ws.id}
+      )
+
+      _ = :sys.get_state(Destila.AI.AlivenessTracker)
+
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "span[title='AI session running']")
 
-      # Stop the agent — triggers :DOWN
+      # Stop the agent — tracker receives :DOWN, broadcasts {:aliveness_changed, ws.id, false}
       Agent.stop(pid)
       _ = render(view)
 
