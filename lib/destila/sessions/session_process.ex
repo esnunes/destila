@@ -2,6 +2,8 @@ defmodule Destila.Sessions.SessionProcess do
   @moduledoc """
   A gen_statem process that owns the complete state machine for a workflow session.
 
+  States: :setup → :preparing | :processing → :awaiting_input | :awaiting_confirmation → :done
+
   Serializes all state access — no concurrent DB writes, no reload-and-check patterns.
   WorkflowRunnerLive communicates exclusively through this process for domain events.
   """
@@ -71,7 +73,7 @@ defmodule Destila.Sessions.SessionProcess do
   # --- Callbacks ---
 
   @impl true
-  def callback_mode, do: :handle_event_function
+  def callback_mode, do: :state_functions
 
   @impl true
   def init(session_id) do
@@ -89,103 +91,213 @@ defmodule Destila.Sessions.SessionProcess do
     {:ok, state, data, actions}
   end
 
-  # --- Start phase (internal event) ---
-  # Used by init (from :setup) and retry_setup.
-  # Deferred so init returns quickly; callers that need synchronous
-  # completion (confirm_advance, phase_complete) use do_start_phase/1 directly.
-  @impl true
-  def handle_event(:internal, :start_phase, _state, data) do
+  # =====================================================================
+  # State: :setup
+  # =====================================================================
+
+  def setup(:internal, :start_phase, data) do
     {state, data} = do_start_phase(data)
     {:next_state, state, data, [inactivity_timeout()]}
   end
 
-  # --- User message ---
-  def handle_event({:call, from}, {:send_message, content}, {:phase, n, status}, data)
-      when status in [:awaiting_input, :awaiting_confirmation] do
-    case AI.Conversation.send_message(data.ws, content) do
-      :processing ->
-        with_pe(data, n, &Executions.process_phase/1)
-        ws = reload(data)
-        broadcast_updated(ws)
+  def setup({:call, from}, :retry_setup, data) do
+    {:keep_state_and_data,
+     [{:reply, from, {:ok, data.ws}}, {:next_event, :internal, :start_phase}]}
+  end
 
-        {:next_state, {:phase, n, :processing}, %{data | ws: ws},
-         [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+  def setup(:cast, :worktree_ready, data) do
+    handle_worktree_ready(data)
+  end
 
-      :awaiting_input ->
-        ws = reload(data)
+  def setup(:state_timeout, :inactivity, _data), do: {:stop, :normal}
 
-        {:keep_state, %{data | ws: ws}, [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+  def setup({:call, from}, _event, _data),
+    do: {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
+
+  def setup(:cast, _event, _data), do: :keep_state_and_data
+  def setup(:info, _msg, _data), do: :keep_state_and_data
+
+  # =====================================================================
+  # State: :preparing (worktree being set up)
+  # =====================================================================
+
+  def preparing(:cast, :worktree_ready, data) do
+    handle_worktree_ready(data)
+  end
+
+  def preparing(:state_timeout, :inactivity, _data), do: {:stop, :normal}
+
+  def preparing({:call, from}, _event, _data),
+    do: {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
+
+  def preparing(:cast, _event, _data), do: :keep_state_and_data
+  def preparing(:info, _msg, _data), do: :keep_state_and_data
+
+  # =====================================================================
+  # State: :processing (AI worker running)
+  # =====================================================================
+
+  def processing(:cast, {:ai_response, result, phase}, data) do
+    if phase == data.ws.current_phase do
+      case AI.Conversation.handle_ai_result(data.ws, result) do
+        :awaiting_input ->
+          with_current_pe(data, &Executions.await_input/1)
+          ws = reload(data)
+          broadcast_updated(ws)
+          {:next_state, :awaiting_input, %{data | ws: ws}, [inactivity_timeout()]}
+
+        :suggest_phase_complete ->
+          with_current_pe(data, &Executions.await_confirmation(&1, nil))
+          ws = reload(data)
+          broadcast_updated(ws)
+          {:next_state, :awaiting_confirmation, %{data | ws: ws}, [inactivity_timeout()]}
+
+        :phase_complete ->
+          complete_current_pe(data)
+          {next_state, data} = advance(data)
+          {:next_state, next_state, data, [inactivity_timeout()]}
+      end
+    else
+      :keep_state_and_data
     end
   end
 
-  # --- Confirm advance ---
-  def handle_event({:call, from}, :confirm_advance, {:phase, n, :awaiting_confirmation}, data) do
+  def processing(:cast, {:ai_error, reason, phase}, data) do
+    if phase == data.ws.current_phase do
+      AI.Conversation.handle_ai_error(data.ws, reason)
+      with_current_pe(data, &Executions.await_input/1)
+      ws = reload(data)
+      broadcast_updated(ws)
+      {:next_state, :awaiting_input, %{data | ws: ws}, [inactivity_timeout()]}
+    else
+      :keep_state_and_data
+    end
+  end
+
+  def processing({:call, from}, :cancel, data) do
+    AI.ClaudeSession.stop_for_workflow_session(data.session_id)
+    with_current_pe(data, &Executions.await_input/1)
+    ws = reload(data)
+    broadcast_updated(ws)
+
+    {:next_state, :awaiting_input, %{data | ws: ws},
+     [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+  end
+
+  def processing(:state_timeout, :inactivity, _data), do: {:stop, :normal}
+
+  def processing({:call, from}, _event, _data),
+    do: {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
+
+  def processing(:cast, _event, _data), do: :keep_state_and_data
+  def processing(:info, _msg, _data), do: :keep_state_and_data
+
+  # =====================================================================
+  # State: :awaiting_input (waiting for user message)
+  # =====================================================================
+
+  def awaiting_input({:call, from}, {:send_message, content}, data) do
+    handle_send_message(from, content, data)
+  end
+
+  def awaiting_input({:call, from}, :retry, data) do
+    handle_retry(from, data)
+  end
+
+  def awaiting_input({:call, from}, :mark_done, data) do
+    handle_mark_done(from, data)
+  end
+
+  def awaiting_input(:state_timeout, :inactivity, _data), do: {:stop, :normal}
+
+  def awaiting_input({:call, from}, _event, _data),
+    do: {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
+
+  def awaiting_input(:cast, _event, _data), do: :keep_state_and_data
+  def awaiting_input(:info, _msg, _data), do: :keep_state_and_data
+
+  # =====================================================================
+  # State: :awaiting_confirmation (AI suggested phase_complete)
+  # =====================================================================
+
+  def awaiting_confirmation({:call, from}, {:send_message, content}, data) do
+    handle_send_message(from, content, data)
+  end
+
+  def awaiting_confirmation({:call, from}, :confirm_advance, data) do
     complete_current_pe(data)
-    {next_state, data} = advance(data, n)
+    {next_state, data} = advance(data)
 
     {:next_state, next_state, data, [{:reply, from, {:ok, data.ws}}, inactivity_timeout()]}
   end
 
-  # --- Decline advance ---
-  def handle_event({:call, from}, :decline_advance, {:phase, n, :awaiting_confirmation}, data) do
-    with_pe(data, n, &Executions.reject_completion/1)
+  def awaiting_confirmation({:call, from}, :decline_advance, data) do
+    with_current_pe(data, &Executions.reject_completion/1)
     ws = reload(data)
     broadcast_updated(ws)
 
-    {:next_state, {:phase, n, :awaiting_input}, %{data | ws: ws},
+    {:next_state, :awaiting_input, %{data | ws: ws},
      [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
   end
 
-  # --- AI response (phase must match to reject stale worker results) ---
-  def handle_event(:cast, {:ai_response, result, phase}, {:phase, n, :processing}, data)
-      when phase == n do
-    case AI.Conversation.handle_ai_result(data.ws, result) do
+  def awaiting_confirmation({:call, from}, :retry, data) do
+    handle_retry(from, data)
+  end
+
+  def awaiting_confirmation({:call, from}, :mark_done, data) do
+    handle_mark_done(from, data)
+  end
+
+  def awaiting_confirmation(:state_timeout, :inactivity, _data), do: {:stop, :normal}
+
+  def awaiting_confirmation({:call, from}, _event, _data),
+    do: {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
+
+  def awaiting_confirmation(:cast, _event, _data), do: :keep_state_and_data
+  def awaiting_confirmation(:info, _msg, _data), do: :keep_state_and_data
+
+  # =====================================================================
+  # State: :done
+  # =====================================================================
+
+  def done({:call, from}, :mark_undone, data) do
+    {:ok, ws} = Workflows.update_workflow_session(data.ws, %{done_at: nil})
+    state = reconstruct_state(ws)
+    broadcast_updated(ws)
+
+    {:next_state, state, %{data | ws: ws}, [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+  end
+
+  def done(:state_timeout, :inactivity, _data), do: {:stop, :normal}
+
+  def done({:call, from}, _event, _data),
+    do: {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
+
+  def done(:cast, _event, _data), do: :keep_state_and_data
+  def done(:info, _msg, _data), do: :keep_state_and_data
+
+  # --- Shared event handlers ---
+
+  defp handle_send_message(from, content, data) do
+    case AI.Conversation.send_message(data.ws, content) do
+      :processing ->
+        with_current_pe(data, &Executions.process_phase/1)
+        ws = reload(data)
+        broadcast_updated(ws)
+
+        {:next_state, :processing, %{data | ws: ws},
+         [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+
       :awaiting_input ->
-        with_pe(data, n, &Executions.await_input/1)
         ws = reload(data)
-        broadcast_updated(ws)
-        {:next_state, {:phase, n, :awaiting_input}, %{data | ws: ws}, [inactivity_timeout()]}
-
-      :suggest_phase_complete ->
-        with_pe(data, n, &Executions.await_confirmation(&1, nil))
-        ws = reload(data)
-        broadcast_updated(ws)
-
-        {:next_state, {:phase, n, :awaiting_confirmation}, %{data | ws: ws},
-         [inactivity_timeout()]}
-
-      :phase_complete ->
-        complete_current_pe(data)
-        {next_state, data} = advance(data, n)
-        {:next_state, next_state, data, [inactivity_timeout()]}
+        {:keep_state, %{data | ws: ws}, [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
     end
   end
 
-  # --- AI response from a stale/different phase — ignore ---
-  def handle_event(:cast, {:ai_response, _result, _phase}, _state, _data) do
-    :keep_state_and_data
-  end
-
-  # --- AI error (phase must match) ---
-  def handle_event(:cast, {:ai_error, reason, phase}, {:phase, n, :processing}, data)
-      when phase == n do
-    AI.Conversation.handle_ai_error(data.ws, reason)
-    with_pe(data, n, &Executions.await_input/1)
-    ws = reload(data)
-    broadcast_updated(ws)
-    {:next_state, {:phase, n, :awaiting_input}, %{data | ws: ws}, [inactivity_timeout()]}
-  end
-
-  # --- AI error from a stale/different phase — ignore ---
-  def handle_event(:cast, {:ai_error, _reason, _phase}, _state, _data) do
-    :keep_state_and_data
-  end
-
-  # --- Retry ---
-  def handle_event({:call, from}, :retry, {:phase, n, status}, data)
-      when status in [:awaiting_input, :awaiting_confirmation] do
+  defp handle_retry(from, data) do
+    phase = data.ws.current_phase
     AI.ClaudeSession.stop_for_workflow_session(data.session_id)
-    AI.Conversation.handle_session_strategy(data.ws, n)
+    AI.Conversation.handle_session_strategy(data.ws, phase)
 
     # Transition PE to processing BEFORE starting the phase,
     # so the PE is in the right state when the worker runs inline (Oban :inline in tests).
@@ -207,30 +319,11 @@ defmodule Destila.Sessions.SessionProcess do
     ws = reload(data)
     broadcast_updated(ws)
 
-    {:next_state, {:phase, n, :processing}, %{data | ws: ws},
+    {:next_state, :processing, %{data | ws: ws},
      [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
   end
 
-  # --- Retry setup ---
-  def handle_event({:call, from}, :retry_setup, :setup, data) do
-    {:keep_state_and_data,
-     [{:reply, from, {:ok, data.ws}}, {:next_event, :internal, :start_phase}]}
-  end
-
-  # --- Cancel ---
-  def handle_event({:call, from}, :cancel, {:phase, n, :processing}, data) do
-    AI.ClaudeSession.stop_for_workflow_session(data.session_id)
-    with_pe(data, n, &Executions.await_input/1)
-    ws = reload(data)
-    broadcast_updated(ws)
-
-    {:next_state, {:phase, n, :awaiting_input}, %{data | ws: ws},
-     [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
-  end
-
-  # --- Mark done ---
-  def handle_event({:call, from}, :mark_done, {:phase, _n, status}, data)
-      when status != :processing do
+  defp handle_mark_done(from, data) do
     ai_session = AI.get_ai_session_for_workflow(data.session_id)
 
     if ai_session do
@@ -248,44 +341,14 @@ defmodule Destila.Sessions.SessionProcess do
     {:next_state, :done, %{data | ws: ws}, [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
   end
 
-  # --- Mark undone ---
-  def handle_event({:call, from}, :mark_undone, :done, data) do
-    {:ok, ws} = Workflows.update_workflow_session(data.ws, %{done_at: nil})
-    state = reconstruct_state(ws)
-    broadcast_updated(ws)
-
-    {:next_state, state, %{data | ws: ws}, [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
-  end
-
-  # --- Worktree ready ---
-  def handle_event(:cast, :worktree_ready, state, data)
-      when state == :setup or (is_tuple(state) and elem(state, 2) == :preparing) do
+  defp handle_worktree_ready(data) do
     ws = reload(data)
     phase = ws.current_phase
     {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
     AI.Conversation.phase_start(ws)
     ws = reload(data)
     broadcast_updated(ws)
-    {:next_state, {:phase, phase, :processing}, %{data | ws: ws}, [inactivity_timeout()]}
-  end
-
-  # --- Inactivity timeout ---
-  def handle_event(:state_timeout, :inactivity, _state, _data) do
-    {:stop, :normal}
-  end
-
-  # --- Catch-all for unexpected events (MUST be last) ---
-  # Returns {:error, :invalid_event} for calls so the LiveView can handle gracefully
-  def handle_event({:call, from}, _event, _state, _data) do
-    {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
-  end
-
-  def handle_event(:cast, _event, _state, _data) do
-    :keep_state_and_data
-  end
-
-  def handle_event(:info, _msg, _state, _data) do
-    :keep_state_and_data
+    {:next_state, :processing, %{data | ws: ws}, [inactivity_timeout()]}
   end
 
   # --- Helpers ---
@@ -298,19 +361,19 @@ defmodule Destila.Sessions.SessionProcess do
       true ->
         case Executions.get_current_phase_execution(ws.id) do
           nil -> :setup
-          %{status: :processing} -> {:phase, ws.current_phase, :processing}
-          %{status: :awaiting_input} -> {:phase, ws.current_phase, :awaiting_input}
-          %{status: :awaiting_confirmation} -> {:phase, ws.current_phase, :awaiting_confirmation}
-          %{status: :failed} -> {:phase, ws.current_phase, :awaiting_input}
-          %{status: :completed} -> {:phase, ws.current_phase, :processing}
+          %{status: :processing} -> :processing
+          %{status: :awaiting_input} -> :awaiting_input
+          %{status: :awaiting_confirmation} -> :awaiting_confirmation
+          %{status: :failed} -> :awaiting_input
+          %{status: :completed} -> :processing
         end
     end
   end
 
   defp reload(data), do: Workflows.get_workflow_session!(data.session_id)
 
-  defp with_pe(data, phase_number, fun) do
-    case Executions.get_phase_execution_by_number(data.session_id, phase_number) do
+  defp with_current_pe(data, fun) do
+    case Executions.get_phase_execution_by_number(data.session_id, data.ws.current_phase) do
       nil -> :ok
       pe -> fun.(pe)
     end
@@ -329,27 +392,26 @@ defmodule Destila.Sessions.SessionProcess do
   defp do_start_phase(data) do
     ws = reload(data)
     data = %{data | ws: ws}
-    phase = ws.current_phase
 
     case ensure_worktree_ready(ws) do
       :ready ->
-        {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
+        {:ok, _pe} = Executions.ensure_phase_execution(ws, ws.current_phase)
         AI.Conversation.phase_start(ws)
         ws = reload(data)
         broadcast_updated(ws)
-        {{:phase, phase, :processing}, %{data | ws: ws}}
+        {:processing, %{data | ws: ws}}
 
       :preparing ->
         broadcast_updated(ws)
-        {{:phase, phase, :preparing}, data}
+        {:preparing, data}
     end
   end
 
   # Completes current phase and either finishes the session or starts the next phase.
   # Returns {next_state, updated_data}.
-  defp advance(data, current_phase) do
-    next = current_phase + 1
+  defp advance(data) do
     ws = data.ws
+    next = ws.current_phase + 1
 
     if next > ws.total_phases do
       {:ok, ws} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
