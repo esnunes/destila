@@ -3,7 +3,7 @@ defmodule Destila.AI.Conversation do
   Handles all AI conversation mechanics -- phase starts, user messages,
   AI results, and AI errors.
 
-  The Engine calls this module directly instead of delegating to workflow
+  SessionProcess calls this module directly instead of delegating to workflow
   modules. Workflow modules remain purely declarative.
   """
 
@@ -28,100 +28,98 @@ defmodule Destila.AI.Conversation do
   end
 
   @doc """
-  Processes a phase update (user message, AI result, AI error, or unknown).
+  Sends a user message for the current phase.
 
-  Returns `:processing`, `:awaiting_input`, `:phase_complete`, or `:suggest_phase_complete`.
+  Returns `:processing`.
   """
-  def phase_update(ws, %{message: message}) do
+  def send_message(ws, message) do
     phase_number = ws.current_phase
-    ai_session = AI.get_ai_session_for_workflow(ws.id)
+    ai_session = AI.get_ai_session_for_workflow!(ws.id)
 
-    if ai_session do
-      AI.create_message(ai_session.id, %{
-        role: :user,
-        content: message,
-        phase: phase_number,
-        workflow_session_id: ws.id
-      })
+    AI.create_message(ai_session.id, %{
+      role: :user,
+      content: message,
+      phase: phase_number,
+      workflow_session_id: ws.id
+    })
 
-      enqueue_ai_worker(ws, phase_number, message)
-      :processing
-    else
-      :awaiting_input
-    end
+    enqueue_ai_worker(ws, phase_number, message)
+    :processing
   end
 
-  def phase_update(ws, %{ai_result: result}) do
+  @doc """
+  Processes an AI result for the current phase.
+
+  Returns `:awaiting_input`, `:phase_complete`, or `:suggest_phase_complete`.
+  """
+  def handle_ai_result(ws, result) do
     phase_number = ws.current_phase
-    ai_session = AI.get_ai_session_for_workflow(ws.id)
+    ai_session = AI.get_ai_session_for_workflow!(ws.id)
 
-    if ai_session do
-      response_text = ResponseProcessor.response_text(result)
-      session_action = ResponseProcessor.extract_session_action(result)
+    response_text = ResponseProcessor.response_text(result)
+    session_action = ResponseProcessor.extract_session_action(result)
 
-      content =
-        case session_action do
-          %{message: msg} when is_binary(msg) and msg != "" -> msg
-          _ -> response_text
-        end
-
-      AI.create_message(ai_session.id, %{
-        role: :system,
-        content: content,
-        raw_response: result,
-        phase: phase_number,
-        workflow_session_id: ws.id
-      })
-
-      if result[:session_id] do
-        AI.update_ai_session(ai_session, %{claude_session_id: result[:session_id]})
-      end
-
-      # Process export actions
-      export_actions = ResponseProcessor.extract_export_actions(result)
-
-      if export_actions != [] do
-        phase_name =
-          Workflows.phase_name(ws.workflow_type, phase_number) || "Phase #{phase_number}"
-
-        for %{key: key, value: value} <- export_actions, key != nil do
-          Workflows.upsert_metadata(
-            ws.id,
-            phase_name,
-            key,
-            %{"text" => value},
-            exported: true
-          )
-        end
-      end
-
+    content =
       case session_action do
-        %{action: "phase_complete"} -> :phase_complete
-        %{action: "suggest_phase_complete"} -> :suggest_phase_complete
-        _ -> :awaiting_input
+        %{message: msg} when is_binary(msg) and msg != "" -> msg
+        _ -> response_text
       end
-    else
-      :awaiting_input
+
+    AI.create_message(ai_session.id, %{
+      role: :system,
+      content: content,
+      raw_response: result,
+      phase: phase_number,
+      workflow_session_id: ws.id
+    })
+
+    if result[:session_id] do
+      AI.update_ai_session(ai_session, %{claude_session_id: result[:session_id]})
+    end
+
+    # Process export actions
+    export_actions = ResponseProcessor.extract_export_actions(result)
+
+    if export_actions != [] do
+      phase_name =
+        Workflows.phase_name(ws.workflow_type, phase_number) || "Phase #{phase_number}"
+
+      for %{key: key, value: value} <- export_actions, key != nil do
+        Workflows.upsert_metadata(
+          ws.id,
+          phase_name,
+          key,
+          %{"text" => value},
+          exported: true
+        )
+      end
+    end
+
+    case session_action do
+      %{action: "phase_complete"} -> :phase_complete
+      %{action: "suggest_phase_complete"} -> :suggest_phase_complete
+      _ -> :awaiting_input
     end
   end
 
-  def phase_update(ws, %{ai_error: _reason}) do
-    phase_number = ws.current_phase
-    ai_session = AI.get_ai_session_for_workflow(ws.id)
+  @doc """
+  Handles an AI error for the current phase.
 
-    if ai_session do
-      AI.create_message(ai_session.id, %{
-        role: :system,
-        content: "Something went wrong. Please try sending your message again.",
-        phase: phase_number,
-        workflow_session_id: ws.id
-      })
-    end
+  Returns `:awaiting_input`.
+  """
+  def handle_ai_error(ws, _reason) do
+    phase_number = ws.current_phase
+    ai_session = AI.get_ai_session_for_workflow!(ws.id)
+
+    AI.create_message(ai_session.id, %{
+      role: :system,
+      content: "Something went wrong. Please try sending your message again.",
+      phase: phase_number,
+      workflow_session_id: ws.id
+    })
 
     :awaiting_input
   end
-
-  def phase_update(_ws, _params), do: :awaiting_input
 
   @doc """
   Handles session strategy for a given phase.
@@ -129,7 +127,7 @@ defmodule Destila.AI.Conversation do
   For `:new` -- stops the existing ClaudeSession and creates a fresh AI session.
   For `:resume` -- no-op.
 
-  This is also used by `Engine.handle_retry/1` to apply the phase's strategy
+  This is also used by `SessionProcess` retry to apply the phase's strategy
   before restarting.
   """
   def handle_session_strategy(ws, phase_number) do

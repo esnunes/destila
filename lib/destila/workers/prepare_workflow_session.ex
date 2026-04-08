@@ -2,6 +2,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
   use Oban.Worker, queue: :setup, max_attempts: 3
 
   alias Destila.{AI, Git, Workflows}
+  alias Destila.Sessions.SessionProcess
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"workflow_session_id" => workflow_session_id}}) do
@@ -12,11 +13,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
          {:ok, worktree_path} <- create_worktree(workflow_session, project) do
       AI.get_or_create_ai_session(workflow_session.id, %{worktree_path: worktree_path})
 
-      Destila.Executions.Engine.phase_update(
-        workflow_session.id,
-        workflow_session.current_phase,
-        %{worktree_ready: true}
-      )
+      SessionProcess.worktree_ready(workflow_session.id)
 
       :ok
     end

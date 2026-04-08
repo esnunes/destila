@@ -18,6 +18,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   alias Destila.AI
   alias Destila.AI.ResponseProcessor
+  alias Destila.Sessions.SessionProcess
   alias Destila.Workflows
   alias Destila.Workflows.Session
 
@@ -58,8 +59,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:workflow_session, workflow_session)
        |> assign(:project, project)
        |> assign(:phases, phases)
-       |> assign(:current_phase, workflow_session.current_phase)
-       |> assign(:total_phases, workflow_session.total_phases)
        |> assign(:editing_title, false)
        |> assign_metadata(workflow_session.id)
        |> assign_worktree_path(workflow_session.id)
@@ -68,6 +67,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:alive_session, alive_session)
        |> assign(:alive_session_ref, alive_session_ref)
        |> assign(:question_answers, %{})
+       |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
       {:ok,
@@ -117,99 +117,78 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("confirm_advance", _params, socket) do
-    ws = socket.assigns.workflow_session
-    next_phase = ws.current_phase + 1
+    case SessionProcess.confirm_advance(socket.assigns.workflow_session.id) do
+      {:ok, ws} ->
+        {:noreply,
+         socket
+         |> assign(:workflow_session, ws)
+         |> assign(:page_title, ws.title)
+         |> assign(:question_answers, %{})
+         |> assign_ai_state(ws)}
 
-    if next_phase > ws.total_phases do
-      {:noreply, socket}
-    else
-      Destila.Executions.Engine.advance_to_next(ws)
-      ws = Workflows.get_workflow_session!(ws.id)
-
-      {:noreply,
-       socket
-       |> assign(:workflow_session, ws)
-       |> assign(:current_phase, ws.current_phase)
-       |> assign(:page_title, ws.title)
-       |> assign(:question_answers, %{})
-       |> assign_ai_state(ws)}
+      {:error, _} ->
+        {:noreply, socket}
     end
   end
 
   def handle_event("decline_advance", _params, socket) do
-    ws = socket.assigns.workflow_session
+    case SessionProcess.decline_advance(socket.assigns.workflow_session.id) do
+      {:ok, ws} ->
+        {:noreply,
+         socket
+         |> assign(:workflow_session, ws)
+         |> assign_ai_state(ws)}
 
-    case Destila.Executions.get_current_phase_execution(ws.id) do
-      %{status: :awaiting_confirmation} = pe -> Destila.Executions.reject_completion(pe)
-      _ -> :ok
+      {:error, _} ->
+        {:noreply, socket}
     end
-
-    ws = Workflows.get_workflow_session!(ws.id)
-
-    {:noreply,
-     socket
-     |> assign(:workflow_session, ws)
-     |> assign_ai_state(ws)}
   end
 
   def handle_event("mark_done", _params, socket) do
-    ws = socket.assigns.workflow_session
+    case SessionProcess.mark_done(socket.assigns.workflow_session.id) do
+      {:ok, ws} ->
+        {:noreply,
+         socket
+         |> assign(:workflow_session, ws)
+         |> assign_ai_state(ws)}
 
-    if Session.phase_status(ws) == :processing do
-      {:noreply, socket}
-    else
-      ai_session = AI.get_ai_session_for_workflow(ws.id)
-
-      if ai_session do
-        AI.create_message(ai_session.id, %{
-          role: :system,
-          content: Workflows.completion_message(ws.workflow_type),
-          phase: ws.current_phase,
-          workflow_session_id: ws.id
-        })
-      end
-
-      {:ok, ws} =
-        Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
-
-      {:noreply,
-       socket
-       |> assign(:workflow_session, ws)
-       |> assign_ai_state(ws)}
+      {:error, _} ->
+        {:noreply, socket}
     end
   end
 
   def handle_event("mark_undone", _params, socket) do
-    ws = socket.assigns.workflow_session
+    case SessionProcess.mark_undone(socket.assigns.workflow_session.id) do
+      {:ok, ws} ->
+        {:noreply, assign(socket, :workflow_session, ws)}
 
-    {:ok, ws} =
-      Workflows.update_workflow_session(ws, %{done_at: nil})
-
-    {:noreply, assign(socket, :workflow_session, ws)}
+      {:error, _} ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("retry_setup", _params, socket) do
-    ws = socket.assigns.workflow_session
-    Destila.Executions.Engine.start_session(ws)
-    {:noreply, socket}
+    case SessionProcess.retry_setup(socket.assigns.workflow_session.id) do
+      {:ok, ws} ->
+        {:noreply, assign(socket, :workflow_session, ws)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
   end
 
   # --- Chat events (previously in AiConversationPhase) ---
 
   def handle_event("send_text", %{"content" => content}, socket) when content != "" do
-    ws = socket.assigns.workflow_session
+    case SessionProcess.send_message(socket.assigns.workflow_session.id, content) do
+      {:ok, ws} ->
+        {:noreply,
+         socket
+         |> assign(:workflow_session, ws)
+         |> assign_ai_state(ws)}
 
-    if Session.phase_status(ws) != :processing do
-      Destila.Executions.Engine.phase_update(ws.id, ws.current_phase, %{message: content})
-
-      ws = Workflows.get_workflow_session!(ws.id)
-
-      {:noreply,
-       socket
-       |> assign(:workflow_session, ws)
-       |> assign_ai_state(ws)}
-    else
-      {:noreply, socket}
+      {:error, _} ->
+        {:noreply, socket}
     end
   end
 
@@ -291,31 +270,22 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("retry_phase", _params, socket) do
-    ws = socket.assigns.workflow_session
+    case SessionProcess.retry(socket.assigns.workflow_session.id) do
+      {:ok, ws} ->
+        {:noreply, assign(socket, :workflow_session, ws)}
 
-    if Session.phase_status(ws) != :processing do
-      Destila.Executions.Engine.phase_retry(ws)
-      ws = Workflows.get_workflow_session!(ws.id)
-      {:noreply, assign(socket, :workflow_session, ws)}
-    else
-      {:noreply, socket}
+      {:error, _} ->
+        {:noreply, socket}
     end
   end
 
   def handle_event("cancel_phase", _params, socket) do
-    ws = socket.assigns.workflow_session
+    case SessionProcess.cancel(socket.assigns.workflow_session.id) do
+      {:ok, ws} ->
+        {:noreply, assign(socket, :workflow_session, ws)}
 
-    if Session.phase_status(ws) == :processing do
-      AI.ClaudeSession.stop_for_workflow_session(ws.id)
-
-      if pe = Destila.Executions.get_current_phase_execution(ws.id) do
-        Destila.Executions.await_input(pe)
-      end
-
-      ws = Workflows.get_workflow_session!(ws.id)
-      {:noreply, assign(socket, :workflow_session, ws)}
-    else
-      {:noreply, socket}
+      {:error, _} ->
+        {:noreply, socket}
     end
   end
 
@@ -324,15 +294,16 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     if socket.assigns[:workflow_session] &&
          updated_ws.id == socket.assigns.workflow_session.id do
       ws = Workflows.get_workflow_session!(updated_ws.id)
+      phase_status = Session.phase_status(ws)
 
       {:noreply,
        socket
        |> assign(:workflow_session, ws)
-       |> assign(:current_phase, ws.current_phase)
        |> assign(:page_title, ws.title)
+       |> assign(:phase_status, phase_status)
        |> assign(
          :streaming_chunks,
-         if(Session.phase_status(ws) == :processing,
+         if(phase_status == :processing,
            do: socket.assigns[:streaming_chunks],
            else: nil
          )
@@ -393,16 +364,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   defp assign_ai_state(socket, ws) do
     messages = AI.list_messages_for_workflow_session(ws.id)
-    current_step = compute_current_step(ws, messages)
+    current_step = compute_current_step(ws, socket.assigns.phase_status, messages)
 
     socket
     |> assign(:messages, messages)
     |> assign(:current_step, current_step)
   end
 
-  defp compute_current_step(ws, messages) do
-    phase_status = Session.phase_status(ws)
-
+  defp compute_current_step(ws, phase_status, messages) do
     cond do
       phase_status == :setup ->
         %{input_type: nil, options: nil, questions: [], question_title: nil, completed: false}
@@ -521,15 +490,18 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             <div class="flex items-center gap-3 ml-4">
               <div class="flex items-center gap-2">
                 <div class="w-24">
-                  <.progress_indicator completed={@current_phase} total={@total_phases} />
+                  <.progress_indicator
+                    completed={@workflow_session.current_phase}
+                    total={@workflow_session.total_phases}
+                  />
                 </div>
                 <span class="text-xs text-base-content/40">
-                  Phase {@current_phase}/{@total_phases}
+                  Phase {@workflow_session.current_phase}/{@workflow_session.total_phases}
                   <span
-                    :if={Workflows.phase_name(@workflow_type, @current_phase)}
+                    :if={Workflows.phase_name(@workflow_type, @workflow_session.current_phase)}
                     class="hidden sm:inline"
                   >
-                    — {Workflows.phase_name(@workflow_type, @current_phase)}
+                    — {Workflows.phase_name(@workflow_type, @workflow_session.current_phase)}
                   </span>
                 </span>
               </div>
@@ -540,7 +512,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                   @workflow_session &&
                     @workflow_session.current_phase == @workflow_session.total_phases &&
                     !Session.done?(@workflow_session) &&
-                    Session.phase_status(@workflow_session) != :processing
+                    @phase_status != :processing
                 }
                 phx-click="mark_done"
                 id="mark-done-btn"
@@ -746,13 +718,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   # --- Generic phase rendering ---
 
   defp render_phase(assigns) do
-    phase_status = Session.phase_status(assigns.workflow_session)
-    assigns = assign(assigns, :phase_status, phase_status)
     do_render_phase(assigns)
   end
 
-  defp do_render_phase(%{phases: phases, current_phase: current_phase} = assigns) do
-    case Enum.at(phases, current_phase - 1) do
+  defp do_render_phase(%{phases: phases, workflow_session: ws} = assigns) do
+    case Enum.at(phases, ws.current_phase - 1) do
       %Destila.Workflows.Phase{} = phase ->
         assigns = assign(assigns, :phase_config, phase)
 
@@ -760,7 +730,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         <.chat_phase
           workflow_session={@workflow_session}
           messages={@messages}
-          phase_number={@current_phase}
+          phase_number={@workflow_session.current_phase}
           phase_config={@phase_config}
           streaming_chunks={@streaming_chunks}
           question_answers={@question_answers}
@@ -773,7 +743,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       nil ->
         ~H"""
         <div class="text-base-content/50 text-center py-12">
-          Phase {@current_phase}
+          Phase {@workflow_session.current_phase}
         </div>
         """
     end

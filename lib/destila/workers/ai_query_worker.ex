@@ -9,6 +9,7 @@ defmodule Destila.Workers.AiQueryWorker do
     ]
 
   alias Destila.{AI, Workflows}
+  alias Destila.Sessions.SessionProcess
 
   @impl Oban.Worker
   def perform(%Oban.Job{
@@ -27,16 +28,16 @@ defmodule Destila.Workers.AiQueryWorker do
 
         case AI.ClaudeSession.query_streaming(session, query, stream_topic: stream_topic) do
           {:ok, result} ->
-            Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_result: result})
+            SessionProcess.ai_response(ws.id, result, phase)
             :ok
 
           {:error, reason} ->
-            Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_error: reason})
+            SessionProcess.ai_error(ws.id, reason, phase)
             :ok
         end
 
       {:error, reason} ->
-        Destila.Executions.Engine.phase_update(ws.id, phase, %{ai_error: reason})
+        SessionProcess.ai_error(ws.id, reason, phase)
         {:error, reason}
     end
   end
