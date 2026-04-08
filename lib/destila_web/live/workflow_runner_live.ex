@@ -67,6 +67,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:alive_session, alive_session)
        |> assign(:alive_session_ref, alive_session_ref)
        |> assign(:question_answers, %{})
+       |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
       {:ok,
@@ -299,6 +300,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        socket
        |> assign(:workflow_session, ws)
        |> assign(:page_title, ws.title)
+       |> assign(:phase_status, phase_status)
        |> assign(
          :streaming_chunks,
          if(phase_status == :processing,
@@ -308,7 +310,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        )
        |> assign_metadata(ws.id)
        |> assign_worktree_path(ws.id)
-       |> assign_ai_state(ws, phase_status)}
+       |> assign_ai_state(ws)}
     else
       {:noreply, socket}
     end
@@ -360,14 +362,12 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # --- Private: AI state management ---
 
-  defp assign_ai_state(socket, ws, phase_status \\ nil) do
+  defp assign_ai_state(socket, ws) do
     messages = AI.list_messages_for_workflow_session(ws.id)
-    phase_status = phase_status || Session.phase_status(ws)
-    current_step = compute_current_step(ws, phase_status, messages)
+    current_step = compute_current_step(ws, socket.assigns.phase_status, messages)
 
     socket
     |> assign(:messages, messages)
-    |> assign(:phase_status, phase_status)
     |> assign(:current_step, current_step)
   end
 
