@@ -2,7 +2,7 @@ defmodule Destila.Sessions.SessionProcess do
   @moduledoc """
   A gen_statem process that owns the complete state machine for a workflow session.
 
-  States: :setup → :preparing | :processing → :awaiting_input | :awaiting_confirmation → :done
+  States: :setup → :processing → :awaiting_input | :awaiting_confirmation → :done
 
   Serializes all state access — no concurrent DB writes, no reload-and-check patterns.
   WorkflowRunnerLive communicates exclusively through this process for domain events.
@@ -116,22 +116,6 @@ defmodule Destila.Sessions.SessionProcess do
 
   def setup(:cast, _event, _data), do: :keep_state_and_data
   def setup(:info, _msg, _data), do: :keep_state_and_data
-
-  # =====================================================================
-  # State: :preparing (worktree being set up)
-  # =====================================================================
-
-  def preparing(:cast, :worktree_ready, data) do
-    handle_worktree_ready(data)
-  end
-
-  def preparing(:state_timeout, :inactivity, _data), do: {:stop, :normal}
-
-  def preparing({:call, from}, _event, _data),
-    do: {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
-
-  def preparing(:cast, _event, _data), do: :keep_state_and_data
-  def preparing(:info, _msg, _data), do: :keep_state_and_data
 
   # =====================================================================
   # State: :processing (AI worker running)
@@ -403,7 +387,7 @@ defmodule Destila.Sessions.SessionProcess do
 
       :preparing ->
         broadcast_updated(ws)
-        {:preparing, data}
+        {:setup, data}
     end
   end
 
