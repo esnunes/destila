@@ -34,7 +34,7 @@ defmodule Destila.Workflows.CodeChatWorkflow do
     ]
   end
 
-  def creation_config, do: {nil, "Message", "user_prompt"}
+  def creation_config, do: {nil, "Prompt", "user_prompt"}
 
   def default_title, do: "New Chat"
 
