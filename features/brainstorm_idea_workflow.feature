@@ -84,10 +84,10 @@ Feature: Brainstorm Idea Workflow
     And I click "Mark as Done"
     Then the workflow should be marked as complete
 
-  Scenario: Mark as Done is hidden while last phase is processing
+  Scenario: Mark as Done is disabled while last phase is processing
     Given the session is in Phase 4 - Prompt Generation
     And the phase is still processing
-    Then I should not see a "Mark as Done" button
+    Then the "Mark as Done" button should be visible but disabled
     And the session should not be marked as complete
 
   Scenario: Un-done a completed session
