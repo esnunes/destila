@@ -133,7 +133,7 @@ defmodule DestilaWeb.BoardComponents do
         <% end %>
 
         <.progress_indicator
-          :if={!@compact}
+          :if={!@compact && @card.total_phases > 1}
           completed={@card.current_phase}
           total={@card.total_phases}
         />
@@ -183,9 +183,11 @@ defmodule DestilaWeb.BoardComponents do
 
   def workflow_label(:brainstorm_idea), do: "Brainstorm Idea"
   def workflow_label(:implement_general_prompt), do: "Implementation"
+  def workflow_label(:code_chat), do: "Code Chat"
   def workflow_label(_), do: "Workflow"
 
   defp workflow_badge_class(:brainstorm_idea), do: "badge-warning"
   defp workflow_badge_class(:implement_general_prompt), do: "badge-primary"
+  defp workflow_badge_class(:code_chat), do: "badge-accent"
   defp workflow_badge_class(_), do: "badge-neutral"
 end
