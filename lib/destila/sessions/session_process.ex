@@ -96,16 +96,14 @@ defmodule Destila.Sessions.SessionProcess do
   # =====================================================================
 
   def setup(:internal, :initialize, data) do
-    ws = reload(data)
-    data = %{data | ws: ws}
+    ws = data.ws
 
     case ensure_worktree_ready(ws) do
       :ready ->
         {:ok, _pe} = Executions.ensure_phase_execution(ws, ws.current_phase)
         AI.Conversation.phase_start(ws)
-        ws = reload(data)
         broadcast_updated(ws)
-        {:next_state, :processing, %{data | ws: ws}, [inactivity_timeout()]}
+        {:next_state, :processing, data, [inactivity_timeout()]}
 
       :preparing ->
         broadcast_updated(ws)
@@ -139,15 +137,13 @@ defmodule Destila.Sessions.SessionProcess do
       case AI.Conversation.handle_ai_result(data.ws, result) do
         :awaiting_input ->
           with_current_pe(data, &Executions.await_input/1)
-          ws = reload(data)
-          broadcast_updated(ws)
-          {:next_state, :awaiting_input, %{data | ws: ws}, [inactivity_timeout()]}
+          broadcast_updated(data.ws)
+          {:next_state, :awaiting_input, data, [inactivity_timeout()]}
 
         :suggest_phase_complete ->
           with_current_pe(data, &Executions.await_confirmation(&1, nil))
-          ws = reload(data)
-          broadcast_updated(ws)
-          {:next_state, :awaiting_confirmation, %{data | ws: ws}, [inactivity_timeout()]}
+          broadcast_updated(data.ws)
+          {:next_state, :awaiting_confirmation, data, [inactivity_timeout()]}
 
         :phase_complete ->
           complete_current_pe(data)
@@ -163,9 +159,8 @@ defmodule Destila.Sessions.SessionProcess do
     if phase == data.ws.current_phase do
       AI.Conversation.handle_ai_error(data.ws, reason)
       with_current_pe(data, &Executions.await_input/1)
-      ws = reload(data)
-      broadcast_updated(ws)
-      {:next_state, :awaiting_input, %{data | ws: ws}, [inactivity_timeout()]}
+      broadcast_updated(data.ws)
+      {:next_state, :awaiting_input, data, [inactivity_timeout()]}
     else
       :keep_state_and_data
     end
@@ -174,11 +169,9 @@ defmodule Destila.Sessions.SessionProcess do
   def processing({:call, from}, :cancel, data) do
     AI.ClaudeSession.stop_for_workflow_session(data.session_id)
     with_current_pe(data, &Executions.await_input/1)
-    ws = reload(data)
-    broadcast_updated(ws)
+    broadcast_updated(data.ws)
 
-    {:next_state, :awaiting_input, %{data | ws: ws},
-     [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+    {:next_state, :awaiting_input, data, [{:reply, from, {:ok, data.ws}}, inactivity_timeout()]}
   end
 
   def processing(:state_timeout, :inactivity, _data), do: {:stop, :normal}
@@ -230,11 +223,9 @@ defmodule Destila.Sessions.SessionProcess do
 
   def awaiting_confirmation({:call, from}, :decline_advance, data) do
     with_current_pe(data, &Executions.reject_completion/1)
-    ws = reload(data)
-    broadcast_updated(ws)
+    broadcast_updated(data.ws)
 
-    {:next_state, :awaiting_input, %{data | ws: ws},
-     [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+    {:next_state, :awaiting_input, data, [{:reply, from, {:ok, data.ws}}, inactivity_timeout()]}
   end
 
   def awaiting_confirmation({:call, from}, :retry, data) do
@@ -278,11 +269,9 @@ defmodule Destila.Sessions.SessionProcess do
   defp handle_send_message(from, content, data) do
     :processing = AI.Conversation.send_message(data.ws, content)
     with_current_pe(data, &Executions.process_phase/1)
-    ws = reload(data)
-    broadcast_updated(ws)
+    broadcast_updated(data.ws)
 
-    {:next_state, :processing, %{data | ws: ws},
-     [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+    {:next_state, :processing, data, [{:reply, from, {:ok, data.ws}}, inactivity_timeout()]}
   end
 
   defp handle_retry(from, data) do
@@ -304,14 +293,10 @@ defmodule Destila.Sessions.SessionProcess do
         :ok
     end
 
-    ws = reload(data)
-    AI.Conversation.phase_start(ws)
+    AI.Conversation.phase_start(data.ws)
+    broadcast_updated(data.ws)
 
-    ws = reload(data)
-    broadcast_updated(ws)
-
-    {:next_state, :processing, %{data | ws: ws},
-     [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
+    {:next_state, :processing, data, [{:reply, from, {:ok, data.ws}}, inactivity_timeout()]}
   end
 
   defp handle_mark_done(from, data) do
@@ -333,13 +318,11 @@ defmodule Destila.Sessions.SessionProcess do
   end
 
   defp handle_worktree_ready(data) do
-    ws = reload(data)
-    phase = ws.current_phase
-    {:ok, _pe} = Executions.ensure_phase_execution(ws, phase)
+    ws = data.ws
+    {:ok, _pe} = Executions.ensure_phase_execution(ws, ws.current_phase)
     AI.Conversation.phase_start(ws)
-    ws = reload(data)
     broadcast_updated(ws)
-    {:next_state, :processing, %{data | ws: ws}, [inactivity_timeout()]}
+    {:next_state, :processing, data, [inactivity_timeout()]}
   end
 
   # --- Helpers ---
@@ -360,8 +343,6 @@ defmodule Destila.Sessions.SessionProcess do
         end
     end
   end
-
-  defp reload(data), do: Workflows.get_workflow_session!(data.session_id)
 
   defp with_current_pe(data, fun) do
     case Executions.get_phase_execution_by_number(data.session_id, data.ws.current_phase) do
@@ -398,16 +379,14 @@ defmodule Destila.Sessions.SessionProcess do
   # Creates PE, checks worktree readiness, kicks off AI.
   # Returns {state, data}.
   defp start_phase(data) do
-    ws = reload(data)
-    data = %{data | ws: ws}
+    ws = data.ws
 
     case ensure_worktree_ready(ws) do
       :ready ->
         {:ok, _pe} = Executions.ensure_phase_execution(ws, ws.current_phase)
         AI.Conversation.phase_start(ws)
-        ws = reload(data)
         broadcast_updated(ws)
-        {:processing, %{data | ws: ws}}
+        {:processing, data}
 
       :preparing ->
         broadcast_updated(ws)
