@@ -293,6 +293,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     if socket.assigns[:workflow_session] &&
          updated_ws.id == socket.assigns.workflow_session.id do
       ws = Workflows.get_workflow_session!(updated_ws.id)
+      phase_status = Session.phase_status(ws)
 
       {:noreply,
        socket
@@ -300,14 +301,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:page_title, ws.title)
        |> assign(
          :streaming_chunks,
-         if(Session.phase_status(ws) == :processing,
+         if(phase_status == :processing,
            do: socket.assigns[:streaming_chunks],
            else: nil
          )
        )
        |> assign_metadata(ws.id)
        |> assign_worktree_path(ws.id)
-       |> assign_ai_state(ws)}
+       |> assign_ai_state(ws, phase_status)}
     else
       {:noreply, socket}
     end
@@ -359,18 +360,18 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # --- Private: AI state management ---
 
-  defp assign_ai_state(socket, ws) do
+  defp assign_ai_state(socket, ws, phase_status \\ nil) do
     messages = AI.list_messages_for_workflow_session(ws.id)
-    current_step = compute_current_step(ws, messages)
+    phase_status = phase_status || Session.phase_status(ws)
+    current_step = compute_current_step(ws, phase_status, messages)
 
     socket
     |> assign(:messages, messages)
+    |> assign(:phase_status, phase_status)
     |> assign(:current_step, current_step)
   end
 
-  defp compute_current_step(ws, messages) do
-    phase_status = Session.phase_status(ws)
-
+  defp compute_current_step(ws, phase_status, messages) do
     cond do
       phase_status == :setup ->
         %{input_type: nil, options: nil, questions: [], question_title: nil, completed: false}
@@ -511,7 +512,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                   @workflow_session &&
                     @workflow_session.current_phase == @workflow_session.total_phases &&
                     !Session.done?(@workflow_session) &&
-                    Session.phase_status(@workflow_session) != :processing
+                    @phase_status != :processing
                 }
                 phx-click="mark_done"
                 id="mark-done-btn"
@@ -717,8 +718,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   # --- Generic phase rendering ---
 
   defp render_phase(assigns) do
-    phase_status = Session.phase_status(assigns.workflow_session)
-    assigns = assign(assigns, :phase_status, phase_status)
     do_render_phase(assigns)
   end
 
