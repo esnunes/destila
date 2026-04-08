@@ -51,40 +51,64 @@ defmodule DestilaWeb.ChatComponents do
       <div class="flex-1 min-h-0 overflow-y-auto px-6 py-6" id="chat-messages" phx-hook="ScrollBottom">
         <div class="max-w-2xl mx-auto">
           <%= for {phase, group} <- @phase_groups do %>
-            <details
-              id={"phase-section-#{phase}"}
-              phx-hook=".PhaseToggle"
-              class={["phase-section", phase == elem(hd(@phase_groups), 0) && "first-phase"]}
-              open={phase >= @phase_number}
-            >
-              <summary class="flex items-center gap-3 my-6 cursor-pointer group list-none">
-                <div class="flex-1 h-px bg-base-300" />
-                <span class="flex items-center gap-1.5 text-xs font-medium text-base-content/40 uppercase tracking-wide group-hover:text-base-content/60 transition-colors">
-                  Phase {phase} — {Workflows.phase_name(@workflow_session.workflow_type, phase)}
-                  <.icon name="hero-chevron-down-micro" class="size-3 phase-chevron" />
-                </span>
-                <div class="flex-1 h-px bg-base-300" />
-              </summary>
-              <.chat_message
-                :for={msg <- group}
-                message={msg}
-                workflow_session={@workflow_session}
-                phase_status={@phase_status}
-              />
-              <%= if phase == @phase_number && @phase_status == :setup do %>
-                <div class="flex items-center gap-3 text-sm pl-2 mt-2">
-                  <span class="loading loading-spinner loading-xs shrink-0" />
-                  <span class="text-base-content/60">Preparing workspace...</span>
-                </div>
-              <% end %>
-              <%= if phase == @phase_number && @phase_status == :processing do %>
-                <%= if @streaming_chunks && @streaming_chunks != [] do %>
-                  <.chat_stream_debug chunks={@streaming_chunks} />
-                <% else %>
-                  <.chat_typing_indicator />
+            <%= if @workflow_session.total_phases > 1 do %>
+              <details
+                id={"phase-section-#{phase}"}
+                phx-hook=".PhaseToggle"
+                class={["phase-section", phase == elem(hd(@phase_groups), 0) && "first-phase"]}
+                open={phase >= @phase_number}
+              >
+                <summary class="flex items-center gap-3 my-6 cursor-pointer group list-none">
+                  <div class="flex-1 h-px bg-base-300" />
+                  <span class="flex items-center gap-1.5 text-xs font-medium text-base-content/40 uppercase tracking-wide group-hover:text-base-content/60 transition-colors">
+                    Phase {phase} — {Workflows.phase_name(@workflow_session.workflow_type, phase)}
+                    <.icon name="hero-chevron-down-micro" class="size-3 phase-chevron" />
+                  </span>
+                  <div class="flex-1 h-px bg-base-300" />
+                </summary>
+                <.chat_message
+                  :for={msg <- group}
+                  message={msg}
+                  workflow_session={@workflow_session}
+                  phase_status={@phase_status}
+                />
+                <%= if phase == @phase_number && @phase_status == :setup do %>
+                  <div class="flex items-center gap-3 text-sm pl-2 mt-2">
+                    <span class="loading loading-spinner loading-xs shrink-0" />
+                    <span class="text-base-content/60">Preparing workspace...</span>
+                  </div>
                 <% end %>
-              <% end %>
-            </details>
+                <%= if phase == @phase_number && @phase_status == :processing do %>
+                  <%= if @streaming_chunks && @streaming_chunks != [] do %>
+                    <.chat_stream_debug chunks={@streaming_chunks} />
+                  <% else %>
+                    <.chat_typing_indicator />
+                  <% end %>
+                <% end %>
+              </details>
+            <% else %>
+              <div id={"phase-section-#{phase}"}>
+                <.chat_message
+                  :for={msg <- group}
+                  message={msg}
+                  workflow_session={@workflow_session}
+                  phase_status={@phase_status}
+                />
+                <%= if phase == @phase_number && @phase_status == :setup do %>
+                  <div class="flex items-center gap-3 text-sm pl-2 mt-2">
+                    <span class="loading loading-spinner loading-xs shrink-0" />
+                    <span class="text-base-content/60">Preparing workspace...</span>
+                  </div>
+                <% end %>
+                <%= if phase == @phase_number && @phase_status == :processing do %>
+                  <%= if @streaming_chunks && @streaming_chunks != [] do %>
+                    <.chat_stream_debug chunks={@streaming_chunks} />
+                  <% else %>
+                    <.chat_typing_indicator />
+                  <% end %>
+                <% end %>
+              </div>
+            <% end %>
           <% end %>
 
           <%!-- Interactive-only: inline structured options --%>

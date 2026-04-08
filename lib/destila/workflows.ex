@@ -11,7 +11,8 @@ defmodule Destila.Workflows do
 
   @workflow_modules %{
     brainstorm_idea: Destila.Workflows.BrainstormIdeaWorkflow,
-    implement_general_prompt: Destila.Workflows.ImplementGeneralPromptWorkflow
+    implement_general_prompt: Destila.Workflows.ImplementGeneralPromptWorkflow,
+    code_chat: Destila.Workflows.CodeChatWorkflow
   }
 
   def workflow_module(workflow_type) do

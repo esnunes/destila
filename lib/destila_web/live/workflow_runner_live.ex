@@ -466,7 +466,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             </div>
 
             <div class="flex items-center gap-3 ml-4">
-              <div class="flex items-center gap-2">
+              <div :if={@workflow_session.total_phases > 1} class="flex items-center gap-2">
                 <div class="w-24">
                   <.progress_indicator
                     completed={@workflow_session.current_phase}
