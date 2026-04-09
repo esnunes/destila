@@ -208,7 +208,8 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     or "Let me know if you'd like changes." Just the prompt content, nothing else.
 
     After outputting the prompt, call `mcp__destila__session` with `action: "export"`, \
-    `key: "prompt_generated"`, and `value` set to the full prompt text you just generated.
+    `key: "prompt_generated"`, `type: "markdown"`, and `value` set to the full prompt text \
+    you just generated.
 
     The user may ask you to refine it. Each time you output a revised prompt, export it again \
     with the same key to update the stored value.
