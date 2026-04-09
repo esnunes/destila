@@ -4,9 +4,6 @@ Feature: Exported Metadata
   during their creation. A collapsible sidebar in the workflow runner displays
   the exported metadata for the current session during execution.
 
-  Background:
-    Given I am logged in
-
   Scenario: Metadata is private by default
     Given a workflow session has metadata entries
     Then metadata entries should not be exported by default

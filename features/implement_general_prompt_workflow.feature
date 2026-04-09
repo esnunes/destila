@@ -13,9 +13,6 @@ Feature: Implement General Prompt Workflow
   6. Feature Video - AI records a feature video (non-interactive, optional)
   7. Adjustments - User reviews the PR and requests changes (interactive)
 
-  Background:
-    Given I am logged in
-
   Scenario: Workflow type selection shows the new workflow
     When I navigate to create a new workflow
     Then I should see "Implement a Prompt" as a workflow option

@@ -4,8 +4,7 @@ Feature: Project Inline Creation
   a local folder path.
 
   Background:
-    Given I am logged in
-    And I am on the workflow wizard page
+    Given I am on the workflow wizard page
 
   Scenario: Create a project with a git repository URL
     When I click "Create New Project"

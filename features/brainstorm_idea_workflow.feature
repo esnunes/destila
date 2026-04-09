@@ -9,9 +9,6 @@ Feature: Brainstorm Idea Workflow
   3. Technical Concerns - AI explores technical approach and trade-offs
   4. Prompt Generation - AI generates the final implementation prompt
 
-  Background:
-    Given I am logged in
-
   Scenario: Creation form collects project and idea
     When I navigate to start a new "Brainstorm Idea" workflow
     Then I should see a form to select a project and describe my idea

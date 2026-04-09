@@ -4,9 +4,6 @@ Feature: Crafting Board
   In Progress, and Done. Users can toggle "Group by Workflow" to see a read-only
   board per workflow type with phase-based columns. A project filter narrows the view.
 
-  Background:
-    Given I am logged in
-
   # --- Default List View ---
 
   Scenario: View sessions in sectioned list

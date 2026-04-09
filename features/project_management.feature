@@ -4,9 +4,6 @@ Feature: Project Management
   one of git repository URL or local folder must be provided. Projects can be
   shared across multiple sessions.
 
-  Background:
-    Given I am logged in
-
   Scenario: View list of projects
     Given there are existing projects
     When I navigate to the projects page

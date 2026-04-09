@@ -3,9 +3,6 @@ Feature: Session Archiving
   dashboard. Archived sessions are accessible from a dedicated archived sessions
   page and can be restored.
 
-  Background:
-    Given I am logged in
-
   # --- Archiving ---
 
   Scenario: Archive a session from the session detail page

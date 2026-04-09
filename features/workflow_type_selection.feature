@@ -3,9 +3,6 @@ Feature: Workflow Type Selection
   The selection page shows all registered workflow types as cards with icons,
   labels, and descriptions. This is handled by CreateSessionLive.
 
-  Background:
-    Given I am logged in
-
   Scenario: View available workflow types
     When I navigate to the workflow selection page
     Then I should see the available workflow types
