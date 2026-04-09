@@ -54,3 +54,29 @@ Feature: Exported Metadata
     And I collapse the sidebar
     When I navigate away and return to the session detail page
     Then the sidebar should still be collapsed
+
+  # --- Inline Chat Messages ---
+
+  Scenario: Markdown metadata appears as inline chat message
+    Given I am on a session detail page
+    And the AI exports metadata with type "markdown"
+    Then a chat message should appear with the markdown card component
+    And the card header should show the humanized metadata key
+    And the card should have "Rendered" and "Markdown" tabs
+    And the card should have a copy button
+
+  Scenario: Non-markdown metadata appears as inline chat message
+    Given I am on a session detail page
+    And the AI exports metadata with type "text"
+    Then a chat message should appear as a styled card
+    And the card should show the humanized metadata key
+    And the card should display the metadata value
+    And the card should have a copy button
+    But the card should not have view-mode tabs
+
+  Scenario: Inline chat message appears in real-time
+    Given I am on a session detail page
+    And the session is actively processing
+    When the AI exports new metadata
+    Then the metadata chat message should appear in the conversation
+    And the sidebar should also update with the new entry

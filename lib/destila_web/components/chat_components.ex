@@ -276,8 +276,30 @@ defmodule DestilaWeb.ChatComponents do
 
   def chat_message(assigns) do
     processed = ResponseProcessor.process_message(assigns.message, assigns.workflow_session)
-    assigns = assign(assigns, :message, processed)
-    render_chat_message(assigns)
+
+    assigns =
+      assigns
+      |> assign(:message, processed)
+      |> assign(:exports, processed[:exports] || [])
+
+    ~H"""
+    {render_chat_message(assigns)}
+    <%= for {export, idx} <- Enum.with_index(@exports) do %>
+      <%= if (export.type || "text") == "markdown" do %>
+        <.markdown_card
+          id={"export-md-#{@message.id}-#{idx}"}
+          key={export.key}
+          content={export.value}
+        />
+      <% else %>
+        <.plain_card
+          id={"export-plain-#{@message.id}-#{idx}"}
+          key={export.key}
+          content={export.value}
+        />
+      <% end %>
+    <% end %>
+    """
   end
 
   defp render_chat_message(%{message: %{message_type: :phase_advance}} = assigns) do
@@ -328,144 +350,6 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
-  defp render_chat_message(%{message: %{message_type: :generated_prompt}} = assigns) do
-    ~H"""
-    <div class="flex gap-3 mb-4">
-      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
-        D
-      </div>
-      <div class="max-w-[80%]">
-        <div
-          id={"prompt-card-#{@message.id}"}
-          class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden"
-          phx-hook=".PromptCard"
-          data-content={@message.content}
-        >
-          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2">
-            <span class="text-xs font-medium text-primary uppercase tracking-wide">
-              Implementation Prompt
-            </span>
-            <div class="flex items-center gap-1">
-              <div role="tablist" class="flex rounded-lg bg-base-300/50 p-0.5">
-                <button
-                  role="tab"
-                  aria-selected="true"
-                  data-view="rendered"
-                  class="prompt-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors bg-base-100 text-base-content shadow-sm"
-                >
-                  Rendered
-                </button>
-                <button
-                  role="tab"
-                  aria-selected="false"
-                  data-view="markdown"
-                  class="prompt-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors text-base-content/50 hover:text-base-content"
-                >
-                  Markdown
-                </button>
-              </div>
-              <button
-                class="prompt-copy-btn ml-1 p-1 rounded-md hover:bg-base-300/50 transition-colors"
-                aria-label="Copy markdown to clipboard"
-              >
-                <.icon name="hero-clipboard-document-micro" class="size-4 text-base-content/50" />
-              </button>
-            </div>
-          </div>
-          <div data-rendered class="px-4 py-3 text-sm text-base-content prose prose-sm max-w-none">
-            {raw(markdown_to_html(@message.content))}
-          </div>
-          <div data-markdown class="hidden px-4 py-3">
-            <pre class="text-sm font-mono text-base-content whitespace-pre-wrap break-words bg-base-300/30 rounded-lg p-3 overflow-x-auto"><code>{@message.content}</code></pre>
-          </div>
-        </div>
-      </div>
-    </div>
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".PromptCard">
-      export default {
-        mounted() {
-          this.activeView = "rendered"
-          this.lastContent = this.el.dataset.content
-
-          this.el.querySelectorAll(".prompt-tab").forEach(tab => {
-            tab.addEventListener("click", () => this.switchView(tab.dataset.view))
-          })
-
-          this.el.querySelector(".prompt-copy-btn").addEventListener("click", () => this.copyMarkdown())
-        },
-
-        updated() {
-          const newContent = this.el.dataset.content
-          if (newContent !== this.lastContent) {
-            this.lastContent = newContent
-            this.activeView = "rendered"
-          }
-          this.applyView()
-        },
-
-        switchView(view) {
-          this.activeView = view
-          this.applyView()
-        },
-
-        applyView() {
-          const rendered = this.el.querySelector("[data-rendered]")
-          const markdown = this.el.querySelector("[data-markdown]")
-          const tabs = this.el.querySelectorAll(".prompt-tab")
-
-          if (this.activeView === "markdown") {
-            rendered.classList.add("hidden")
-            markdown.classList.remove("hidden")
-          } else {
-            rendered.classList.remove("hidden")
-            markdown.classList.add("hidden")
-          }
-
-          tabs.forEach(tab => {
-            const isActive = tab.dataset.view === this.activeView
-            tab.setAttribute("aria-selected", isActive)
-            if (isActive) {
-              tab.classList.add("bg-base-100", "text-base-content", "shadow-sm")
-              tab.classList.remove("text-base-content/50")
-            } else {
-              tab.classList.remove("bg-base-100", "text-base-content", "shadow-sm")
-              tab.classList.add("text-base-content/50")
-            }
-          })
-        },
-
-        async copyMarkdown() {
-          const content = this.el.dataset.content
-          const btn = this.el.querySelector(".prompt-copy-btn")
-          try {
-            await navigator.clipboard.writeText(content)
-            this.showCopyFeedback(btn, true)
-          } catch {
-            this.showCopyFeedback(btn, false)
-          }
-        },
-
-        showCopyFeedback(btn, success) {
-          const icon = btn.querySelector("[class*='hero-']")
-          const original = icon.className
-          if (success) {
-            icon.className = icon.className.replace("hero-clipboard-document-micro", "hero-check-micro")
-            btn.setAttribute("aria-label", "Copied!")
-          } else {
-            icon.className = icon.className.replace("hero-clipboard-document-micro", "hero-x-mark-micro")
-            btn.setAttribute("aria-label", "Copy failed")
-          }
-          clearTimeout(this._feedbackTimer)
-          this._feedbackTimer = setTimeout(() => {
-            icon.className = original
-            btn.setAttribute("aria-label", "Copy markdown to clipboard")
-          }, 2000)
-        }
-      }
-    </script>
-    """
-  end
-
   defp render_chat_message(assigns) do
     ~H"""
     <div class={[
@@ -513,6 +397,229 @@ defmodule DestilaWeb.ChatComponents do
       </div>
     </div>
     """
+  end
+
+  # --- Export card components ---
+
+  attr :id, :string, required: true
+  attr :key, :string, required: true
+  attr :content, :string, required: true
+
+  defp markdown_card(assigns) do
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="max-w-[80%]">
+        <div
+          id={@id}
+          class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden"
+          phx-hook=".MarkdownCard"
+          data-content={@content}
+        >
+          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-primary uppercase tracking-wide">
+              {humanize_key(@key)}
+            </span>
+            <div class="flex items-center gap-1">
+              <div role="tablist" class="flex rounded-lg bg-base-300/50 p-0.5">
+                <button
+                  role="tab"
+                  aria-selected="true"
+                  data-view="rendered"
+                  class="md-card-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors bg-base-100 text-base-content shadow-sm"
+                >
+                  Rendered
+                </button>
+                <button
+                  role="tab"
+                  aria-selected="false"
+                  data-view="markdown"
+                  class="md-card-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors text-base-content/50 hover:text-base-content"
+                >
+                  Markdown
+                </button>
+              </div>
+              <button
+                class="md-card-copy-btn ml-1 p-1 rounded-md hover:bg-base-300/50 transition-colors"
+                aria-label="Copy markdown to clipboard"
+              >
+                <.icon name="hero-clipboard-document-micro" class="size-4 text-base-content/50" />
+              </button>
+            </div>
+          </div>
+          <div data-rendered class="px-4 py-3 text-sm text-base-content prose prose-sm max-w-none">
+            {raw(markdown_to_html(@content))}
+          </div>
+          <div data-markdown class="hidden px-4 py-3">
+            <pre class="text-sm font-mono text-base-content whitespace-pre-wrap break-words bg-base-300/30 rounded-lg p-3 overflow-x-auto"><code>{@content}</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".MarkdownCard">
+      export default {
+        mounted() {
+          this.activeView = "rendered"
+          this.lastContent = this.el.dataset.content
+
+          this.el.querySelectorAll(".md-card-tab").forEach(tab => {
+            tab.addEventListener("click", () => this.switchView(tab.dataset.view))
+          })
+
+          this.el.querySelector(".md-card-copy-btn").addEventListener("click", () => this.copyMarkdown())
+        },
+
+        updated() {
+          const newContent = this.el.dataset.content
+          if (newContent !== this.lastContent) {
+            this.lastContent = newContent
+            this.activeView = "rendered"
+          }
+          this.applyView()
+        },
+
+        switchView(view) {
+          this.activeView = view
+          this.applyView()
+        },
+
+        applyView() {
+          const rendered = this.el.querySelector("[data-rendered]")
+          const markdown = this.el.querySelector("[data-markdown]")
+          const tabs = this.el.querySelectorAll(".md-card-tab")
+
+          if (this.activeView === "markdown") {
+            rendered.classList.add("hidden")
+            markdown.classList.remove("hidden")
+          } else {
+            rendered.classList.remove("hidden")
+            markdown.classList.add("hidden")
+          }
+
+          tabs.forEach(tab => {
+            const isActive = tab.dataset.view === this.activeView
+            tab.setAttribute("aria-selected", isActive)
+            if (isActive) {
+              tab.classList.add("bg-base-100", "text-base-content", "shadow-sm")
+              tab.classList.remove("text-base-content/50")
+            } else {
+              tab.classList.remove("bg-base-100", "text-base-content", "shadow-sm")
+              tab.classList.add("text-base-content/50")
+            }
+          })
+        },
+
+        async copyMarkdown() {
+          const content = this.el.dataset.content
+          const btn = this.el.querySelector(".md-card-copy-btn")
+          try {
+            await navigator.clipboard.writeText(content)
+            this.showCopyFeedback(btn, true)
+          } catch {
+            this.showCopyFeedback(btn, false)
+          }
+        },
+
+        showCopyFeedback(btn, success) {
+          const icon = btn.querySelector("[class*='hero-']")
+          const original = icon.className
+          if (success) {
+            icon.className = icon.className.replace("hero-clipboard-document-micro", "hero-check-micro")
+            btn.setAttribute("aria-label", "Copied!")
+          } else {
+            icon.className = icon.className.replace("hero-clipboard-document-micro", "hero-x-mark-micro")
+            btn.setAttribute("aria-label", "Copy failed")
+          }
+          clearTimeout(this._feedbackTimer)
+          this._feedbackTimer = setTimeout(() => {
+            icon.className = original
+            btn.setAttribute("aria-label", "Copy markdown to clipboard")
+          }, 2000)
+        }
+      }
+    </script>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :key, :string, required: true
+  attr :content, :string, required: true
+
+  defp plain_card(assigns) do
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="max-w-[80%]">
+        <div
+          id={@id}
+          class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden"
+          phx-hook=".PlainCard"
+          data-content={@content}
+        >
+          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-primary uppercase tracking-wide">
+              {humanize_key(@key)}
+            </span>
+            <button
+              class="plain-card-copy-btn p-1 rounded-md hover:bg-base-300/50 transition-colors"
+              aria-label="Copy to clipboard"
+            >
+              <.icon name="hero-clipboard-document-micro" class="size-4 text-base-content/50" />
+            </button>
+          </div>
+          <div class="px-4 py-3 text-sm text-base-content whitespace-pre-wrap break-words">
+            {@content}
+          </div>
+        </div>
+      </div>
+    </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".PlainCard">
+      export default {
+        mounted() {
+          this.el.querySelector(".plain-card-copy-btn")
+            .addEventListener("click", () => this.copyContent())
+        },
+
+        async copyContent() {
+          const content = this.el.dataset.content
+          const btn = this.el.querySelector(".plain-card-copy-btn")
+          try {
+            await navigator.clipboard.writeText(content)
+            this.showCopyFeedback(btn, true)
+          } catch {
+            this.showCopyFeedback(btn, false)
+          }
+        },
+
+        showCopyFeedback(btn, success) {
+          const icon = btn.querySelector("[class*='hero-']")
+          const original = icon.className
+          if (success) {
+            icon.className = icon.className.replace("hero-clipboard-document-micro", "hero-check-micro")
+            btn.setAttribute("aria-label", "Copied!")
+          } else {
+            icon.className = icon.className.replace("hero-clipboard-document-micro", "hero-x-mark-micro")
+            btn.setAttribute("aria-label", "Copy failed")
+          }
+          clearTimeout(this._feedbackTimer)
+          this._feedbackTimer = setTimeout(() => {
+            icon.className = original
+            btn.setAttribute("aria-label", "Copy to clipboard")
+          }, 2000)
+        }
+      }
+    </script>
+    """
+  end
+
+  defp humanize_key(key) when is_binary(key) do
+    key
+    |> String.split("_")
+    |> Enum.map_join(" ", &String.capitalize/1)
   end
 
   # --- Streaming / typing ---
