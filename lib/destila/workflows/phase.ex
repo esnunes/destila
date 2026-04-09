@@ -9,7 +9,6 @@ defmodule Destila.Workflows.Phase do
   defstruct [
     :name,
     :system_prompt,
-    :message_type,
     non_interactive: false,
     allowed_tools: [],
     session_strategy: :resume

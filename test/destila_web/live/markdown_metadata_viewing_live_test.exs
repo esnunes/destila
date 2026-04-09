@@ -1,13 +1,13 @@
-defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
+defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
   @moduledoc """
-  LiveView tests for Generated Prompt Viewing.
-  Feature: features/generated_prompt_viewing.feature
+  LiveView tests for Markdown Metadata Viewing.
+  Feature: features/markdown_metadata_viewing.feature
   """
   use DestilaWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
-  @feature "generated_prompt_viewing"
+  @feature "markdown_metadata_viewing"
 
   @sample_markdown """
   # Implementation Prompt
@@ -41,7 +41,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
     {:ok, conn: conn}
   end
 
-  defp create_session_with_generated_prompt do
+  defp create_session_with_markdown_export do
     {:ok, workflow_session} =
       Destila.Workflows.insert_workflow_session(%{
         title: "Test Session",
@@ -57,11 +57,21 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
     {:ok, _} =
       Destila.AI.create_message(ai_session.id, %{
         role: :system,
-        content: @sample_markdown,
+        content: "Here is your implementation prompt.",
         raw_response: %{
-          "text" => @sample_markdown,
-          "result" => @sample_markdown,
-          "mcp_tool_uses" => [],
+          "text" => "Here is your implementation prompt.",
+          "result" => "Here is your implementation prompt.",
+          "mcp_tool_uses" => [
+            %{
+              "name" => "mcp__destila__session",
+              "input" => %{
+                "action" => "export",
+                "key" => "generated_prompt",
+                "value" => @sample_markdown,
+                "type" => "markdown"
+              }
+            }
+          ],
           "is_error" => false
         },
         phase: 4,
@@ -73,12 +83,12 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
 
   describe "default rendered view" do
     @tag feature: @feature, scenario: "Default to rendered HTML view"
-    test "renders the prompt card with toggle buttons and copy button", %{conn: conn} do
-      ws = create_session_with_generated_prompt()
+    test "renders the markdown card with toggle buttons and copy button", %{conn: conn} do
+      ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      # Card exists with ID and data-content
-      assert has_element?(view, "[id^='prompt-card-']")
+      # Card exists with export-md ID prefix and data-content
+      assert has_element?(view, "[id^='export-md-']")
       assert has_element?(view, "[data-content]")
 
       # Toggle buttons present with tablist
@@ -87,7 +97,7 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
       assert has_element?(view, "button[data-view='markdown']")
 
       # Copy button present
-      assert has_element?(view, "button.prompt-copy-btn")
+      assert has_element?(view, "button.md-card-copy-btn")
 
       # Both view containers present
       assert has_element?(view, "[data-rendered]")
@@ -98,16 +108,19 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
 
       # Markdown view has pre/code block
       assert has_element?(view, "[data-markdown] pre code")
+
+      # Card header shows humanized key
+      html = render(view)
+      assert html =~ "Generated Prompt"
     end
   end
 
   describe "markdown view structure" do
     @tag feature: @feature, scenario: "Toggle to markdown view"
     test "markdown view contains raw markdown in pre/code block", %{conn: conn} do
-      ws = create_session_with_generated_prompt()
+      ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      # Use render(element) to get the code block content
       code_html = view |> element("[data-markdown] pre code") |> render()
       assert code_html =~ "# Implementation Prompt"
       assert code_html =~ "## Overview"
@@ -118,10 +131,9 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
   describe "rendered view structure" do
     @tag feature: @feature, scenario: "Toggle back to rendered view"
     test "rendered view contains HTML-rendered markdown", %{conn: conn} do
-      ws = create_session_with_generated_prompt()
+      ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      # Rendered view should contain HTML elements from Earmark conversion
       assert has_element?(view, "[data-rendered] h1")
       assert has_element?(view, "[data-rendered] h2")
     end
@@ -130,20 +142,19 @@ defmodule DestilaWeb.GeneratedPromptViewingLiveTest do
   describe "copy button" do
     @tag feature: @feature, scenario: "Copy markdown to clipboard"
     test "copy button has correct aria-label and icon", %{conn: conn} do
-      ws = create_session_with_generated_prompt()
+      ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "button[aria-label='Copy markdown to clipboard']")
-      assert has_element?(view, "button.prompt-copy-btn .hero-clipboard-document-micro")
+      assert has_element?(view, "button.md-card-copy-btn .hero-clipboard-document-micro")
     end
 
     @tag feature: @feature, scenario: "Copy works from either view"
     test "data-content attribute contains the raw markdown for JS hook", %{conn: conn} do
-      ws = create_session_with_generated_prompt()
+      ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      # The card's data-content holds the raw markdown for the JS hook to copy
-      card_html = view |> element("[id^='prompt-card-']") |> render()
+      card_html = view |> element("[id^='export-md-']") |> render()
       assert card_html =~ "data-content=\""
       assert card_html =~ "# Implementation Prompt"
     end

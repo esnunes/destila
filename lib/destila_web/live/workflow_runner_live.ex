@@ -768,6 +768,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   defp format_metadata_value(value), do: inspect(value)
 
   defp humanize_key(key) when is_binary(key) do
-    key |> String.replace("_", " ") |> String.capitalize()
+    key
+    |> String.split("_")
+    |> Enum.map_join(" ", &String.capitalize/1)
   end
 end

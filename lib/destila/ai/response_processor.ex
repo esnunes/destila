@@ -31,7 +31,8 @@ defmodule Destila.AI.ResponseProcessor do
       message_type: nil,
       input_type: nil,
       options: nil,
-      questions: []
+      questions: [],
+      exports: []
     }
   end
 
@@ -39,15 +40,9 @@ defmodule Destila.AI.ResponseProcessor do
       when is_map(raw) do
     {override_content, message_type} = derive_message_type(raw, msg.phase, workflow_session)
     {input_type, options, questions} = extract_tool_input(raw)
+    exports = extract_export_actions(raw)
 
-    # Use session tool message if present, otherwise use stored content.
-    # For generated_prompt, always use the stored content (AI's text output).
-    content =
-      if message_type == :generated_prompt do
-        String.trim(msg.content)
-      else
-        override_content || String.trim(msg.content)
-      end
+    content = override_content || String.trim(msg.content)
 
     # If questions were extracted and content is empty/placeholder, derive from questions
     content =
@@ -75,7 +70,8 @@ defmodule Destila.AI.ResponseProcessor do
       message_type: message_type,
       input_type: input_type,
       options: options,
-      questions: questions
+      questions: questions,
+      exports: exports
     }
   end
 
@@ -90,7 +86,8 @@ defmodule Destila.AI.ResponseProcessor do
       message_type: nil,
       input_type: :text,
       options: nil,
-      questions: []
+      questions: [],
+      exports: []
     }
   end
 
@@ -180,13 +177,8 @@ defmodule Destila.AI.ResponseProcessor do
     end
   end
 
-  defp derive_message_type(raw, phase, workflow_session) do
-    phase_def = get_phase_def(workflow_session.workflow_type, phase)
-
+  defp derive_message_type(raw, _phase, _workflow_session) do
     cond do
-      phase_def && phase_def.message_type == :generated_prompt ->
-        {nil, :generated_prompt}
-
       session = extract_session_action(raw) ->
         case session.action do
           "suggest_phase_complete" ->
@@ -202,10 +194,6 @@ defmodule Destila.AI.ResponseProcessor do
       true ->
         {nil, nil}
     end
-  end
-
-  defp get_phase_def(workflow_type, phase) do
-    Enum.at(Destila.Workflows.phases(workflow_type), phase - 1)
   end
 
   defp extract_tool_input(%{"mcp_tool_uses" => tool_uses}) when is_list(tool_uses) do
