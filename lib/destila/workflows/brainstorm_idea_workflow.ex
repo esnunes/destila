@@ -199,6 +199,12 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     - File-by-file change lists
     - Time estimates
 
+    The prompt MUST include a code quality instruction telling the implementer: \
+    do not write unnecessary defensive code — no redundant nil checks, fallback \
+    values, error handling, or validation for scenarios that cannot happen. Trust \
+    internal code and framework guarantees. Only validate at system boundaries. \
+    Keep code simple and direct.
+
     IMPORTANT: Output ONLY the prompt itself — no introductory text, headers, footers, \
     or commentary around it. Do not wrap it in a code block. Do not say "Here is the prompt:" \
     or "Let me know if you'd like changes." Just the prompt content, nothing else.

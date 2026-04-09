@@ -177,6 +177,16 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     3. Ensure the code compiles and basic tests pass
     4. Commit all changes: `git add . && git commit -m "Implement plan"`
     5. Push to the remote: `git push`
+
+    ## Code Quality
+
+    Write code that is simple, direct, and minimal. Do NOT write unnecessary \
+    defensive code — no redundant nil checks, fallback values, error handling, \
+    or validation for scenarios that cannot happen. Trust internal code and \
+    framework guarantees. Only validate at system boundaries (user input, \
+    external APIs). Three simple lines are better than a premature abstraction. \
+    Do not add features, configurability, or "improvements" beyond what the \
+    plan specifies.
     """ <> @non_interactive_tool_instructions
   end
 
@@ -188,7 +198,10 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     Steps:
     1. Read the plan and understand the requirements
     2. Review all changed files for correctness, quality, and completeness
-    3. Identify P1 (critical) and P2 (important) issues
+    3. Identify P1 (critical) and P2 (important) issues — unnecessary defensive \
+    code counts as P2 (remove redundant nil checks, fallback values, error \
+    handling for impossible scenarios, and validation that duplicates framework \
+    guarantees)
     4. Fix all P1 and P2 items
     5. Commit fixes: `git add . && git commit -m "Fix review issues"`
     6. Push to the remote: `git push`
@@ -244,6 +257,11 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     Then wait for the user. They may ask you to make changes to the code, \
     fix issues, or adjust the implementation. Apply any requested changes, \
     commit, and push. The PR will update automatically.
+
+    When writing or modifying code, keep it simple and direct. Do NOT add \
+    unnecessary defensive code — no redundant nil checks, fallback values, \
+    error handling, or validation for scenarios that cannot happen. Only \
+    validate at system boundaries.
 
     The user will mark this phase as done when they are satisfied.
 
