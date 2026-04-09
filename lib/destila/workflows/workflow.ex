@@ -38,18 +38,8 @@ defmodule Destila.Workflows.Workflow do
   @callback icon_class() :: String.t()
   @callback default_title() :: String.t()
   @callback completion_message() :: String.t()
-  @doc """
-  Returns the creation form configuration for this workflow.
-
-  The tuple contains:
-  - `source_metadata_key` — the exported metadata key to search for source sessions,
-    or `nil` if no source selection is needed
-  - `label` — the label for the text input field (e.g., "Idea", "Prompt")
-  - `dest_metadata_key` — the metadata key under which the user's input is stored
-  """
-  @callback creation_config() ::
-              {source_metadata_key :: String.t() | nil, label :: String.t(),
-               dest_metadata_key :: String.t()}
+  @callback creation_label() :: String.t()
+  @callback source_metadata_key() :: String.t() | nil
 
   defmacro __using__(_opts) do
     quote do

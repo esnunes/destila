@@ -34,7 +34,8 @@ defmodule Destila.Workflows.CodeChatWorkflow do
     ]
   end
 
-  def creation_config, do: {nil, "Prompt", "user_prompt"}
+  def creation_label, do: "Prompt"
+  def source_metadata_key, do: nil
 
   def default_title, do: "New Chat"
 
@@ -48,8 +49,7 @@ defmodule Destila.Workflows.CodeChatWorkflow do
   # --- AI System Prompt ---
 
   defp chat_prompt(workflow_session) do
-    metadata = Destila.Workflows.get_metadata(workflow_session.id)
-    user_prompt = get_in(metadata, ["user_prompt", "text"])
+    user_prompt = workflow_session.user_prompt
 
     user_context =
       if user_prompt && user_prompt != "" do

@@ -2,7 +2,7 @@ defmodule DestilaWeb.CreateSessionLive do
   @moduledoc """
   LiveView for workflow session creation. Handles:
   - `/workflows` — workflow type selection
-  - `/workflows/:workflow_type` — adaptive creation form driven by `creation_config/0`
+  - `/workflows/:workflow_type` — adaptive creation form driven by `creation_label/0` and `source_metadata_key/0`
   """
 
   use DestilaWeb, :live_view

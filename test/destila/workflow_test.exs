@@ -33,8 +33,12 @@ defmodule Destila.WorkflowTest do
       end
     end
 
-    test "creation_config/0 returns expected tuple" do
-      assert BrainstormIdeaWorkflow.creation_config() == {nil, "Idea", "idea"}
+    test "creation_label/0 returns expected label" do
+      assert BrainstormIdeaWorkflow.creation_label() == "Idea"
+    end
+
+    test "source_metadata_key/0 returns nil" do
+      assert BrainstormIdeaWorkflow.source_metadata_key() == nil
     end
   end
 
@@ -57,9 +61,12 @@ defmodule Destila.WorkflowTest do
       assert ImplementGeneralPromptWorkflow.total_phases() == 7
     end
 
-    test "creation_config/0 returns expected tuple" do
-      assert ImplementGeneralPromptWorkflow.creation_config() ==
-               {"prompt_generated", "Prompt", "prompt"}
+    test "creation_label/0 returns expected label" do
+      assert ImplementGeneralPromptWorkflow.creation_label() == "Prompt"
+    end
+
+    test "source_metadata_key/0 returns expected key" do
+      assert ImplementGeneralPromptWorkflow.source_metadata_key() == "prompt_generated"
     end
   end
 end

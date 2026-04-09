@@ -75,14 +75,14 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "creation", "idea", %{"text" => "first"})
+        Workflows.upsert_metadata(ws.id, "creation", "notes", %{"text" => "first"})
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "phase1", "idea", %{"text" => "second"})
+        Workflows.upsert_metadata(ws.id, "phase1", "notes", %{"text" => "second"})
 
       # Flat merge — last phase wins alphabetically (creation < phase1)
       metadata = Workflows.get_metadata(ws.id)
-      assert metadata["idea"] == %{"text" => "second"}
+      assert metadata["notes"] == %{"text" => "second"}
     end
   end
 
@@ -138,7 +138,7 @@ defmodule Destila.WorkflowsMetadataTest do
     test "returns empty list when no metadata is exported" do
       ws = create_session()
       {:ok, _} = Workflows.upsert_metadata(ws.id, "creation", "title_gen", %{"status" => "done"})
-      {:ok, _} = Workflows.upsert_metadata(ws.id, "creation", "idea", %{"text" => "my idea"})
+      {:ok, _} = Workflows.upsert_metadata(ws.id, "creation", "notes", %{"text" => "my notes"})
       assert Workflows.get_exported_metadata(ws.id) == []
     end
 
@@ -362,7 +362,7 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "creation", "idea", %{
+        Workflows.upsert_metadata(ws.id, "creation", "notes", %{
           "text" => "Fix the login bug"
         })
 
@@ -380,7 +380,7 @@ defmodule Destila.WorkflowsMetadataTest do
       metadata = Workflows.get_metadata(ws.id)
 
       assert metadata == %{
-               "idea" => %{"text" => "Fix the login bug"},
+               "notes" => %{"text" => "Fix the login bug"},
                "title_gen" => %{"status" => "completed"},
                "worktree" => %{"status" => "completed", "worktree_path" => "/tmp/wt"}
              }

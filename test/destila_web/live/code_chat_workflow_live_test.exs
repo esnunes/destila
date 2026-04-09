@@ -33,16 +33,13 @@ defmodule DestilaWeb.CodeChatWorkflowLiveTest do
         title: "New Chat",
         workflow_type: :code_chat,
         current_phase: 1,
-        total_phases: 1
+        total_phases: 1,
+        user_prompt: "Help me refactor this module"
       })
 
     unless pe_status == :setup do
       {:ok, _pe} = Destila.Executions.create_phase_execution(ws, 1, %{status: pe_status})
     end
-
-    Destila.Workflows.upsert_metadata(ws.id, "creation", "user_prompt", %{
-      "text" => "Help me refactor this module"
-    })
 
     ws
   end

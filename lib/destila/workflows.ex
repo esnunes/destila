@@ -40,10 +40,8 @@ defmodule Destila.Workflows do
     end)
   end
 
-  def creation_config(workflow_type), do: workflow_module(workflow_type).creation_config()
-
   def list_source_sessions(workflow_type) do
-    {source_key, _label, _dest_key} = creation_config(workflow_type)
+    source_key = workflow_module(workflow_type).source_metadata_key()
 
     if source_key do
       list_sessions_with_exported_metadata(source_key)
@@ -52,10 +50,7 @@ defmodule Destila.Workflows do
     end
   end
 
-  def creation_label(workflow_type) do
-    {_source_key, label, _dest_key} = creation_config(workflow_type)
-    label
-  end
+  def creation_label(workflow_type), do: workflow_module(workflow_type).creation_label()
 
   def phases(workflow_type), do: workflow_module(workflow_type).phases()
   def total_phases(workflow_type), do: workflow_module(workflow_type).total_phases()
@@ -100,7 +95,6 @@ defmodule Destila.Workflows do
 
     selected_session_id = Map.get(params, :selected_session_id)
     project_id = Map.get(params, :project_id)
-    {_source_key, _label, dest_key} = creation_config(workflow_type)
 
     title =
       if selected_session_id do
@@ -118,13 +112,12 @@ defmodule Destila.Workflows do
         workflow_type: workflow_type,
         current_phase: 1,
         total_phases: total_phases(workflow_type),
-        title_generating: title_generating
+        title_generating: title_generating,
+        user_prompt: input_text
       }
       |> maybe_put(:project_id, project_id)
 
     with {:ok, ws} <- insert_workflow_session(session_attrs) do
-      upsert_metadata(ws.id, "creation", dest_key, %{"text" => input_text})
-
       if selected_session_id do
         upsert_metadata(ws.id, "creation", "source_session", %{"id" => selected_session_id})
       end

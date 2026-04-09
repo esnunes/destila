@@ -14,6 +14,7 @@ defmodule Destila.Workflows.Session do
     field(:current_phase, :integer, default: 1)
     field(:total_phases, :integer)
 
+    field(:user_prompt, :string)
     field(:title_generating, :boolean, default: false)
     field(:position, :integer)
     field(:done_at, :utc_datetime)
@@ -43,7 +44,8 @@ defmodule Destila.Workflows.Session do
       :total_phases,
       :title_generating,
       :position,
-      :archived_at
+      :archived_at,
+      :user_prompt
     ])
     |> validate_required([:title, :workflow_type])
   end
