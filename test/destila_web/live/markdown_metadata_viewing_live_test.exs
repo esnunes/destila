@@ -78,6 +78,15 @@ defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
         workflow_session_id: workflow_session.id
       })
 
+    {:ok, _} =
+      Destila.Workflows.upsert_metadata(
+        workflow_session.id,
+        "phase_4",
+        "generated_prompt",
+        %{"markdown" => @sample_markdown},
+        exported: true
+      )
+
     workflow_session
   end
 
@@ -157,6 +166,83 @@ defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
       card_html = view |> element("[id^='export-md-']") |> render()
       assert card_html =~ "data-content=\""
       assert card_html =~ "# Implementation Prompt"
+    end
+  end
+
+  describe "sidebar entry" do
+    @tag feature: "exported_metadata", scenario: "Markdown metadata sidebar entry has view button"
+    test "markdown entry shows view button instead of details block", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      # Should have a view button, not a details/summary
+      assert has_element?(view, "button[phx-click='open_markdown_modal']")
+      refute has_element?(view, "details[id^='metadata-entry-']")
+
+      # Should show document icon
+      assert has_element?(view, "[id^='metadata-entry-'] .hero-document-text-micro")
+    end
+  end
+
+  describe "markdown modal" do
+    @tag feature: @feature, scenario: "Open markdown in modal from sidebar"
+    test "clicking sidebar view button opens markdown modal", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("button[phx-click='open_markdown_modal']") |> render_click()
+
+      assert has_element?(view, "#markdown-modal")
+      assert has_element?(view, "#markdown-modal-viewer")
+      # Modal has tabs and copy button
+      assert has_element?(view, "#markdown-modal-viewer [role='tablist']")
+      assert has_element?(view, "#markdown-modal-viewer button[data-view='rendered']")
+      assert has_element?(view, "#markdown-modal-viewer button[data-view='markdown']")
+      assert has_element?(view, "#markdown-modal-viewer .md-card-copy-btn")
+      # Modal has rendered and raw views
+      assert has_element?(view, "#markdown-modal-viewer [data-rendered]")
+      assert has_element?(view, "#markdown-modal-viewer [data-markdown]")
+    end
+
+    @tag feature: @feature, scenario: "Open markdown in modal from sidebar"
+    test "modal shows humanized key in header", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("button[phx-click='open_markdown_modal']") |> render_click()
+
+      modal_html = view |> element("#markdown-modal") |> render()
+      assert modal_html =~ "Generated Prompt"
+    end
+
+    @tag feature: @feature, scenario: "Close markdown modal"
+    test "clicking close button dismisses the modal", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("button[phx-click='open_markdown_modal']") |> render_click()
+      assert has_element?(view, "#markdown-modal")
+
+      view
+      |> element("#markdown-modal button[phx-click='close_markdown_modal']")
+      |> render_click()
+
+      refute has_element?(view, "#markdown-modal")
+    end
+
+    @tag feature: @feature, scenario: "Close markdown modal"
+    test "inline markdown card remains after closing modal", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("button[phx-click='open_markdown_modal']") |> render_click()
+
+      view
+      |> element("#markdown-modal button[phx-click='close_markdown_modal']")
+      |> render_click()
+
+      # Inline card still present
+      assert has_element?(view, "[id^='export-md-']")
     end
   end
 end
