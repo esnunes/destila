@@ -23,44 +23,66 @@ defmodule Destila.AI.ConversationTest do
   end
 
   describe "handle_ai_error/2" do
-    test "authentication error from query result" do
+    test "auth error from AuthStatusMessage" do
       ws = create_session()
 
       reason = %{
         result: nil,
         is_error: true,
-        errors: ["Not authenticated. Please run `claude login`."],
+        errors: nil,
         text: "",
         session_id: nil,
         subtype: :error_during_execution,
+        auth_error: "Invalid key",
         mcp_tool_uses: []
       }
 
       AI.Conversation.handle_ai_error(ws, reason)
       msg = last_message(ws.id)
 
-      assert msg.content =~ "authentication"
+      assert msg.content =~ "authentication failed: Invalid key"
       assert msg.content =~ "claude login"
     end
 
-    test "authentication error from result text" do
+    test "non-auth error with errors list shows the errors" do
       ws = create_session()
 
       reason = %{
-        result: "Your session has expired. Please login again.",
+        result: nil,
+        is_error: true,
+        errors: ["Rate limit exceeded"],
+        text: "",
+        session_id: nil,
+        subtype: :error_during_execution,
+        auth_error: nil,
+        mcp_tool_uses: []
+      }
+
+      AI.Conversation.handle_ai_error(ws, reason)
+      msg = last_message(ws.id)
+
+      assert msg.content =~ "Rate limit exceeded"
+      refute msg.content =~ "authentication"
+    end
+
+    test "non-auth error with result text shows the error" do
+      ws = create_session()
+
+      reason = %{
+        result: "Rate limit exceeded",
         is_error: true,
         errors: nil,
         text: "",
         session_id: nil,
         subtype: :error_during_execution,
+        auth_error: nil,
         mcp_tool_uses: []
       }
 
       AI.Conversation.handle_ai_error(ws, reason)
       msg = last_message(ws.id)
 
-      assert msg.content =~ "authentication"
-      assert msg.content =~ "claude login"
+      assert msg.content =~ "Rate limit exceeded"
     end
 
     test "CLI not found error" do
@@ -109,25 +131,6 @@ defmodule Destila.AI.ConversationTest do
       msg = last_message(ws.id)
 
       assert msg.content == "Something went wrong. Please try sending your message again."
-    end
-
-    test "non-auth error with result text shows the error" do
-      ws = create_session()
-
-      reason = %{
-        result: "Rate limit exceeded",
-        is_error: true,
-        errors: nil,
-        text: "",
-        session_id: nil,
-        subtype: :error_during_execution,
-        mcp_tool_uses: []
-      }
-
-      AI.Conversation.handle_ai_error(ws, reason)
-      msg = last_message(ws.id)
-
-      assert msg.content =~ "Rate limit exceeded"
     end
 
     test "always returns :awaiting_input" do

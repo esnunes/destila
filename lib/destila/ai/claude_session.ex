@@ -245,7 +245,8 @@ defmodule Destila.AI.ClaudeSession do
       is_error: false,
       session_id: nil,
       subtype: nil,
-      errors: nil
+      errors: nil,
+      auth_error: nil
     }
 
     acc =
@@ -272,6 +273,9 @@ defmodule Destila.AI.ClaudeSession do
                 errors: msg.errors
             }
 
+          %ClaudeCode.Message.AuthStatusMessage{error: error} when is_binary(error) ->
+            %{acc | auth_error: error}
+
           _ ->
             acc
         end
@@ -284,6 +288,7 @@ defmodule Destila.AI.ClaudeSession do
       session_id: acc.session_id,
       subtype: acc.subtype,
       errors: acc.errors,
+      auth_error: acc.auth_error,
       mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses)
     }
   end

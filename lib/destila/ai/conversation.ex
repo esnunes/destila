@@ -126,41 +126,19 @@ defmodule Destila.AI.Conversation do
     :awaiting_input
   end
 
-  @auth_patterns [
-    "not authenticated",
-    "authentication required",
-    "authentication has expired",
-    "authentication expired",
-    "unauthorized",
-    "token expired",
-    "session expired",
-    "invalid api key",
-    "please login",
-    "please log in",
-    "please run `claude login`"
-  ]
+  defp error_message(%{auth_error: auth_error}) when is_binary(auth_error) do
+    "Claude authentication failed: #{auth_error}. " <>
+      "Please run `claude login` in your terminal to re-authenticate, then retry."
+  end
 
   defp error_message(reason) do
     text = extract_error_text(reason)
 
-    cond do
-      auth_error?(text) ->
-        "Claude authentication has expired or is missing. " <>
-          "Please run `claude login` in your terminal to re-authenticate, then retry."
-
-      text != "" ->
-        "Something went wrong: #{text}"
-
-      true ->
-        "Something went wrong. Please try sending your message again."
+    if text != "" do
+      "Something went wrong: #{text}"
+    else
+      "Something went wrong. Please try sending your message again."
     end
-  end
-
-  defp auth_error?(""), do: false
-
-  defp auth_error?(text) do
-    lower = String.downcase(text)
-    Enum.any?(@auth_patterns, &String.contains?(lower, &1))
   end
 
   defp extract_error_text(%{errors: [_ | _] = errors}), do: Enum.join(errors, "; ")
