@@ -9,6 +9,13 @@ defmodule Destila.Workflows do
   alias Destila.Repo
   alias Destila.Workflows.{Session, SessionMetadata}
 
+  @valid_metadata_types ~w(text text_file markdown video_file)
+
+  @doc """
+  Returns the list of valid metadata types for exported metadata values.
+  """
+  def valid_metadata_types, do: @valid_metadata_types
+
   @workflow_modules %{
     brainstorm_idea: Destila.Workflows.BrainstormIdeaWorkflow,
     implement_general_prompt: Destila.Workflows.ImplementGeneralPromptWorkflow,
@@ -180,8 +187,12 @@ defmodule Destila.Workflows do
       select: {ws, m.value}
     )
     |> Repo.all()
-    |> Enum.map(fn {ws, value} -> {ws, value["text"]} end)
+    |> Enum.map(fn {ws, value} -> {ws, extract_metadata_text(value)} end)
     |> Enum.reject(fn {_ws, text} -> is_nil(text) || text == "" end)
+  end
+
+  defp extract_metadata_text(value) do
+    Enum.find_value(@valid_metadata_types, fn type -> value[type] end)
   end
 
   def count_by_project(project_id) do
@@ -227,30 +238,44 @@ defmodule Destila.Workflows do
 
   # --- Metadata ---
 
-  def upsert_metadata(workflow_session_id, phase_name, key, value, opts \\ []) do
+  def upsert_metadata(workflow_session_id, phase_name, key, value, opts \\ [])
+
+  def upsert_metadata(workflow_session_id, phase_name, key, value, opts) do
     exported = Keyword.get(opts, :exported, false)
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    %SessionMetadata{}
-    |> SessionMetadata.changeset(%{
-      workflow_session_id: workflow_session_id,
-      phase_name: phase_name,
-      key: key,
-      value: value,
-      exported: exported
-    })
-    |> Repo.insert(
-      on_conflict: {:replace, [:value, :exported, :updated_at]},
-      conflict_target: [:workflow_session_id, :phase_name, :key],
-      set: [updated_at: now]
-    )
-    |> case do
-      {:ok, metadata} ->
-        Destila.PubSubHelper.broadcast_event(:metadata_updated, workflow_session_id)
-        {:ok, metadata}
+    if exported and not valid_exported_value?(value) do
+      {:error, :invalid_metadata_type}
+    else
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      {:error, changeset} ->
-        {:error, changeset}
+      %SessionMetadata{}
+      |> SessionMetadata.changeset(%{
+        workflow_session_id: workflow_session_id,
+        phase_name: phase_name,
+        key: key,
+        value: value,
+        exported: exported
+      })
+      |> Repo.insert(
+        on_conflict: {:replace, [:value, :exported, :updated_at]},
+        conflict_target: [:workflow_session_id, :phase_name, :key],
+        set: [updated_at: now]
+      )
+      |> case do
+        {:ok, metadata} ->
+          Destila.PubSubHelper.broadcast_event(:metadata_updated, workflow_session_id)
+          {:ok, metadata}
+
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    end
+  end
+
+  defp valid_exported_value?(value) do
+    case Map.keys(value) do
+      [type] -> type in @valid_metadata_types
+      _ -> false
     end
   end
 

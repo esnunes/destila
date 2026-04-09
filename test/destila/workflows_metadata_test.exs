@@ -170,18 +170,73 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "z_phase", "alpha", %{"v" => "1"}, exported: true)
+        Workflows.upsert_metadata(ws.id, "z_phase", "alpha", %{"text" => "1"}, exported: true)
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "a_phase", "beta", %{"v" => "2"}, exported: true)
+        Workflows.upsert_metadata(ws.id, "a_phase", "beta", %{"text" => "2"}, exported: true)
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "a_phase", "alpha", %{"v" => "3"}, exported: true)
+        Workflows.upsert_metadata(ws.id, "a_phase", "alpha", %{"text" => "3"}, exported: true)
 
       exported = Workflows.get_exported_metadata(ws.id)
       assert length(exported) == 3
       assert Enum.map(exported, & &1.phase_name) == ["a_phase", "a_phase", "z_phase"]
       assert Enum.map(exported, & &1.key) == ["alpha", "beta", "alpha"]
+    end
+  end
+
+  describe "upsert_metadata/5 type validation for exported metadata" do
+    test "accepts all valid metadata types" do
+      ws = create_session()
+
+      for type <- ~w(text text_file markdown video_file) do
+        assert {:ok, _} =
+                 Workflows.upsert_metadata(
+                   ws.id,
+                   "phase",
+                   "key_#{type}",
+                   %{type => "value"},
+                   exported: true
+                 )
+      end
+    end
+
+    test "rejects invalid type for exported metadata" do
+      ws = create_session()
+
+      assert {:error, :invalid_metadata_type} =
+               Workflows.upsert_metadata(
+                 ws.id,
+                 "phase",
+                 "key",
+                 %{"html" => "<p>bad</p>"},
+                 exported: true
+               )
+    end
+
+    test "rejects multi-key value maps for exported metadata" do
+      ws = create_session()
+
+      assert {:error, :invalid_metadata_type} =
+               Workflows.upsert_metadata(
+                 ws.id,
+                 "phase",
+                 "key",
+                 %{"text" => "a", "extra" => "b"},
+                 exported: true
+               )
+    end
+
+    test "allows arbitrary value maps for non-exported metadata" do
+      ws = create_session()
+
+      assert {:ok, _} =
+               Workflows.upsert_metadata(
+                 ws.id,
+                 "creation",
+                 "source_session",
+                 %{"id" => "some-uuid"}
+               )
     end
   end
 
@@ -276,6 +331,24 @@ defmodule Destila.WorkflowsMetadataTest do
 
       assert Workflows.list_sessions_with_exported_metadata("prompt_generated") != []
       assert Workflows.list_sessions_with_exported_metadata("other_key") == []
+    end
+
+    test "returns value for non-text metadata types" do
+      ws = create_session()
+      {:ok, _} = Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "phase",
+        "my_doc",
+        %{"markdown" => "# Hello"},
+        exported: true
+      )
+
+      result = Workflows.list_sessions_with_exported_metadata("my_doc")
+      assert [{session, text}] = result
+      assert session.id == ws.id
+      assert text == "# Hello"
     end
   end
 

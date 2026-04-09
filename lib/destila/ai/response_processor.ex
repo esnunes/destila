@@ -114,7 +114,7 @@ defmodule Destila.AI.ResponseProcessor do
   @doc """
   Extracts all export actions from an AI result's MCP tool uses.
 
-  Returns a list of `%{key: key, value: value}` maps.
+  Returns a list of `%{key: key, value: value, type: type}` maps. Type is `nil` when omitted.
   """
   def extract_export_actions(%{mcp_tool_uses: tool_uses}) when is_list(tool_uses) do
     do_extract_export_actions(tool_uses)
@@ -160,7 +160,7 @@ defmodule Destila.AI.ResponseProcessor do
         input = access(tool, :input) || %{}
 
         if access(input, :action) == "export" do
-          [%{key: access(input, :key), value: access(input, :value)}]
+          [%{key: access(input, :key), value: access(input, :value), type: access(input, :type)}]
         else
           []
         end

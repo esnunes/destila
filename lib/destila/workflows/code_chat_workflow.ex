@@ -80,7 +80,8 @@ defmodule Destila.Workflows.CodeChatWorkflow do
     For open-ended questions without clear options, just ask in plain text.
 
     To store a key-value pair as session metadata, call `mcp__destila__session` with \
-    `action: "export"`, a `key` string, and a `value` string.
+    `action: "export"`, a `key` string, and a `value` string. You can optionally \
+    specify a `type` string: `text` (default), `text_file`, `markdown`, or `video_file`.
 
     IMPORTANT: Never call `mcp__destila__session` with `suggest_phase_complete` or \
     `phase_complete`. The user controls when this session ends via the UI.

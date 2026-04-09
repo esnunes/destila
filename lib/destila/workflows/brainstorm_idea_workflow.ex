@@ -79,6 +79,10 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   To store a key-value pair as session metadata, call `mcp__destila__session` with \
   `action: "export"`, a `key` string, and a `value` string. You may call export \
   multiple times in a single response and may combine it with a phase transition action.
+
+  You can optionally specify a `type` string to indicate how the value should be \
+  interpreted: `text` (default), `text_file` (absolute path to a text file), \
+  `markdown` (markdown content), or `video_file` (absolute path to a video file).
   """
 
   defp task_description_prompt(workflow_session) do
@@ -203,11 +207,13 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     or commentary around it. Do not wrap it in a code block. Do not say "Here is the prompt:" \
     or "Let me know if you'd like changes." Just the prompt content, nothing else.
 
-    After outputting the prompt, call `mcp__destila__session` with `action: "export"`, \
-    `key: "prompt_generated"`, and `value` set to the full prompt text you just generated.
+    After outputting the prompt, export it by calling `mcp__destila__session` with these \
+    exact parameters: `action: "export"`, `key: "prompt_generated"`, `type: "markdown"`, \
+    and `value` set to the full prompt text. You MUST set `type` to `"markdown"` — never \
+    use `"text"`.
 
-    The user may ask you to refine it. Each time you output a revised prompt, export it again \
-    with the same key to update the stored value.
+    The user may ask you to refine it. Each time you output a revised prompt, export it \
+    again with the same key and `type: "markdown"` to update the stored value.
 
     Do NOT call the `mcp__destila__session` tool with `suggest_phase_complete` or \
     `phase_complete` — the user will mark this phase as done manually.

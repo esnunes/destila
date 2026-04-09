@@ -84,12 +84,17 @@ defmodule Destila.AI.Conversation do
       phase_name =
         Workflows.phase_name(ws.workflow_type, phase_number) || "Phase #{phase_number}"
 
-      for %{key: key, value: value} <- export_actions, key != nil do
+      valid_types = Workflows.valid_metadata_types()
+
+      for %{key: key, value: value, type: type} <- export_actions,
+          key != nil,
+          type = type || "text",
+          type in valid_types do
         Workflows.upsert_metadata(
           ws.id,
           phase_name,
           key,
-          %{"text" => value},
+          %{type => value},
           exported: true
         )
       end
