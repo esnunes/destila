@@ -283,7 +283,9 @@ defmodule DestilaWeb.ChatComponents do
       |> assign(:exports, processed[:exports] || [])
 
     ~H"""
-    {render_chat_message(assigns)}
+    <%= if @exports == [] do %>
+      {render_chat_message(assigns)}
+    <% end %>
     <%= for {export, idx} <- Enum.with_index(@exports) do %>
       <%= if (export.type || "text") == "markdown" do %>
         <.markdown_card
