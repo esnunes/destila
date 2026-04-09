@@ -102,3 +102,18 @@ Feature: Exported Metadata
     Then the sidebar entry should display a view button instead of an expandable text preview
     When I click the view button
     Then a modal overlay should open with the rendered markdown
+
+  # --- User Prompt in Sidebar ---
+
+  Scenario: User prompt appears at the top of the sidebar
+    Given I am on a session detail page
+    Then the sidebar should show a "User Prompt" section above the source code section
+    And the section should display a view button
+
+  Scenario: Open user prompt in markdown modal
+    Given I am on a session detail page
+    And the session has a user prompt
+    When I click the view button on the user prompt section
+    Then a full-screen modal overlay should appear with a dark backdrop
+    And the modal should display the user prompt content with "Rendered" and "Markdown" tabs
+    And the modal should default to the rendered HTML view

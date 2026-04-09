@@ -64,7 +64,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:alive_session, alive_session)
        |> assign(:question_answers, %{})
        |> assign(:video_modal_meta_id, nil)
-       |> assign(:markdown_modal_meta_id, nil)
+       |> assign(:markdown_modal_content, nil)
+       |> assign(:markdown_modal_label, nil)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -295,11 +296,26 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("open_markdown_modal", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :markdown_modal_meta_id, id)}
+    meta = Enum.find(socket.assigns.exported_metadata, &(&1.id == id))
+
+    {:noreply,
+     socket
+     |> assign(:markdown_modal_content, meta.value["markdown"])
+     |> assign(:markdown_modal_label, humanize_key(meta.key))}
+  end
+
+  def handle_event("open_markdown_modal", %{"content" => content, "label" => label}, socket) do
+    {:noreply,
+     socket
+     |> assign(:markdown_modal_content, content)
+     |> assign(:markdown_modal_label, label)}
   end
 
   def handle_event("close_markdown_modal", _params, socket) do
-    {:noreply, assign(socket, :markdown_modal_meta_id, nil)}
+    {:noreply,
+     socket
+     |> assign(:markdown_modal_content, nil)
+     |> assign(:markdown_modal_label, nil)}
   end
 
   # PubSub: workflow session updated — refresh shared chrome
@@ -584,6 +600,41 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
               <%!-- Sidebar content — toggled by hook --%>
               <div id="metadata-sidebar-content" class="w-80 overflow-y-auto flex-1 bg-base-100">
+                <%!-- User prompt section --%>
+                <div
+                  id="user-prompt-section"
+                  class="p-4 border-b border-base-300/60"
+                >
+                  <div class="flex items-center gap-2 mb-3">
+                    <.icon
+                      name="hero-chat-bubble-left-ellipsis-micro"
+                      class="size-4 text-base-content/30"
+                    />
+                    <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">
+                      User Prompt
+                    </h3>
+                  </div>
+                  <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150">
+                    <.icon
+                      name="hero-document-text-micro"
+                      class="size-3 text-base-content/30 shrink-0"
+                    />
+                    <span class="font-medium text-sm text-base-content/70 truncate flex-1">
+                      Prompt
+                    </span>
+                    <button
+                      id="view-user-prompt-btn"
+                      phx-click="open_markdown_modal"
+                      phx-value-content={@workflow_session.user_prompt}
+                      phx-value-label="User Prompt"
+                      class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
+                      aria-label="View user prompt"
+                    >
+                      <.icon name="hero-eye-micro" class="size-4 text-primary" />
+                    </button>
+                  </div>
+                </div>
+
                 <%!-- Source code section --%>
                 <div
                   :if={@worktree_path}
@@ -737,8 +788,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       </div>
 
       <%!-- Markdown modal --%>
-      <%= if @markdown_modal_meta_id do %>
-        <% modal_meta = Enum.find(@exported_metadata, &(&1.id == @markdown_modal_meta_id)) %>
+      <%= if @markdown_modal_content do %>
         <div
           id="markdown-modal"
           class="fixed inset-0 z-50 flex items-center justify-center"
@@ -755,11 +805,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             >
               <.icon name="hero-x-mark" class="size-6" />
             </button>
-            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden">
+            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden max-h-[80vh] overflow-y-auto">
               <.markdown_viewer
                 id="markdown-modal-viewer"
-                content={modal_meta.value["markdown"]}
-                label={humanize_key(modal_meta.key)}
+                content={@markdown_modal_content}
+                label={@markdown_modal_label}
               />
             </div>
           </div>
