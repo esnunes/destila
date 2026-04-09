@@ -85,15 +85,44 @@ Also add `exports: []` to the user message handler (line 34) and the system-with
 
 **File:** `lib/destila/ai/response_processor.ex`
 
-In `derive_message_type/3` (lines 183-205), remove the first `cond` clause:
+In `derive_message_type/3` (lines 183-205), remove the first `cond` clause (lines 187-188) AND the now-unused `phase_def` variable (line 184):
 
 ```elixir
-# Remove this clause (lines 187-188):
-phase_def && phase_def.message_type == :generated_prompt ->
-  {nil, :generated_prompt}
+# Before (lines 183-205):
+defp derive_message_type(raw, phase, workflow_session) do
+  phase_def = get_phase_def(workflow_session.workflow_type, phase)
+
+  cond do
+    phase_def && phase_def.message_type == :generated_prompt ->
+      {nil, :generated_prompt}
+
+    session = extract_session_action(raw) ->
+      ...
+  end
+end
+
+# After:
+defp derive_message_type(raw, _phase, _workflow_session) do
+  cond do
+    session = extract_session_action(raw) ->
+      case session.action do
+        "suggest_phase_complete" ->
+          {session.message || "Ready to move to the next phase.", :phase_advance}
+
+        "phase_complete" ->
+          {session.message || "Moving to the next phase.", :phase_advance}
+
+        _ ->
+          {nil, nil}
+      end
+
+    true ->
+      {nil, nil}
+  end
+end
 ```
 
-The `phase_def` variable assignment (line 184) and the `get_phase_def` helper (lines 207-209) are still used by any future phase-level message_type logic, but since no phases use message_type after this change, they can optionally be removed. However, keeping them doesn't hurt and preserves the extension point.
+**Also delete `get_phase_def/2`** (lines 207-209) — it is now unreferenced dead code. This removal is **required**: `mix precommit` runs `compile --warnings-as-errors`, so any unused variable or function will fail the build.
 
 Also remove the special content handling for `:generated_prompt` at lines 45-50:
 
@@ -571,13 +600,15 @@ Append after the existing "Sidebar collapse state persists" scenario:
 
 **11a. File:** `test/destila/ai/response_processor_test.exs`
 
-Add a new `describe` block for `process_message/2` exports:
+Add `alias Destila.AI.Message` at the top (after the existing `alias ResponseProcessor` line).
+
+Add a new `describe` block for `process_message/2` exports. Note: `Message` is an Ecto schema but can be constructed directly with `%Message{}` for unit tests — `process_message/2` only reads struct fields, it doesn't hit the DB. The `workflow_session` parameter only needs `:workflow_type` (accessed by `derive_message_type`).
 
 ```elixir
 describe "process_message/2 exports" do
   test "includes exports from AI response with export tool calls" do
     msg = %Message{
-      id: 1,
+      id: Ecto.UUID.generate(),
       role: :system,
       phase: 1,
       content: "Here's your prompt.",
@@ -594,10 +625,10 @@ describe "process_message/2 exports" do
           }
         ]
       },
-      inserted_at: ~U[2026-01-01 00:00:00Z]
+      inserted_at: DateTime.utc_now()
     }
 
-    ws = %Destila.Workflows.Session{workflow_type: :brainstorm_idea, current_phase: 1}
+    ws = %{workflow_type: :brainstorm_idea}
     processed = ResponseProcessor.process_message(msg, ws)
 
     assert [%{key: "generated_prompt", value: "# Prompt", type: "markdown"}] = processed.exports
@@ -605,11 +636,11 @@ describe "process_message/2 exports" do
 
   test "exports is empty list for user messages" do
     msg = %Message{
-      id: 2,
+      id: Ecto.UUID.generate(),
       role: :user,
       phase: 1,
       content: "Hello",
-      inserted_at: ~U[2026-01-01 00:00:00Z]
+      inserted_at: DateTime.utc_now()
     }
 
     processed = ResponseProcessor.process_message(msg, %{})
@@ -618,17 +649,46 @@ describe "process_message/2 exports" do
 
   test "exports is empty list for messages without export tool calls" do
     msg = %Message{
-      id: 3,
+      id: Ecto.UUID.generate(),
       role: :system,
       phase: 1,
       content: "Just text",
       raw_response: %{"mcp_tool_uses" => []},
-      inserted_at: ~U[2026-01-01 00:00:00Z]
+      inserted_at: DateTime.utc_now()
     }
 
-    ws = %Destila.Workflows.Session{workflow_type: :brainstorm_idea, current_phase: 1}
+    ws = %{workflow_type: :brainstorm_idea}
     processed = ResponseProcessor.process_message(msg, ws)
     assert processed.exports == []
+  end
+
+  test "multiple exports from a single message" do
+    msg = %Message{
+      id: Ecto.UUID.generate(),
+      role: :system,
+      phase: 1,
+      content: "Exported two things.",
+      raw_response: %{
+        "mcp_tool_uses" => [
+          %{
+            "name" => "mcp__destila__session",
+            "input" => %{"action" => "export", "key" => "summary", "value" => "A summary", "type" => "text"}
+          },
+          %{
+            "name" => "mcp__destila__session",
+            "input" => %{"action" => "export", "key" => "doc", "value" => "# Doc", "type" => "markdown"}
+          }
+        ]
+      },
+      inserted_at: DateTime.utc_now()
+    }
+
+    ws = %{workflow_type: :brainstorm_idea}
+    processed = ResponseProcessor.process_message(msg, ws)
+
+    assert length(processed.exports) == 2
+    assert Enum.at(processed.exports, 0).key == "summary"
+    assert Enum.at(processed.exports, 1).key == "doc"
   end
 end
 ```
@@ -639,16 +699,16 @@ end
 describe "process_message/2 message_type" do
   test "does not derive :generated_prompt from phase config" do
     msg = %Message{
-      id: 4,
+      id: Ecto.UUID.generate(),
       role: :system,
       phase: 4,
       content: "Final prompt content",
       raw_response: %{"mcp_tool_uses" => []},
-      inserted_at: ~U[2026-01-01 00:00:00Z]
+      inserted_at: DateTime.utc_now()
     }
 
     # Phase 4 of brainstorm_idea was previously :generated_prompt
-    ws = %Destila.Workflows.Session{workflow_type: :brainstorm_idea, current_phase: 4}
+    ws = %{workflow_type: :brainstorm_idea}
     processed = ResponseProcessor.process_message(msg, ws)
 
     assert processed.message_type == nil
@@ -656,7 +716,233 @@ describe "process_message/2 message_type" do
 end
 ```
 
-**11c.** Update any existing tests that reference `@tag feature: "generated_prompt_viewing"` to use `@tag feature: "markdown_metadata_viewing"`. Search for this tag across test files and update.
+**11c. Rename and rewrite** `test/destila_web/live/generated_prompt_viewing_live_test.exs`
+
+This test file requires a full rewrite, not just tag updates. The key changes:
+
+1. **Rename** the file to `test/destila_web/live/markdown_metadata_viewing_live_test.exs`
+2. **Rename** the module to `DestilaWeb.MarkdownMetadataViewingLiveTest`
+3. **Update** the `@moduledoc` and `@feature` to reference the new feature file
+4. **Rewrite `create_session_with_generated_prompt`** → `create_session_with_markdown_export`: The existing setup creates messages with `"mcp_tool_uses" => []` (empty). With the new export-detection approach, **no inline cards will render** for messages with empty tool uses. The setup must include an export tool call in `raw_response`:
+
+```elixir
+defp create_session_with_markdown_export do
+  {:ok, workflow_session} =
+    Destila.Workflows.insert_workflow_session(%{
+      title: "Test Session",
+      workflow_type: :brainstorm_idea,
+      project_id: nil,
+      done_at: DateTime.utc_now(),
+      current_phase: 4,
+      total_phases: 4
+    })
+
+  {:ok, ai_session} = Destila.AI.get_or_create_ai_session(workflow_session.id)
+
+  {:ok, _} =
+    Destila.AI.create_message(ai_session.id, %{
+      role: :system,
+      content: "Here is your implementation prompt.",
+      raw_response: %{
+        "text" => "Here is your implementation prompt.",
+        "result" => "Here is your implementation prompt.",
+        "mcp_tool_uses" => [
+          %{
+            "name" => "mcp__destila__session",
+            "input" => %{
+              "action" => "export",
+              "key" => "generated_prompt",
+              "value" => @sample_markdown,
+              "type" => "markdown"
+            }
+          }
+        ],
+        "is_error" => false
+      },
+      phase: 4,
+      workflow_session_id: workflow_session.id
+    })
+
+  workflow_session
+end
+```
+
+5. **Update all CSS selectors** in assertions to match new component markup:
+
+| Old selector | New selector |
+|---|---|
+| `[id^='prompt-card-']` | `[id^='export-md-']` |
+| `button.prompt-copy-btn` | `button.md-card-copy-btn` |
+| `.prompt-tab` | `.md-card-tab` |
+
+6. **Update tag values** from `@feature "generated_prompt_viewing"` to `@feature "markdown_metadata_viewing"`
+
+The full rewritten test file:
+
+```elixir
+defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
+  @moduledoc """
+  LiveView tests for Markdown Metadata Viewing.
+  Feature: features/markdown_metadata_viewing.feature
+  """
+  use DestilaWeb.ConnCase, async: false
+
+  import Phoenix.LiveViewTest
+
+  @feature "markdown_metadata_viewing"
+
+  @sample_markdown """
+  # Implementation Prompt
+
+  ## Overview
+
+  Fix the login timeout bug by increasing the session TTL.
+
+  ## Steps
+
+  1. Update `config/runtime.exs`
+  2. Change `session_ttl` from 30 to 60 minutes
+  3. Add a test for the new timeout value
+
+  ```elixir
+  config :my_app, session_ttl: :timer.minutes(60)
+  ```
+  """
+
+  setup %{conn: conn} do
+    ClaudeCode.Test.set_mode_to_shared()
+
+    ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+      [
+        ClaudeCode.Test.text("AI response"),
+        ClaudeCode.Test.result("AI response")
+      ]
+    end)
+
+    conn = post(conn, "/login", %{"email" => "test@example.com"})
+    {:ok, conn: conn}
+  end
+
+  defp create_session_with_markdown_export do
+    {:ok, workflow_session} =
+      Destila.Workflows.insert_workflow_session(%{
+        title: "Test Session",
+        workflow_type: :brainstorm_idea,
+        project_id: nil,
+        done_at: DateTime.utc_now(),
+        current_phase: 4,
+        total_phases: 4
+      })
+
+    {:ok, ai_session} = Destila.AI.get_or_create_ai_session(workflow_session.id)
+
+    {:ok, _} =
+      Destila.AI.create_message(ai_session.id, %{
+        role: :system,
+        content: "Here is your implementation prompt.",
+        raw_response: %{
+          "text" => "Here is your implementation prompt.",
+          "result" => "Here is your implementation prompt.",
+          "mcp_tool_uses" => [
+            %{
+              "name" => "mcp__destila__session",
+              "input" => %{
+                "action" => "export",
+                "key" => "generated_prompt",
+                "value" => @sample_markdown,
+                "type" => "markdown"
+              }
+            }
+          ],
+          "is_error" => false
+        },
+        phase: 4,
+        workflow_session_id: workflow_session.id
+      })
+
+    workflow_session
+  end
+
+  describe "default rendered view" do
+    @tag feature: @feature, scenario: "Default to rendered HTML view"
+    test "renders the markdown card with toggle buttons and copy button", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      # Card exists with export-md ID prefix and data-content
+      assert has_element?(view, "[id^='export-md-']")
+      assert has_element?(view, "[data-content]")
+
+      # Toggle buttons present with tablist
+      assert has_element?(view, "[role='tablist']")
+      assert has_element?(view, "button[data-view='rendered']")
+      assert has_element?(view, "button[data-view='markdown']")
+
+      # Copy button present
+      assert has_element?(view, "button.md-card-copy-btn")
+
+      # Both view containers present
+      assert has_element?(view, "[data-rendered]")
+      assert has_element?(view, "[data-markdown]")
+
+      # Rendered view has prose wrapper
+      assert has_element?(view, "[data-rendered].prose")
+
+      # Markdown view has pre/code block
+      assert has_element?(view, "[data-markdown] pre code")
+
+      # Card header shows humanized key
+      html = render(view)
+      assert html =~ "Generated Prompt"
+    end
+  end
+
+  describe "markdown view structure" do
+    @tag feature: @feature, scenario: "Toggle to markdown view"
+    test "markdown view contains raw markdown in pre/code block", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      code_html = view |> element("[data-markdown] pre code") |> render()
+      assert code_html =~ "# Implementation Prompt"
+      assert code_html =~ "## Overview"
+      assert code_html =~ "```elixir"
+    end
+  end
+
+  describe "rendered view structure" do
+    @tag feature: @feature, scenario: "Toggle back to rendered view"
+    test "rendered view contains HTML-rendered markdown", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "[data-rendered] h1")
+      assert has_element?(view, "[data-rendered] h2")
+    end
+  end
+
+  describe "copy button" do
+    @tag feature: @feature, scenario: "Copy markdown to clipboard"
+    test "copy button has correct aria-label and icon", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "button[aria-label='Copy markdown to clipboard']")
+      assert has_element?(view, "button.md-card-copy-btn .hero-clipboard-document-micro")
+    end
+
+    @tag feature: @feature, scenario: "Copy works from either view"
+    test "data-content attribute contains the raw markdown for JS hook", %{conn: conn} do
+      ws = create_session_with_markdown_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      card_html = view |> element("[id^='export-md-']") |> render()
+      assert card_html =~ "data-content=\""
+      assert card_html =~ "# Implementation Prompt"
+    end
+  end
+end
+```
 
 ### Step 12: Run `mix precommit`
 
@@ -673,7 +959,7 @@ Verify compilation, formatting, and all tests pass.
 
 ## Execution order
 
-1. Steps 1-2 (ResponseProcessor) — add exports field, remove :generated_prompt detection
+1. Steps 1-2 (ResponseProcessor) — add exports field, remove :generated_prompt detection + dead code (`phase_def`, `get_phase_def/2`)
 2. Step 3 (Phase struct + workflow) — remove message_type field and usage
 3. Steps 4-6 (ChatComponents) — add humanize_key, create markdown_card and plain_card
 4. Steps 7-8 (ChatComponents) — update chat_message, remove old :generated_prompt handler
@@ -684,7 +970,7 @@ Verify compilation, formatting, and all tests pass.
 
 ## Files modified
 
-- `lib/destila/ai/response_processor.ex` — add exports to process_message, remove :generated_prompt detection
+- `lib/destila/ai/response_processor.ex` — add exports to process_message, remove :generated_prompt detection, remove dead `phase_def`/`get_phase_def` code
 - `lib/destila/workflows/phase.ex` — remove :message_type field from struct
 - `lib/destila/workflows/brainstorm_idea_workflow.ex` — remove message_type from Phase 4
 - `lib/destila_web/components/chat_components.ex` — add humanize_key, markdown_card, plain_card, .MarkdownCard/.PlainCard hooks; update chat_message; remove :generated_prompt handler and .PromptCard hook
@@ -693,6 +979,8 @@ Verify compilation, formatting, and all tests pass.
 - `features/markdown_metadata_viewing.feature` — new file (renamed + rewritten)
 - `features/exported_metadata.feature` — add inline chat message scenarios
 - `test/destila/ai/response_processor_test.exs` — add process_message exports tests, add message_type regression test
+- `test/destila_web/live/generated_prompt_viewing_live_test.exs` — deleted (renamed)
+- `test/destila_web/live/markdown_metadata_viewing_live_test.exs` — new file (renamed + rewritten with export tool calls in raw_response and updated CSS selectors)
 
 ## Done when
 
