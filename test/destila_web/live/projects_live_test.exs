@@ -10,7 +10,6 @@ defmodule DestilaWeb.ProjectsLiveTest do
   @feature "project_management"
 
   setup %{conn: conn} do
-    conn = post(conn, "/login", %{"email" => "test@example.com"})
     {:ok, conn: conn}
   end
 

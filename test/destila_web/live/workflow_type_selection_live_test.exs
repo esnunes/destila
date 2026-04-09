@@ -13,7 +13,6 @@ defmodule DestilaWeb.WorkflowTypeSelectionLiveTest do
   _ = :brainstorm_idea
 
   setup %{conn: conn} do
-    conn = post(conn, "/login", %{"email" => "test@example.com"})
     {:ok, conn: conn}
   end
 

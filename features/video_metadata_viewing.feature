@@ -5,8 +5,7 @@ Feature: Video Metadata Viewing
   served via a streaming endpoint that reads MP4 files from the local filesystem.
 
   Background:
-    Given I am logged in
-    And a session has exported video_file metadata
+    Given a session has exported video_file metadata
 
   Scenario: Video card displays with click-to-play controls
     Then the video card should display an HTML5 video player

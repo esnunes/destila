@@ -22,7 +22,6 @@ defmodule DestilaWeb.MediaControllerTest do
         exported: true
       )
 
-    conn = conn |> post("/login", %{"email" => "test@example.com"}) |> recycle()
     {:ok, conn: conn, meta: meta, video_path: path}
   end
 
@@ -64,13 +63,4 @@ defmodule DestilaWeb.MediaControllerTest do
     end
   end
 
-  describe "authentication" do
-    @tag feature: @feature, scenario: "Video file is streamed from disk"
-    test "redirects unauthenticated request to login", %{meta: meta} do
-      conn = build_conn()
-      conn = get(conn, "/media/#{meta.id}")
-
-      assert redirected_to(conn) == "/login"
-    end
-  end
 end

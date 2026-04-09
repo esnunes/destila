@@ -3,17 +3,15 @@ defmodule DestilaWeb.DashboardLive do
 
   import DestilaWeb.BoardComponents
 
-  def mount(_params, session, socket) do
+  def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
     end
 
-    current_user = session["current_user"]
     crafting = Destila.Workflows.list_workflow_sessions()
 
     {:ok,
      socket
-     |> assign(:current_user, current_user)
      |> assign(:page_title, "Dashboard")
      |> assign(:crafting_prompts, crafting)}
   end
@@ -54,10 +52,10 @@ defmodule DestilaWeb.DashboardLive do
       |> assign(:crafting_summary, crafting_summary)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
+    <Layouts.app flash={@flash} page_title={@page_title}>
       <div class="p-6 lg:p-8 max-w-6xl mx-auto">
         <h1 class="text-2xl font-bold tracking-tight mb-8">
-          Welcome back, {@current_user.name}
+          Dashboard
         </h1>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">

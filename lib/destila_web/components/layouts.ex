@@ -4,19 +4,15 @@ defmodule DestilaWeb.Layouts do
   embed_templates "layouts/*"
 
   attr :flash, :map, required: true
-  attr :current_user, :map, default: nil
   attr :page_title, :string, default: nil
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
     <div class="min-h-screen bg-base-100">
-      <.sidebar :if={@current_user} current_user={@current_user} page_title={@page_title} />
+      <.sidebar page_title={@page_title} />
 
-      <main class={[
-        "min-h-screen transition-[margin-left] duration-200",
-        @current_user && "ml-16 sidebar-open:ml-60"
-      ]}>
+      <main class="min-h-screen transition-[margin-left] duration-200 ml-16 sidebar-open:ml-60">
         {render_slot(@inner_block)}
       </main>
 
@@ -25,7 +21,6 @@ defmodule DestilaWeb.Layouts do
     """
   end
 
-  attr :current_user, :map, required: true
   attr :page_title, :string, default: nil
 
   defp sidebar(assigns) do
@@ -71,24 +66,6 @@ defmodule DestilaWeb.Layouts do
 
       <%!-- Bottom --%>
       <div class="shrink-0 border-t border-base-300/50 mx-2 pt-2 pb-3 space-y-1">
-        <%!-- User --%>
-        <div class="flex items-center rounded-lg">
-          <div class="w-12 h-10 flex items-center justify-center shrink-0">
-            <div class="w-8 h-8 rounded-full bg-neutral flex items-center justify-center text-neutral-content">
-              <span class="text-xs font-medium">{String.first(@current_user.name)}</span>
-            </div>
-          </div>
-          <div class="min-w-0 whitespace-nowrap opacity-0 sidebar-open:opacity-100 transition-opacity duration-200">
-            <p class="text-sm font-medium truncate">{@current_user.name}</p>
-            <.link
-              href={~p"/logout"}
-              class="text-xs text-base-content/50 hover:text-error transition-colors"
-            >
-              Sign out
-            </.link>
-          </div>
-        </div>
-
         <%!-- Theme toggle --%>
         <button
           phx-click={JS.dispatch("phx:cycle-theme")}

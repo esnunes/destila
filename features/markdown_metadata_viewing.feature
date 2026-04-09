@@ -6,8 +6,7 @@ Feature: Markdown Metadata Viewing
   their clipboard. The card header shows the humanized metadata key name.
 
   Background:
-    Given I am logged in
-    And a session has exported markdown metadata
+    Given a session has exported markdown metadata
 
   Scenario: Default to rendered HTML view
     Then the markdown card should display the rendered HTML view

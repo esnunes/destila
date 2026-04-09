@@ -9,9 +9,7 @@ defmodule DestilaWeb.CreateSessionLive do
 
   alias Destila.Workflows
 
-  def mount(params, session, socket) do
-    socket = assign(socket, :current_user, session["current_user"])
-
+  def mount(params, _session, socket) do
     if Map.has_key?(params, "workflow_type") do
       mount_form(params["workflow_type"], socket)
     else
@@ -185,7 +183,7 @@ defmodule DestilaWeb.CreateSessionLive do
 
   def render(%{view: :selecting_type} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash}>
       <div class="flex items-center justify-center min-h-screen">
         <div class="w-full max-w-lg px-6">
           <div class="text-center mb-8">
@@ -224,7 +222,7 @@ defmodule DestilaWeb.CreateSessionLive do
 
   def render(%{view: :form} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
+    <Layouts.app flash={@flash} page_title={@page_title}>
       <div class="overflow-y-auto h-screen px-6 py-6">
         <div class="max-w-2xl mx-auto space-y-6">
           <div class="flex justify-end">
