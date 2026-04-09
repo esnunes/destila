@@ -70,17 +70,14 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
         project_id: project_id,
         current_phase: phase,
         total_phases: 7,
-        title_generating: Keyword.get(opts, :title_generating, true)
+        title_generating: Keyword.get(opts, :title_generating, true),
+        user_prompt: "Implement the login feature"
       })
 
     # Create PE unless we want setup status (no PE)
     unless pe_status == :setup do
       {:ok, _pe} = Destila.Executions.create_phase_execution(ws, phase, %{status: pe_status})
     end
-
-    Destila.Workflows.upsert_metadata(ws.id, "creation", "prompt", %{
-      "text" => "Implement the login feature"
-    })
 
     ws
   end

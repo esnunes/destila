@@ -26,7 +26,8 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     ]
   end
 
-  def creation_config, do: {nil, "Idea", "idea"}
+  def creation_label, do: "Idea"
+  def source_metadata_key, do: nil
 
   def default_title, do: "New Idea"
 
@@ -82,8 +83,7 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   """
 
   defp task_description_prompt(workflow_session) do
-    metadata = Destila.Workflows.get_metadata(workflow_session.id)
-    idea = get_in(metadata, ["idea", "text"])
+    idea = workflow_session.user_prompt
 
     idea_context =
       if idea && idea != "" do

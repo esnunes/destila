@@ -14,12 +14,14 @@ defmodule Destila.Workflows.Session do
     field(:current_phase, :integer, default: 1)
     field(:total_phases, :integer)
 
+    field(:user_prompt, :string)
     field(:title_generating, :boolean, default: false)
     field(:position, :integer)
     field(:done_at, :utc_datetime)
     field(:archived_at, :utc_datetime)
 
     belongs_to(:project, Destila.Projects.Project)
+    belongs_to(:source_session, __MODULE__)
     has_many(:ai_sessions, Destila.AI.Session, foreign_key: :workflow_session_id)
     has_many(:messages, Destila.AI.Message, foreign_key: :workflow_session_id)
 
@@ -43,7 +45,9 @@ defmodule Destila.Workflows.Session do
       :total_phases,
       :title_generating,
       :position,
-      :archived_at
+      :archived_at,
+      :user_prompt,
+      :source_session_id
     ])
     |> validate_required([:title, :workflow_type])
   end

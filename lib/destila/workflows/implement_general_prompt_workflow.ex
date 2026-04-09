@@ -101,7 +101,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     ]
   end
 
-  def creation_config, do: {"prompt_generated", "Prompt", "prompt"}
+  def creation_label, do: "Prompt"
+  def source_metadata_key, do: "prompt_generated"
 
   def default_title, do: "New Implementation"
 
@@ -120,8 +121,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
   # --- AI System Prompts ---
 
   defp plan_prompt(workflow_session) do
-    metadata = Destila.Workflows.get_metadata(workflow_session.id)
-    prompt = get_in(metadata, ["prompt", "text"])
+    prompt = workflow_session.user_prompt
 
     """
     You are an AI planning agent working in a git worktree. Your task is to \
