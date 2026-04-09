@@ -80,3 +80,18 @@ Feature: Exported Metadata
     When the AI exports new metadata
     Then the metadata chat message should appear in the conversation
     And the sidebar should also update with the new entry
+
+  Scenario: Video metadata appears as inline chat message
+    Given I am on a session detail page
+    And the AI exports metadata with type "video_file"
+    Then a chat message should appear with the video card component
+    And the card header should show the humanized metadata key
+    And the card should display a video player with click-to-play controls
+    And the video should not autoplay
+
+  Scenario: Video metadata sidebar entry has play button
+    Given I am on a session detail page
+    And the session has exported metadata of type "video_file"
+    Then the sidebar entry should display a play button instead of a text preview
+    When I click the play button
+    Then a modal overlay should open with a larger video player

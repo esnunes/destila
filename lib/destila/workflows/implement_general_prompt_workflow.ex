@@ -236,6 +236,10 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     2. Record a walkthrough demonstrating the changes
     3. Commit any artifacts: `git add . && git commit -m "Add feature video"`
     4. Push to the remote: `git push`
+
+    When exporting the video, use the original video filename (without extension) as the \
+    export key — for example, if the file is `feature-demo.mp4`, export with \
+    `key: "feature_demo"`. This ensures each video export has a distinct, descriptive key.
     """ <> @non_interactive_tool_instructions
   end
 
