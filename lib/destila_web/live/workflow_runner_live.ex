@@ -65,6 +65,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:question_answers, %{})
        |> assign(:video_modal_meta_id, nil)
        |> assign(:markdown_modal_meta_id, nil)
+       |> assign(:user_prompt_modal_open, false)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -300,6 +301,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   def handle_event("close_markdown_modal", _params, socket) do
     {:noreply, assign(socket, :markdown_modal_meta_id, nil)}
+  end
+
+  def handle_event("open_user_prompt_modal", _params, socket) do
+    {:noreply, assign(socket, :user_prompt_modal_open, true)}
+  end
+
+  def handle_event("close_user_prompt_modal", _params, socket) do
+    {:noreply, assign(socket, :user_prompt_modal_open, false)}
   end
 
   # PubSub: workflow session updated — refresh shared chrome
@@ -584,6 +593,40 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
               <%!-- Sidebar content — toggled by hook --%>
               <div id="metadata-sidebar-content" class="w-80 overflow-y-auto flex-1 bg-base-100">
+                <%!-- User prompt section --%>
+                <div
+                  :if={@workflow_session.user_prompt not in [nil, ""]}
+                  id="user-prompt-section"
+                  class="p-4 border-b border-base-300/60"
+                >
+                  <div class="flex items-center gap-2 mb-3">
+                    <.icon
+                      name="hero-chat-bubble-left-ellipsis-micro"
+                      class="size-4 text-base-content/30"
+                    />
+                    <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">
+                      User Prompt
+                    </h3>
+                  </div>
+                  <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150">
+                    <.icon
+                      name="hero-document-text-micro"
+                      class="size-3 text-base-content/30 shrink-0"
+                    />
+                    <span class="font-medium text-sm text-base-content/70 truncate flex-1">
+                      Prompt
+                    </span>
+                    <button
+                      id="view-user-prompt-btn"
+                      phx-click="open_user_prompt_modal"
+                      class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
+                      aria-label="View user prompt"
+                    >
+                      <.icon name="hero-eye-micro" class="size-4 text-primary" />
+                    </button>
+                  </div>
+                </div>
+
                 <%!-- Source code section --%>
                 <div
                   :if={@worktree_path}
@@ -760,6 +803,35 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 id="markdown-modal-viewer"
                 content={modal_meta.value["markdown"]}
                 label={humanize_key(modal_meta.key)}
+              />
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <%!-- User prompt modal --%>
+      <%= if @user_prompt_modal_open do %>
+        <div
+          id="user-prompt-modal"
+          class="fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div
+            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            phx-click="close_user_prompt_modal"
+          />
+          <div class="relative z-10 w-full max-w-3xl mx-4">
+            <button
+              phx-click="close_user_prompt_modal"
+              class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
+              aria-label="Close user prompt"
+            >
+              <.icon name="hero-x-mark" class="size-6" />
+            </button>
+            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden">
+              <.markdown_viewer
+                id="user-prompt-modal-viewer"
+                content={@workflow_session.user_prompt}
+                label="User Prompt"
               />
             </div>
           </div>
