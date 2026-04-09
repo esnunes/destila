@@ -243,7 +243,9 @@ defmodule Destila.AI.ClaudeSession do
       mcp_tool_uses: [],
       result: nil,
       is_error: false,
-      session_id: nil
+      session_id: nil,
+      subtype: nil,
+      errors: nil
     }
 
     acc =
@@ -265,7 +267,9 @@ defmodule Destila.AI.ClaudeSession do
               acc
               | result: msg.result,
                 is_error: msg.is_error,
-                session_id: msg.session_id
+                session_id: msg.session_id,
+                subtype: msg.subtype,
+                errors: msg.errors
             }
 
           _ ->
@@ -278,6 +282,8 @@ defmodule Destila.AI.ClaudeSession do
       text: acc.text |> Enum.reverse() |> Enum.join("\n\n"),
       is_error: acc.is_error,
       session_id: acc.session_id,
+      subtype: acc.subtype,
+      errors: acc.errors,
       mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses)
     }
   end

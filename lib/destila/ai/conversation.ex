@@ -112,19 +112,80 @@ defmodule Destila.AI.Conversation do
 
   Returns `:awaiting_input`.
   """
-  def handle_ai_error(ws, _reason) do
+  def handle_ai_error(ws, reason) do
     phase_number = ws.current_phase
     ai_session = AI.get_ai_session_for_workflow!(ws.id)
 
     AI.create_message(ai_session.id, %{
       role: :system,
-      content: "Something went wrong. Please try sending your message again.",
+      content: error_message(reason),
       phase: phase_number,
       workflow_session_id: ws.id
     })
 
     :awaiting_input
   end
+
+  @auth_patterns [
+    "not authenticated",
+    "authentication required",
+    "authentication has expired",
+    "authentication expired",
+    "unauthorized",
+    "token expired",
+    "session expired",
+    "invalid api key",
+    "please login",
+    "please log in",
+    "please run `claude login`"
+  ]
+
+  defp error_message(reason) do
+    text = extract_error_text(reason)
+
+    cond do
+      auth_error?(text) ->
+        "Claude authentication has expired or is missing. " <>
+          "Please run `claude login` in your terminal to re-authenticate, then retry."
+
+      text != "" ->
+        "Something went wrong: #{text}"
+
+      true ->
+        "Something went wrong. Please try sending your message again."
+    end
+  end
+
+  defp auth_error?(""), do: false
+
+  defp auth_error?(text) do
+    lower = String.downcase(text)
+    Enum.any?(@auth_patterns, &String.contains?(lower, &1))
+  end
+
+  defp extract_error_text(%{errors: [_ | _] = errors}), do: Enum.join(errors, "; ")
+  defp extract_error_text(%{result: result}) when is_binary(result), do: result
+  defp extract_error_text(%{text: text}) when is_binary(text) and text != "", do: text
+
+  defp extract_error_text({:provisioning_failed, {:initialize_failed, msg}})
+       when is_binary(msg),
+       do: msg
+
+  defp extract_error_text({:provisioning_failed, {:cli_exit, status}}),
+    do: "Claude CLI exited unexpectedly (exit code #{status})"
+
+  defp extract_error_text({:provisioning_failed, :initialize_timeout}),
+    do: "Claude CLI timed out during initialization"
+
+  defp extract_error_text({:provisioning_failed, reason}),
+    do: extract_error_text(reason)
+
+  defp extract_error_text({:plugin_setup_failed, reason}) when is_binary(reason), do: reason
+
+  defp extract_error_text({:cli_not_found, msg}) when is_binary(msg), do: msg
+
+  defp extract_error_text(reason) when is_binary(reason), do: reason
+  defp extract_error_text(_), do: ""
 
   @doc """
   Handles session strategy for a given phase.
