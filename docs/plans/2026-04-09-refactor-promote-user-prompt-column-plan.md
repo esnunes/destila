@@ -57,6 +57,8 @@ The current code conditionally includes the user prompt context only when the me
 
 Create `priv/repo/migrations/<timestamp>_add_user_prompt_to_workflow_sessions.exs`:
 
+**Important: this project uses SQLite (`ecto_sqlite3`), so all raw SQL must use SQLite-compatible syntax** — `json_extract()` instead of `->>`, `lower(hex(randomblob(16)))` instead of `gen_random_uuid()`, `json_object()` instead of `jsonb_build_object()`, and `datetime('now')` instead of `NOW()`.
+
 ```elixir
 defmodule Destila.Repo.Migrations.AddUserPromptToWorkflowSessions do
   use Ecto.Migration
@@ -71,7 +73,7 @@ defmodule Destila.Repo.Migrations.AddUserPromptToWorkflowSessions do
     # Backfill from creation-phase metadata, mapping workflow_type to the correct key
     execute """
     UPDATE workflow_sessions
-    SET user_prompt = m.value->>'text'
+    SET user_prompt = json_extract(m.value, '$.text')
     FROM workflow_session_metadata m
     WHERE m.workflow_session_id = workflow_sessions.id
       AND m.phase_name = 'creation'
@@ -95,7 +97,7 @@ defmodule Destila.Repo.Migrations.AddUserPromptToWorkflowSessions do
     execute """
     INSERT INTO workflow_session_metadata (id, workflow_session_id, phase_name, key, value, exported, inserted_at, updated_at)
     SELECT
-      gen_random_uuid(),
+      lower(hex(randomblob(16))),
       ws.id,
       'creation',
       CASE ws.workflow_type
@@ -103,10 +105,10 @@ defmodule Destila.Repo.Migrations.AddUserPromptToWorkflowSessions do
         WHEN 'code_chat' THEN 'user_prompt'
         WHEN 'implement_general_prompt' THEN 'prompt'
       END,
-      jsonb_build_object('text', ws.user_prompt),
-      false,
-      NOW(),
-      NOW()
+      json_object('text', ws.user_prompt),
+      0,
+      datetime('now'),
+      datetime('now')
     FROM workflow_sessions ws
     WHERE ws.user_prompt IS NOT NULL
     """
@@ -313,7 +315,8 @@ Remove the `upsert_metadata` call (lines 81-83). Instead, pass `user_prompt` in 
 5. `lib/destila/workflows/brainstorm_idea_workflow.ex` — replace `creation_config`, update `task_description_prompt`
 6. `lib/destila/workflows/code_chat_workflow.ex` — replace `creation_config`, update `chat_prompt`
 7. `lib/destila/workflows/implement_general_prompt_workflow.ex` — replace `creation_config`, update `plan_prompt`
-8. `test/destila/workflow_test.exs` — replace `creation_config` tests
-9. `test/destila_web/live/code_chat_workflow_live_test.exs` — use `user_prompt` in session attrs
-10. `test/destila_web/live/implement_general_prompt_workflow_live_test.exs` — use `user_prompt` in session attrs
-11. `test/destila/workflows_metadata_test.exs` — update keys in tests that used creation-phase prompt keys
+8. `lib/destila_web/live/create_session_live.ex` — update `@moduledoc` reference from `creation_config/0` to `creation_label/0` and `source_metadata_key/0` (line 5)
+9. `test/destila/workflow_test.exs` — replace `creation_config` tests
+10. `test/destila_web/live/code_chat_workflow_live_test.exs` — use `user_prompt` in session attrs
+11. `test/destila_web/live/implement_general_prompt_workflow_live_test.exs` — use `user_prompt` in session attrs
+12. `test/destila/workflows_metadata_test.exs` — update keys in tests that used creation-phase prompt keys
