@@ -595,7 +595,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
               <div id="metadata-sidebar-content" class="w-80 overflow-y-auto flex-1 bg-base-100">
                 <%!-- User prompt section --%>
                 <div
-                  :if={@workflow_session.user_prompt not in [nil, ""]}
                   id="user-prompt-section"
                   class="p-4 border-b border-base-300/60"
                 >

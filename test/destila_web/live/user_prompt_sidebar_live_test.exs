@@ -59,24 +59,6 @@ defmodule DestilaWeb.UserPromptSidebarLiveTest do
       assert has_element?(view, "#user-prompt-section")
       assert has_element?(view, "#view-user-prompt-btn")
     end
-
-    @tag feature: "exported_metadata",
-         scenario: "User prompt section is hidden when prompt is empty"
-    test "hides user prompt section when prompt is nil", %{conn: conn} do
-      ws = create_session(%{user_prompt: nil})
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      refute has_element?(view, "#user-prompt-section")
-    end
-
-    @tag feature: "exported_metadata",
-         scenario: "User prompt section is hidden when prompt is empty"
-    test "hides user prompt section when prompt is empty string", %{conn: conn} do
-      ws = create_session(%{user_prompt: ""})
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      refute has_element?(view, "#user-prompt-section")
-    end
   end
 
   describe "user prompt modal" do

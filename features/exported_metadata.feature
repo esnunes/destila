@@ -107,14 +107,8 @@ Feature: Exported Metadata
 
   Scenario: User prompt appears at the top of the sidebar
     Given I am on a session detail page
-    And the session has a user prompt
     Then the sidebar should show a "User Prompt" section above the source code section
     And the section should display a view button
-
-  Scenario: User prompt section is hidden when prompt is empty
-    Given I am on a session detail page
-    And the session has no user prompt
-    Then the sidebar should not show a "User Prompt" section
 
   Scenario: Open user prompt in markdown modal
     Given I am on a session detail page
