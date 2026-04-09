@@ -227,12 +227,14 @@ defmodule DestilaWeb.CreateSessionLive do
     <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
       <div class="overflow-y-auto h-screen px-6 py-6">
         <div class="max-w-2xl mx-auto space-y-6">
-          <.link
-            navigate={~p"/workflows"}
-            class="btn btn-ghost btn-sm text-base-content/40"
-          >
-            &larr; Back to workflow selection
-          </.link>
+          <div class="flex justify-end">
+            <.link
+              navigate={~p"/workflows"}
+              class="text-xs text-base-content/40 hover:text-base-content/60 transition-colors flex items-center gap-1"
+            >
+              <.icon name="hero-arrow-left-micro" class="size-3.5" /> Back to workflow selection
+            </.link>
+          </div>
 
           <%!-- Input section --%>
           <div>
