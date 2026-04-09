@@ -36,6 +36,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :metadata, :map, required: true
   attr :current_step, :map, required: true
   attr :phase_status, :atom, default: nil
+  attr :exported_metadata, :list, default: []
 
   def chat_phase(assigns) do
     non_interactive = assigns.phase_config.non_interactive
@@ -71,6 +72,7 @@ defmodule DestilaWeb.ChatComponents do
                   message={msg}
                   workflow_session={@workflow_session}
                   phase_status={@phase_status}
+                  exported_metadata={@exported_metadata}
                 />
                 <%= if phase == @phase_number && @phase_status == :setup do %>
                   <div class="flex items-center gap-3 text-sm pl-2 mt-2">
@@ -93,6 +95,7 @@ defmodule DestilaWeb.ChatComponents do
                   message={msg}
                   workflow_session={@workflow_session}
                   phase_status={@phase_status}
+                  exported_metadata={@exported_metadata}
                 />
                 <%= if phase == @phase_number && @phase_status == :setup do %>
                   <div class="flex items-center gap-3 text-sm pl-2 mt-2">
@@ -273,6 +276,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :message, :map, required: true
   attr :workflow_session, :map, default: %{}
   attr :phase_status, :atom, default: nil
+  attr :exported_metadata, :list, default: []
 
   def chat_message(assigns) do
     processed = ResponseProcessor.process_message(assigns.message, assigns.workflow_session)
@@ -287,18 +291,28 @@ defmodule DestilaWeb.ChatComponents do
       {render_chat_message(assigns)}
     <% end %>
     <%= for {export, idx} <- Enum.with_index(@exports) do %>
-      <%= if (export.type || "text") == "markdown" do %>
-        <.markdown_card
-          id={"export-md-#{@message.id}-#{idx}"}
-          key={export.key}
-          content={export.value}
-        />
-      <% else %>
-        <.plain_card
-          id={"export-plain-#{@message.id}-#{idx}"}
-          key={export.key}
-          content={export.value}
-        />
+      <%= cond do %>
+        <% (export.type || "text") == "markdown" -> %>
+          <.markdown_card
+            id={"export-md-#{@message.id}-#{idx}"}
+            key={export.key}
+            content={export.value}
+          />
+        <% (export.type || "text") == "video_file" -> %>
+          <% meta = Enum.find(@exported_metadata, &(&1.key == export.key)) %>
+          <%= if meta do %>
+            <.video_card
+              id={"export-video-#{@message.id}-#{idx}"}
+              key={export.key}
+              metadata_id={meta.id}
+            />
+          <% end %>
+        <% true -> %>
+          <.plain_card
+            id={"export-plain-#{@message.id}-#{idx}"}
+            key={export.key}
+            content={export.value}
+          />
       <% end %>
     <% end %>
     """
@@ -615,6 +629,35 @@ defmodule DestilaWeb.ChatComponents do
         }
       }
     </script>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :key, :string, required: true
+  attr :metadata_id, :string, required: true
+
+  defp video_card(assigns) do
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="max-w-[80%]">
+        <div id={@id} class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden">
+          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
+            <.icon name="hero-film-micro" class="size-4 text-primary" />
+            <span class="text-xs font-medium text-primary uppercase tracking-wide">
+              {humanize_key(@key)}
+            </span>
+          </div>
+          <div class="p-3">
+            <video controls preload="metadata" class="w-full rounded-lg">
+              <source src={"/media/#{@metadata_id}"} type="video/mp4" />
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
     """
   end
 

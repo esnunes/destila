@@ -63,6 +63,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:streaming_chunks, nil)
        |> assign(:alive_session, alive_session)
        |> assign(:question_answers, %{})
+       |> assign(:video_modal_meta_id, nil)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -282,6 +283,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       {:error, _} ->
         {:noreply, socket}
     end
+  end
+
+  def handle_event("open_video_modal", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :video_modal_meta_id, id)}
+  end
+
+  def handle_event("close_video_modal", _params, socket) do
+    {:noreply, assign(socket, :video_modal_meta_id, nil)}
   end
 
   # PubSub: workflow session updated — refresh shared chrome
@@ -609,25 +618,49 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                     </div>
                   <% else %>
                     <div class="space-y-1.5">
-                      <details
-                        :for={meta <- @exported_metadata}
-                        id={"metadata-entry-#{meta.id}"}
-                        class="group rounded-lg border border-base-300/60 overflow-hidden"
-                        open
-                      >
-                        <summary class="flex items-center gap-2 cursor-pointer px-3 py-2 hover:bg-base-200/50 transition-colors duration-150 text-sm select-none">
-                          <.icon
-                            name="hero-chevron-right-micro"
-                            class="size-3 text-base-content/30 group-open:rotate-90 transition-transform duration-150 shrink-0"
-                          />
-                          <span class="font-medium text-base-content/70 truncate">
-                            {humanize_key(meta.key)}
-                          </span>
-                        </summary>
-                        <div class="border-t border-base-300/40 bg-base-200/30">
-                          <.metadata_value_block value={meta.value} />
-                        </div>
-                      </details>
+                      <%= for meta <- @exported_metadata do %>
+                        <%= if Map.has_key?(meta.value, "video_file") do %>
+                          <div
+                            id={"metadata-entry-#{meta.id}"}
+                            class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
+                          >
+                            <.icon
+                              name="hero-film-micro"
+                              class="size-3 text-base-content/30 shrink-0"
+                            />
+                            <span class="font-medium text-sm text-base-content/70 truncate flex-1">
+                              {humanize_key(meta.key)}
+                            </span>
+                            <button
+                              phx-click="open_video_modal"
+                              phx-value-id={meta.id}
+                              class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
+                              aria-label={"Play #{humanize_key(meta.key)}"}
+                            >
+                              <.icon name="hero-play-micro" class="size-4 text-primary" />
+                            </button>
+                          </div>
+                        <% else %>
+                          <details
+                            id={"metadata-entry-#{meta.id}"}
+                            class="group rounded-lg border border-base-300/60 overflow-hidden"
+                            open
+                          >
+                            <summary class="flex items-center gap-2 cursor-pointer px-3 py-2 hover:bg-base-200/50 transition-colors duration-150 text-sm select-none">
+                              <.icon
+                                name="hero-chevron-right-micro"
+                                class="size-3 text-base-content/30 group-open:rotate-90 transition-transform duration-150 shrink-0"
+                              />
+                              <span class="font-medium text-base-content/70 truncate">
+                                {humanize_key(meta.key)}
+                              </span>
+                            </summary>
+                            <div class="border-t border-base-300/40 bg-base-200/30">
+                              <.metadata_value_block value={meta.value} />
+                            </div>
+                          </details>
+                        <% end %>
+                      <% end %>
                     </div>
                   <% end %>
                 </div>
@@ -645,6 +678,30 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             <.icon name="hero-check-circle-solid" class="size-4 text-success" />
             <span>Workflow complete</span>
           </p>
+        </div>
+      </div>
+
+      <%!-- Video modal --%>
+      <div
+        :if={@video_modal_meta_id}
+        id="video-modal"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+      >
+        <div
+          class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          phx-click="close_video_modal"
+        />
+        <div class="relative z-10 w-full max-w-3xl mx-4">
+          <button
+            phx-click="close_video_modal"
+            class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
+            aria-label="Close video"
+          >
+            <.icon name="hero-x-mark" class="size-6" />
+          </button>
+          <video controls autoplay class="w-full rounded-xl shadow-2xl">
+            <source src={"/media/#{@video_modal_meta_id}"} type="video/mp4" />
+          </video>
         </div>
       </div>
 
@@ -715,6 +772,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           metadata={@metadata}
           current_step={@current_step}
           phase_status={@phase_status}
+          exported_metadata={@exported_metadata}
         />
         """
 

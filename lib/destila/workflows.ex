@@ -299,5 +299,7 @@ defmodule Destila.Workflows do
     |> Repo.all()
   end
 
+  def get_metadata!(id), do: Repo.get!(SessionMetadata, id)
+
   defdelegate broadcast(result, event), to: Destila.PubSubHelper
 end
