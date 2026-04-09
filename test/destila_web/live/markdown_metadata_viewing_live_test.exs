@@ -176,7 +176,7 @@ defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       # Should have a view button, not a details/summary
-      assert has_element?(view, "button[phx-click='open_markdown_modal']")
+      assert has_element?(view, "button[phx-click='open_markdown_modal'][phx-value-id]")
       refute has_element?(view, "details[id^='metadata-entry-']")
 
       # Should show document icon
@@ -190,7 +190,7 @@ defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
       ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      view |> element("button[phx-click='open_markdown_modal']") |> render_click()
+      view |> element("button[phx-click='open_markdown_modal'][phx-value-id]") |> render_click()
 
       assert has_element?(view, "#markdown-modal")
       assert has_element?(view, "#markdown-modal-viewer")
@@ -209,7 +209,7 @@ defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
       ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      view |> element("button[phx-click='open_markdown_modal']") |> render_click()
+      view |> element("button[phx-click='open_markdown_modal'][phx-value-id]") |> render_click()
 
       modal_html = view |> element("#markdown-modal") |> render()
       assert modal_html =~ "Generated Prompt"
@@ -220,7 +220,7 @@ defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
       ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      view |> element("button[phx-click='open_markdown_modal']") |> render_click()
+      view |> element("button[phx-click='open_markdown_modal'][phx-value-id]") |> render_click()
       assert has_element?(view, "#markdown-modal")
 
       view
@@ -235,7 +235,7 @@ defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
       ws = create_session_with_markdown_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      view |> element("button[phx-click='open_markdown_modal']") |> render_click()
+      view |> element("button[phx-click='open_markdown_modal'][phx-value-id]") |> render_click()
 
       view
       |> element("#markdown-modal button[phx-click='close_markdown_modal']")

@@ -64,8 +64,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:alive_session, alive_session)
        |> assign(:question_answers, %{})
        |> assign(:video_modal_meta_id, nil)
-       |> assign(:markdown_modal_meta_id, nil)
-       |> assign(:user_prompt_modal_open, false)
+       |> assign(:markdown_modal_content, nil)
+       |> assign(:markdown_modal_label, nil)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -296,19 +296,26 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("open_markdown_modal", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :markdown_modal_meta_id, id)}
+    meta = Enum.find(socket.assigns.exported_metadata, &(&1.id == id))
+
+    {:noreply,
+     socket
+     |> assign(:markdown_modal_content, meta.value["markdown"])
+     |> assign(:markdown_modal_label, humanize_key(meta.key))}
+  end
+
+  def handle_event("open_markdown_modal", %{"content" => content, "label" => label}, socket) do
+    {:noreply,
+     socket
+     |> assign(:markdown_modal_content, content)
+     |> assign(:markdown_modal_label, label)}
   end
 
   def handle_event("close_markdown_modal", _params, socket) do
-    {:noreply, assign(socket, :markdown_modal_meta_id, nil)}
-  end
-
-  def handle_event("open_user_prompt_modal", _params, socket) do
-    {:noreply, assign(socket, :user_prompt_modal_open, true)}
-  end
-
-  def handle_event("close_user_prompt_modal", _params, socket) do
-    {:noreply, assign(socket, :user_prompt_modal_open, false)}
+    {:noreply,
+     socket
+     |> assign(:markdown_modal_content, nil)
+     |> assign(:markdown_modal_label, nil)}
   end
 
   # PubSub: workflow session updated — refresh shared chrome
@@ -617,7 +624,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                     </span>
                     <button
                       id="view-user-prompt-btn"
-                      phx-click="open_user_prompt_modal"
+                      phx-click="open_markdown_modal"
+                      phx-value-content={@workflow_session.user_prompt}
+                      phx-value-label="User Prompt"
                       class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
                       aria-label="View user prompt"
                     >
@@ -779,8 +788,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       </div>
 
       <%!-- Markdown modal --%>
-      <%= if @markdown_modal_meta_id do %>
-        <% modal_meta = Enum.find(@exported_metadata, &(&1.id == @markdown_modal_meta_id)) %>
+      <%= if @markdown_modal_content do %>
         <div
           id="markdown-modal"
           class="fixed inset-0 z-50 flex items-center justify-center"
@@ -800,37 +808,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden max-h-[80vh] overflow-y-auto">
               <.markdown_viewer
                 id="markdown-modal-viewer"
-                content={modal_meta.value["markdown"]}
-                label={humanize_key(modal_meta.key)}
-              />
-            </div>
-          </div>
-        </div>
-      <% end %>
-
-      <%!-- User prompt modal --%>
-      <%= if @user_prompt_modal_open do %>
-        <div
-          id="user-prompt-modal"
-          class="fixed inset-0 z-50 flex items-center justify-center"
-        >
-          <div
-            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            phx-click="close_user_prompt_modal"
-          />
-          <div class="relative z-10 w-full max-w-3xl mx-4">
-            <button
-              phx-click="close_user_prompt_modal"
-              class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
-              aria-label="Close user prompt"
-            >
-              <.icon name="hero-x-mark" class="size-6" />
-            </button>
-            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden max-h-[80vh] overflow-y-auto">
-              <.markdown_viewer
-                id="user-prompt-modal-viewer"
-                content={@workflow_session.user_prompt}
-                label="User Prompt"
+                content={@markdown_modal_content}
+                label={@markdown_modal_label}
               />
             </div>
           </div>

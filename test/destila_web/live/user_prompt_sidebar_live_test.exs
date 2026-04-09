@@ -69,13 +69,13 @@ defmodule DestilaWeb.UserPromptSidebarLiveTest do
 
       view |> element("#view-user-prompt-btn") |> render_click()
 
-      assert has_element?(view, "#user-prompt-modal")
-      assert has_element?(view, "#user-prompt-modal-viewer")
-      assert has_element?(view, "#user-prompt-modal-viewer [role='tablist']")
-      assert has_element?(view, "#user-prompt-modal-viewer button[data-view='rendered']")
-      assert has_element?(view, "#user-prompt-modal-viewer button[data-view='markdown']")
-      assert has_element?(view, "#user-prompt-modal-viewer [data-rendered]")
-      assert has_element?(view, "#user-prompt-modal-viewer [data-markdown]")
+      assert has_element?(view, "#markdown-modal")
+      assert has_element?(view, "#markdown-modal-viewer")
+      assert has_element?(view, "#markdown-modal-viewer [role='tablist']")
+      assert has_element?(view, "#markdown-modal-viewer button[data-view='rendered']")
+      assert has_element?(view, "#markdown-modal-viewer button[data-view='markdown']")
+      assert has_element?(view, "#markdown-modal-viewer [data-rendered]")
+      assert has_element?(view, "#markdown-modal-viewer [data-markdown]")
     end
 
     @tag feature: "exported_metadata", scenario: "Open user prompt in markdown modal"
@@ -84,13 +84,13 @@ defmodule DestilaWeb.UserPromptSidebarLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       view |> element("#view-user-prompt-btn") |> render_click()
-      assert has_element?(view, "#user-prompt-modal")
+      assert has_element?(view, "#markdown-modal")
 
       view
-      |> element("#user-prompt-modal button[phx-click='close_user_prompt_modal']")
+      |> element("#markdown-modal button[phx-click='close_markdown_modal']")
       |> render_click()
 
-      refute has_element?(view, "#user-prompt-modal")
+      refute has_element?(view, "#markdown-modal")
     end
   end
 end
