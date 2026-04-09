@@ -26,19 +26,21 @@ When a workflow exports metadata with type `video_file`, the system currently re
 
 ### 1. Streaming controller with range request support
 
-A new `DestilaWeb.MediaController` serves MP4 files at `GET /media/:id.mp4`. It looks up the `SessionMetadata` record by ID, extracts the path from `value["video_file"]`, and streams the file. Using the metadata ID in the URL keeps filesystem paths out of the browser and naturally scopes access to existing records.
+A new `DestilaWeb.MediaController` serves MP4 files at `GET /media/:id`. It looks up the `SessionMetadata` record by ID, extracts the path from `value["video_file"]`, and streams the file. Using the metadata ID in the URL keeps filesystem paths out of the browser and naturally scopes access to existing records.
 
-Range requests (`Range` header) are required for browser seeking. The controller parses the `Range` header, responds with `206 Partial Content` for range requests and `200 OK` for full requests, setting `Content-Type`, `Content-Length`, `Accept-Ranges`, and `Content-Range` headers appropriately. The file is streamed in chunks to avoid loading large videos into memory.
+**No `.mp4` extension in the URL.** The `:browser` pipeline's `:accepts` plug only allows `"html"` format. A `.mp4` extension would trigger Phoenix's format negotiation, rejecting the request. Instead, the controller sets `Content-Type: video/mp4` explicitly, which is sufficient for browsers to treat the response as video. The frontend references `/media/<uuid>` without any extension.
+
+Range requests (`Range` header) are required for browser seeking. The controller parses the `Range` header, responds with `206 Partial Content` for range requests and `200 OK` for full requests, setting `Content-Type`, `Content-Length`, `Accept-Ranges`, and `Content-Range` headers appropriately. The file is sent via `Plug.Conn.send_file/5` which supports offset and length parameters.
 
 ### 2. New `video_card` component in chat_components.ex
 
-Follows the same visual frame as `markdown_card` and `plain_card`: D-avatar on the left, bordered card with primary/20 border, header bar with humanized key name. The body contains an HTML5 `<video>` element with `controls` and no autoplay. Source URL is `/media/<metadata_id>.mp4`.
+Follows the same visual frame as `markdown_card` and `plain_card`: D-avatar on the left, bordered card with primary/20 border, header bar with humanized key name. The body contains an HTML5 `<video>` element with `controls` and no autoplay. Source URL is `/media/<metadata_id>`.
 
 The `chat_message/1` template adds a third branch: if `export.type == "video_file"`, render `video_card`. This requires the export map to carry the metadata ID, which is looked up from the sidebar's `@exported_metadata` list.
 
 ### 3. Export maps need a `metadata_id` field for video_file types
 
-The inline `video_card` needs the metadata record's ID to construct the `/media/:id.mp4` URL. Currently, exports extracted from `raw_response` only have `%{key, value, type}` — no database ID. Two approaches:
+The inline `video_card` needs the metadata record's ID to construct the `/media/:id` URL. Currently, exports extracted from `raw_response` only have `%{key, value, type}` — no database ID. Two approaches:
 
 **Chosen approach:** Pass `exported_metadata` (the list of `SessionMetadata` structs already loaded in the LiveView) into `chat_message/1` as an attr. When rendering a `video_file` export, look up the matching metadata record by key to get its ID. This avoids changing the response processor or adding a DB query per message render. The lookup is O(n) on a small list (typically <10 exported entries).
 
@@ -48,7 +50,7 @@ For `video_file` entries in the sidebar, replace the `<details>` expand with a p
 
 ### 5. Route placement and auth
 
-The `/media/:id.mp4` route goes inside the authenticated scope (`pipe_through [:browser, :require_auth]`). This ensures only logged-in users can access video files, consistent with the rest of the app.
+The `/media/:id` route goes inside the authenticated scope (`pipe_through [:browser, :require_auth]`). This ensures only logged-in users can access video files, consistent with the rest of the app.
 
 ## Changes
 
@@ -68,16 +70,7 @@ Add after the existing `get_all_metadata/1` function (line 300).
 
 **File:** `lib/destila_web/controllers/media_controller.ex` (new)
 
-Create a controller with a single `show` action:
-
-1. Fetch the `SessionMetadata` record by `params["id"]` using `Workflows.get_metadata!/1`.
-2. Extract the file path from `metadata.value["video_file"]`.
-3. Get the file size via `File.stat!/1`.
-4. Check for a `Range` request header.
-5. For range requests: parse the byte range, send `206` with `Content-Range` header, stream the requested byte range.
-6. For full requests: send `200` with `Content-Length`, stream the entire file.
-7. Always set `Content-Type: video/mp4` and `Accept-Ranges: bytes`.
-8. Stream the file using `Plug.Conn.send_file/5` which supports offset and length parameters — this handles both full and range requests efficiently without manual chunking.
+Create a controller with a single `show` action. Uses `Plug.Conn.send_file/5` which supports offset and length parameters for both full and range requests without manual chunking.
 
 ```elixir
 defmodule DestilaWeb.MediaController do
@@ -126,15 +119,13 @@ end
 
 **File:** `lib/destila_web/router.ex`
 
-Add inside the authenticated scope (after line 45), before the catch-all LiveView routes:
+Add inside the authenticated scope, right after `live "/sessions/archived"` (line 44) and before `live "/sessions/:id"` (line 45):
 
 ```elixir
-get "/media/:id.mp4", MediaController, :show
+get "/media/:id", MediaController, :show
 ```
 
-Note: The scope is already aliased to `DestilaWeb`, so this resolves to `DestilaWeb.MediaController`.
-
-Place this route **before** the `live "/sessions/:id"` route to avoid any path conflicts. Specifically, add it right after the `live "/sessions/archived"` line (line 44).
+No `.mp4` extension — the scope alias resolves this to `DestilaWeb.MediaController`. Placement before the `:id` catch-all LiveView route avoids path conflicts.
 
 ### Step 4: Add `video_card` component
 
@@ -145,14 +136,14 @@ Add a new `video_card` component after `plain_card` (after line 619). It follows
 Attrs:
 - `id` (string, required)
 - `key` (string, required) — metadata key for the header
-- `metadata_id` (string, required) — the SessionMetadata record ID for the `/media/:id.mp4` URL
+- `metadata_id` (string, required) — the SessionMetadata record ID for the `/media/:id` URL
 
 Template structure (same card frame as `markdown_card`):
 - D-avatar circle on the left
 - Bordered card (`rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden`)
 - Header bar with humanized key name (same style: `bg-primary/10 border-b border-primary/20`)
 - Body: `<video>` element with `controls`, `preload="metadata"`, class styling for rounded corners and full width
-- `<source>` pointing to `/media/{@metadata_id}.mp4` with `type="video/mp4"`
+- `<source>` pointing to `/media/{@metadata_id}` with `type="video/mp4"`
 
 ```elixir
 attr :id, :string, required: true
@@ -175,7 +166,7 @@ defp video_card(assigns) do
         </div>
         <div class="p-3">
           <video controls preload="metadata" class="w-full rounded-lg">
-            <source src={"/media/#{@metadata_id}.mp4"} type="video/mp4" />
+            <source src={"/media/#{@metadata_id}"} type="video/mp4" />
           </video>
         </div>
       </div>
@@ -229,21 +220,23 @@ Update the export rendering loop (lines 289-303) to add a `video_file` branch. W
 
 ### Step 6: Pass `exported_metadata` through to `chat_message`
 
+Three files need edits to thread `exported_metadata` from the LiveView down to `chat_message`:
+
 **File:** `lib/destila_web/components/chat_components.ex`
 
-The `chat_phase/1` component renders `chat_message` in a loop. It needs to pass the `exported_metadata` assign through. Find where `<.chat_message>` is called in `chat_phase/1` and add `exported_metadata={@exported_metadata}`.
+1. Add attr declaration to `chat_phase/1` (after `attr :phase_status, :atom, default: nil` at line 38):
+
+   ```elixir
+   attr :exported_metadata, :list, default: []
+   ```
+
+2. Pass it through at both `<.chat_message>` call sites inside `chat_phase/1`:
+   - **Line 69-74** (inside the multi-phase `<details>` branch): add `exported_metadata={@exported_metadata}` to the existing attrs
+   - **Line 91-96** (inside the single-phase `<div>` branch): same addition
 
 **File:** `lib/destila_web/live/workflow_runner_live.ex`
 
-The LiveView renders `<ChatComponents.chat_phase>`. It already has `@exported_metadata` in assigns (from `assign_metadata/2`). Pass it through to `chat_phase`:
-
-Find the `<ChatComponents.chat_phase` call and add `exported_metadata={@exported_metadata}`.
-
-Add `exported_metadata` as an attr in `chat_phase/1`:
-
-```elixir
-attr :exported_metadata, :list, default: []
-```
+3. In `do_render_phase/2` (lines 708-718), add `exported_metadata={@exported_metadata}` to the `<.chat_phase>` call. The LiveView already has `@exported_metadata` in assigns from `assign_metadata/2` (line 735).
 
 ### Step 7: Update sidebar for video_file entries
 
@@ -251,7 +244,7 @@ attr :exported_metadata, :list, default: []
 
 In the exported metadata sidebar section (lines 611-631), modify the `:for` loop to handle video entries differently. For `video_file` type metadata, render a play button instead of a `<details>` expand. Clicking it sets `:video_modal_meta_id` assign.
 
-Replace the single `:for` block with a conditional inside the loop:
+Replace the `<details :for={meta <- @exported_metadata} ...>` block (lines 612-630) with a `for` comprehension that conditionally renders video entries differently:
 
 ```elixir
 <div class="space-y-1.5">
@@ -275,7 +268,23 @@ Replace the single `:for` block with a conditional inside the loop:
         </button>
       </div>
     <% else %>
-      <details ...existing details block...>
+      <details
+        id={"metadata-entry-#{meta.id}"}
+        class="group rounded-lg border border-base-300/60 overflow-hidden"
+        open
+      >
+        <summary class="flex items-center gap-2 cursor-pointer px-3 py-2 hover:bg-base-200/50 transition-colors duration-150 text-sm select-none">
+          <.icon
+            name="hero-chevron-right-micro"
+            class="size-3 text-base-content/30 group-open:rotate-90 transition-transform duration-150 shrink-0"
+          />
+          <span class="font-medium text-base-content/70 truncate">
+            {humanize_key(meta.key)}
+          </span>
+        </summary>
+        <div class="border-t border-base-300/40 bg-base-200/30">
+          <.metadata_value_block value={meta.value} />
+        </div>
       </details>
     <% end %>
   <% end %>
@@ -286,9 +295,9 @@ Replace the single `:for` block with a conditional inside the loop:
 
 **File:** `lib/destila_web/live/workflow_runner_live.ex`
 
-Add a new assign `:video_modal_meta_id` (default `nil`) in `mount`. When set, render a modal overlay.
+**Assign:** Add `|> assign(:video_modal_meta_id, nil)` to the assign chain in `mount_session/2` (after line 65, the `assign(:question_answers, %{})` line).
 
-Add event handlers:
+**Event handlers:** Add near the other `handle_event` functions:
 
 ```elixir
 def handle_event("open_video_modal", %{"id" => id}, socket) do
@@ -300,20 +309,19 @@ def handle_event("close_video_modal", _params, socket) do
 end
 ```
 
-Add modal template at the bottom of the render function (before the closing `</Layouts.app>` or similar). The modal renders when `@video_modal_meta_id` is not nil:
+**Modal template:** Insert right before `</Layouts.app>` at the end of `render/1`. The modal renders when `@video_modal_meta_id` is not nil. Specifically, insert before the closing on line 649 (`</div>` that closes the outer flex container), placing it as a sibling of the main layout content:
 
 ```heex
 <div
   :if={@video_modal_meta_id}
   id="video-modal"
   class="fixed inset-0 z-50 flex items-center justify-center"
-  phx-click="close_video_modal"
 >
-  <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" />
   <div
-    class="relative z-10 w-full max-w-3xl mx-4"
-    phx-click-away="close_video_modal"
-  >
+    class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+    phx-click="close_video_modal"
+  />
+  <div class="relative z-10 w-full max-w-3xl mx-4">
     <button
       phx-click="close_video_modal"
       class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
@@ -322,13 +330,13 @@ Add modal template at the bottom of the render function (before the closing `</L
       <.icon name="hero-x-mark" class="size-6" />
     </button>
     <video controls autoplay class="w-full rounded-xl shadow-2xl">
-      <source src={"/media/#{@video_modal_meta_id}.mp4"} type="video/mp4" />
+      <source src={"/media/#{@video_modal_meta_id}"} type="video/mp4" />
     </video>
   </div>
 </div>
 ```
 
-The modal autoplays since the user explicitly clicked play. The backdrop closes the modal on click. The `phx-click` on the outer div and `phx-click-away` on the inner div handle dismissal.
+**Click handling:** The `phx-click="close_video_modal"` is on the **backdrop div only**, not the outer container. This prevents clicks on the video player from closing the modal. The close button provides an explicit dismissal mechanism.
 
 ### Step 9: Update Gherkin feature files
 
@@ -355,30 +363,160 @@ Append video scenarios after the existing inline chat message section (after lin
 
 **File:** `features/video_metadata_viewing.feature` (new)
 
-Create the full feature file as specified in the prompt.
+```gherkin
+Feature: Video Metadata Viewing
+  When a workflow exports video_file-type metadata, it is displayed inline
+  in the chat using a video card component. Users can play the video directly
+  in the chat or open a larger modal from the metadata sidebar. Videos are
+  served via a streaming endpoint that reads MP4 files from the local filesystem.
+
+  Background:
+    Given I am logged in
+    And a session has exported video_file metadata
+
+  Scenario: Video card displays with click-to-play controls
+    Then the video card should display an HTML5 video player
+    And the player should show standard playback controls
+    And the video should not be playing
+
+  Scenario: Play video inline
+    When I click the play button on the video card
+    Then the video should start playing
+
+  Scenario: Open video in modal from sidebar
+    When I click the play button on the sidebar video entry
+    Then a modal overlay should appear
+    And the modal should contain a larger video player
+    And the modal video should have playback controls
+
+  Scenario: Close video modal
+    Given the video modal is open
+    When I close the modal
+    Then the modal should disappear
+    And the inline video card should still be visible
+
+  Scenario: Video file is streamed from disk
+    Given the exported video_file path points to a valid MP4 file
+    Then the video player source should load via the streaming endpoint
+    And the video should be playable
+```
 
 ### Step 10: Write tests
 
 **File:** `test/destila_web/controllers/media_controller_test.exs` (new)
 
-Test the streaming endpoint:
-- Full request returns 200 with `video/mp4` content type and `accept-ranges: bytes` header
-- Range request returns 206 with correct `content-range` header and partial content
-- Non-existent metadata ID returns 404 (Ecto.NoResultsError → Phoenix error handling)
-- Requires authentication (redirect to login when not authenticated)
+Follow the `ConnCase` pattern. Setup creates a temp file and a `SessionMetadata` record:
 
-Use a real temporary MP4 file (or any file with `.mp4` extension containing test bytes) created in test setup. Create a `SessionMetadata` record pointing to it.
+```elixir
+defmodule DestilaWeb.MediaControllerTest do
+  use DestilaWeb.ConnCase, async: false
 
-**File:** `test/destila_web/live/workflow_runner_live/video_metadata_test.exs` (new)
+  @feature "video_metadata_viewing"
 
-LiveView tests for:
-- Video card renders with `<video>` element when a `video_file` export exists
-- Video card has correct source URL pointing to `/media/:id.mp4`
-- Sidebar shows play button for video entries
-- Opening video modal renders modal with video player
-- Closing video modal removes the modal
+  setup %{conn: conn} do
+    # Create a temp MP4 file with test bytes
+    path = Path.join(System.tmp_dir!(), "test_video_#{System.unique_integer([:positive])}.mp4")
+    File.write!(path, :crypto.strong_rand_bytes(1024))
+    on_exit(fn -> File.rm(path) end)
 
-Tag all tests with `@tag feature: "exported_metadata"` or `@tag feature: "video_metadata_viewing"` and appropriate scenario tags.
+    # Create workflow session + metadata
+    {:ok, ws} =
+      Destila.Workflows.insert_workflow_session(%{
+        title: "Test", workflow_type: :brainstorm_idea,
+        project_id: nil, current_phase: 1, total_phases: 1
+      })
+
+    {:ok, meta} =
+      Destila.Workflows.upsert_metadata(ws.id, "phase_1", "demo_video",
+        %{"video_file" => path}, exported: true)
+
+    conn = post(conn, "/login", %{"email" => "test@example.com"})
+    {:ok, conn: conn, meta: meta, video_path: path}
+  end
+end
+```
+
+Test cases:
+- `@tag feature: @feature, scenario: "Video file is streamed from disk"` — Full request returns 200 with `content-type: video/mp4` and `accept-ranges: bytes` headers, body matches file content
+- `@tag feature: @feature, scenario: "Video file is streamed from disk"` — Range request (`Range: bytes=0-99`) returns 206 with `content-range` header and 100-byte body
+- `@tag feature: @feature, scenario: "Video file is streamed from disk"` — Open-ended range (`Range: bytes=100-`) returns bytes from offset 100 to EOF
+- Auth test — unauthenticated request (fresh `build_conn()` without login) redirects to `/login`
+
+**File:** `test/destila_web/live/video_metadata_viewing_live_test.exs` (new)
+
+Follow the pattern from `markdown_metadata_viewing_live_test.exs`. Setup creates a session with a `video_file` export (the message's `raw_response` includes an MCP tool use with `type: "video_file"`). The metadata value stores a path, but the LiveView test only checks DOM structure — it doesn't need the file to exist since the `<video>` element just references the URL.
+
+```elixir
+defmodule DestilaWeb.VideoMetadataViewingLiveTest do
+  @moduledoc """
+  LiveView tests for Video Metadata Viewing.
+  Feature: features/video_metadata_viewing.feature
+  """
+  use DestilaWeb.ConnCase, async: false
+
+  import Phoenix.LiveViewTest
+
+  @feature "video_metadata_viewing"
+
+  setup %{conn: conn} do
+    ClaudeCode.Test.set_mode_to_shared()
+    ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+      [ClaudeCode.Test.text("AI response"), ClaudeCode.Test.result("AI response")]
+    end)
+
+    conn = post(conn, "/login", %{"email" => "test@example.com"})
+    {:ok, conn: conn}
+  end
+
+  defp create_session_with_video_export do
+    {:ok, ws} =
+      Destila.Workflows.insert_workflow_session(%{
+        title: "Test Session", workflow_type: :brainstorm_idea,
+        project_id: nil, done_at: DateTime.utc_now(),
+        current_phase: 4, total_phases: 4
+      })
+
+    {:ok, _ai_session} = Destila.AI.get_or_create_ai_session(ws.id)
+
+    {:ok, _} =
+      Destila.AI.create_message(ws.id |> Destila.AI.get_ai_session_for_workflow() |> Map.get(:id), %{
+        role: :system,
+        content: "Here is the video output.",
+        raw_response: %{
+          "text" => "Here is the video output.",
+          "result" => "Here is the video output.",
+          "mcp_tool_uses" => [
+            %{
+              "name" => "mcp__destila__session",
+              "input" => %{
+                "action" => "export",
+                "key" => "demo_video",
+                "value" => "/tmp/test.mp4",
+                "type" => "video_file"
+              }
+            }
+          ],
+          "is_error" => false
+        },
+        phase: 4,
+        workflow_session_id: ws.id
+      })
+
+    Destila.Workflows.upsert_metadata(ws.id, "phase_4", "demo_video",
+      %{"video_file" => "/tmp/test.mp4"}, exported: true)
+
+    ws
+  end
+end
+```
+
+Test cases:
+- `@tag feature: @feature, scenario: "Video card displays with click-to-play controls"` — `has_element?(view, "[id^='export-video-']")` and `has_element?(view, "video")` and `has_element?(view, "source[type='video/mp4']")`
+- `@tag feature: @feature, scenario: "Video card displays with click-to-play controls"` — Source URL contains `/media/` prefix: `render(view) =~ "/media/"`
+- `@tag feature: @feature, scenario: "Video card displays with click-to-play controls"` — Card header shows humanized key: `render(view) =~ "Demo Video"`
+- `@tag feature: @feature, scenario: "Open video in modal from sidebar"` — Sidebar entry has play button: `has_element?(view, "button[phx-click='open_video_modal']")`
+- `@tag feature: @feature, scenario: "Open video in modal from sidebar"` — Click play opens modal: after `render_click(element(view, "button[phx-click='open_video_modal']"))`, assert `has_element?(view, "#video-modal")`
+- `@tag feature: @feature, scenario: "Close video modal"` — Click close button removes modal: after opening, `render_click(element(view, "#video-modal button[phx-click='close_video_modal']"))`, assert `!has_element?(view, "#video-modal")`
 
 ## File summary
 
@@ -386,10 +524,10 @@ Tag all tests with `@tag feature: "exported_metadata"` or `@tag feature: "video_
 |------|--------|-------------|
 | `lib/destila/workflows.ex` | Edit | Add `get_metadata!/1` |
 | `lib/destila_web/controllers/media_controller.ex` | New | Streaming endpoint with range support |
-| `lib/destila_web/router.ex` | Edit | Add `/media/:id.mp4` route |
+| `lib/destila_web/router.ex` | Edit | Add `/media/:id` route |
 | `lib/destila_web/components/chat_components.ex` | Edit | Add `video_card`, update `chat_message` branching, add `exported_metadata` attr |
 | `lib/destila_web/live/workflow_runner_live.ex` | Edit | Sidebar play button, video modal, pass `exported_metadata` to chat |
 | `features/exported_metadata.feature` | Edit | Append video scenarios |
 | `features/video_metadata_viewing.feature` | New | Full video viewing feature file |
-| `test/destila_web/controllers/media_controller_test.exs` | New | Controller tests |
-| `test/destila_web/live/workflow_runner_live/video_metadata_test.exs` | New | LiveView integration tests |
+| `test/destila_web/controllers/media_controller_test.exs` | New | Controller tests (200, 206, auth) |
+| `test/destila_web/live/video_metadata_viewing_live_test.exs` | New | LiveView integration tests (card, sidebar, modal) |
