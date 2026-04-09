@@ -419,6 +419,7 @@ defmodule DestilaWeb.ChatComponents do
 
   attr :id, :string, required: true
   attr :content, :string, required: true
+  attr :label, :string, default: nil
 
   def markdown_viewer(assigns) do
     ~H"""
@@ -428,31 +429,42 @@ defmodule DestilaWeb.ChatComponents do
       phx-hook=".MarkdownCard"
       data-content={@content}
     >
-      <div class="flex items-center justify-end gap-1 px-4 py-2">
-        <div role="tablist" class="flex rounded-lg bg-base-300/50 p-0.5">
+      <div class={[
+        "flex items-center gap-2 px-4 py-2",
+        if(@label,
+          do: "bg-primary/10 border-b border-primary/20 justify-between",
+          else: "justify-end"
+        )
+      ]}>
+        <span :if={@label} class="text-xs font-medium text-primary uppercase tracking-wide">
+          {@label}
+        </span>
+        <div class="flex items-center gap-1">
+          <div role="tablist" class="flex rounded-lg bg-base-300/50 p-0.5">
+            <button
+              role="tab"
+              aria-selected="true"
+              data-view="rendered"
+              class="md-card-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors bg-base-100 text-base-content shadow-sm"
+            >
+              Rendered
+            </button>
+            <button
+              role="tab"
+              aria-selected="false"
+              data-view="markdown"
+              class="md-card-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors text-base-content/50 hover:text-base-content"
+            >
+              Markdown
+            </button>
+          </div>
           <button
-            role="tab"
-            aria-selected="true"
-            data-view="rendered"
-            class="md-card-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors bg-base-100 text-base-content shadow-sm"
+            class="md-card-copy-btn ml-1 p-1 rounded-md hover:bg-base-300/50 transition-colors"
+            aria-label="Copy markdown to clipboard"
           >
-            Rendered
-          </button>
-          <button
-            role="tab"
-            aria-selected="false"
-            data-view="markdown"
-            class="md-card-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors text-base-content/50 hover:text-base-content"
-          >
-            Markdown
+            <.icon name="hero-clipboard-document-micro" class="size-4 text-base-content/50" />
           </button>
         </div>
-        <button
-          class="md-card-copy-btn ml-1 p-1 rounded-md hover:bg-base-300/50 transition-colors"
-          aria-label="Copy markdown to clipboard"
-        >
-          <.icon name="hero-clipboard-document-micro" class="size-4 text-base-content/50" />
-        </button>
       </div>
       <div data-rendered class="px-4 py-3 text-sm text-base-content prose prose-sm max-w-none">
         {raw(markdown_to_html(@content))}
@@ -558,12 +570,7 @@ defmodule DestilaWeb.ChatComponents do
       </div>
       <div class="max-w-[80%]">
         <div class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden">
-          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20">
-            <span class="text-xs font-medium text-primary uppercase tracking-wide">
-              {humanize_key(@key)}
-            </span>
-          </div>
-          <.markdown_viewer id={@id} content={@content} />
+          <.markdown_viewer id={@id} content={@content} label={humanize_key(@key)} />
         </div>
       </div>
     </div>
