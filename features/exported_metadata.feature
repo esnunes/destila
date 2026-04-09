@@ -95,3 +95,10 @@ Feature: Exported Metadata
     Then the sidebar entry should display a play button instead of a text preview
     When I click the play button
     Then a modal overlay should open with a larger video player
+
+  Scenario: Markdown metadata sidebar entry has view button
+    Given I am on a session detail page
+    And the session has exported metadata of type "markdown"
+    Then the sidebar entry should display a view button instead of an expandable text preview
+    When I click the view button
+    Then a modal overlay should open with the rendered markdown

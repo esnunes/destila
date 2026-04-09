@@ -64,6 +64,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:alive_session, alive_session)
        |> assign(:question_answers, %{})
        |> assign(:video_modal_meta_id, nil)
+       |> assign(:markdown_modal_meta_id, nil)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -291,6 +292,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   def handle_event("close_video_modal", _params, socket) do
     {:noreply, assign(socket, :video_modal_meta_id, nil)}
+  end
+
+  def handle_event("open_markdown_modal", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :markdown_modal_meta_id, id)}
+  end
+
+  def handle_event("close_markdown_modal", _params, socket) do
+    {:noreply, assign(socket, :markdown_modal_meta_id, nil)}
   end
 
   # PubSub: workflow session updated — refresh shared chrome
@@ -619,46 +628,68 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                   <% else %>
                     <div class="space-y-1.5">
                       <%= for meta <- @exported_metadata do %>
-                        <%= if Map.has_key?(meta.value, "video_file") do %>
-                          <div
-                            id={"metadata-entry-#{meta.id}"}
-                            class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
-                          >
-                            <.icon
-                              name="hero-film-micro"
-                              class="size-3 text-base-content/30 shrink-0"
-                            />
-                            <span class="font-medium text-sm text-base-content/70 truncate flex-1">
-                              {humanize_key(meta.key)}
-                            </span>
-                            <button
-                              phx-click="open_video_modal"
-                              phx-value-id={meta.id}
-                              class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
-                              aria-label={"Play #{humanize_key(meta.key)}"}
+                        <%= cond do %>
+                          <% Map.has_key?(meta.value, "video_file") -> %>
+                            <div
+                              id={"metadata-entry-#{meta.id}"}
+                              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
                             >
-                              <.icon name="hero-play-micro" class="size-4 text-primary" />
-                            </button>
-                          </div>
-                        <% else %>
-                          <details
-                            id={"metadata-entry-#{meta.id}"}
-                            class="group rounded-lg border border-base-300/60 overflow-hidden"
-                            open
-                          >
-                            <summary class="flex items-center gap-2 cursor-pointer px-3 py-2 hover:bg-base-200/50 transition-colors duration-150 text-sm select-none">
                               <.icon
-                                name="hero-chevron-right-micro"
-                                class="size-3 text-base-content/30 group-open:rotate-90 transition-transform duration-150 shrink-0"
+                                name="hero-film-micro"
+                                class="size-3 text-base-content/30 shrink-0"
                               />
-                              <span class="font-medium text-base-content/70 truncate">
+                              <span class="font-medium text-sm text-base-content/70 truncate flex-1">
                                 {humanize_key(meta.key)}
                               </span>
-                            </summary>
-                            <div class="border-t border-base-300/40 bg-base-200/30">
-                              <.metadata_value_block value={meta.value} />
+                              <button
+                                phx-click="open_video_modal"
+                                phx-value-id={meta.id}
+                                class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
+                                aria-label={"Play #{humanize_key(meta.key)}"}
+                              >
+                                <.icon name="hero-play-micro" class="size-4 text-primary" />
+                              </button>
                             </div>
-                          </details>
+                          <% Map.has_key?(meta.value, "markdown") -> %>
+                            <div
+                              id={"metadata-entry-#{meta.id}"}
+                              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
+                            >
+                              <.icon
+                                name="hero-document-text-micro"
+                                class="size-3 text-base-content/30 shrink-0"
+                              />
+                              <span class="font-medium text-sm text-base-content/70 truncate flex-1">
+                                {humanize_key(meta.key)}
+                              </span>
+                              <button
+                                phx-click="open_markdown_modal"
+                                phx-value-id={meta.id}
+                                class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
+                                aria-label={"View #{humanize_key(meta.key)}"}
+                              >
+                                <.icon name="hero-eye-micro" class="size-4 text-primary" />
+                              </button>
+                            </div>
+                          <% true -> %>
+                            <details
+                              id={"metadata-entry-#{meta.id}"}
+                              class="group rounded-lg border border-base-300/60 overflow-hidden"
+                              open
+                            >
+                              <summary class="flex items-center gap-2 cursor-pointer px-3 py-2 hover:bg-base-200/50 transition-colors duration-150 text-sm select-none">
+                                <.icon
+                                  name="hero-chevron-right-micro"
+                                  class="size-3 text-base-content/30 group-open:rotate-90 transition-transform duration-150 shrink-0"
+                                />
+                                <span class="font-medium text-base-content/70 truncate">
+                                  {humanize_key(meta.key)}
+                                </span>
+                              </summary>
+                              <div class="border-t border-base-300/40 bg-base-200/30">
+                                <.metadata_value_block value={meta.value} />
+                              </div>
+                            </details>
                         <% end %>
                       <% end %>
                     </div>
@@ -704,6 +735,40 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           </video>
         </div>
       </div>
+
+      <%!-- Markdown modal --%>
+      <%= if @markdown_modal_meta_id do %>
+        <% modal_meta = Enum.find(@exported_metadata, &(&1.id == @markdown_modal_meta_id)) %>
+        <div
+          id="markdown-modal"
+          class="fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div
+            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            phx-click="close_markdown_modal"
+          />
+          <div class="relative z-10 w-full max-w-3xl mx-4">
+            <button
+              phx-click="close_markdown_modal"
+              class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
+              aria-label="Close markdown"
+            >
+              <.icon name="hero-x-mark" class="size-6" />
+            </button>
+            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden">
+              <div class="px-4 py-2 bg-primary/10 border-b border-primary/20">
+                <span class="text-xs font-medium text-primary uppercase tracking-wide">
+                  {humanize_key(modal_meta.key)}
+                </span>
+              </div>
+              <.markdown_viewer
+                id="markdown-modal-viewer"
+                content={modal_meta.value["markdown"]}
+              />
+            </div>
+          </div>
+        </div>
+      <% end %>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".MetadataSidebar">
         export default {
