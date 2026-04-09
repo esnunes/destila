@@ -22,8 +22,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   alias Destila.Workflows
   alias Destila.Workflows.Session
 
-  def mount(%{"id" => id}, session, socket) do
-    socket = assign(socket, :current_user, session["current_user"])
+  def mount(%{"id" => id}, _session, socket) do
     mount_session(id, socket)
   end
 
@@ -426,7 +425,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
+    <Layouts.app flash={@flash} page_title={@page_title}>
       <div class="flex flex-col h-screen">
         <%!-- Header --%>
         <div class="border-b border-base-300 bg-base-100 px-6 py-4">

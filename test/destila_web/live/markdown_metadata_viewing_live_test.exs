@@ -37,7 +37,6 @@ defmodule DestilaWeb.MarkdownMetadataViewingLiveTest do
       ]
     end)
 
-    conn = post(conn, "/login", %{"email" => "test@example.com"})
     {:ok, conn: conn}
   end
 

@@ -20,7 +20,6 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
         git_repo_url: "https://github.com/test/existing"
       })
 
-    conn = post(conn, "/login", %{"email" => "test@example.com"})
     {:ok, conn: conn}
   end
 

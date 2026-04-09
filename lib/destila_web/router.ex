@@ -12,29 +12,14 @@ defmodule DestilaWeb.Router do
     plug :put_secure_browser_headers
   end
 
-  pipeline :require_auth do
-    plug DestilaWeb.Plugs.RequireAuth
-  end
-
-  # Public routes (no auth required)
-  scope "/", DestilaWeb do
-    pipe_through :browser
-
-    live "/login", SessionLive
-    post "/login", SessionController, :create
-    get "/logout", SessionController, :delete
-  end
-
-  # Oban Web dashboard
   scope "/" do
-    pipe_through [:browser, :require_auth]
+    pipe_through :browser
 
     oban_dashboard("/oban")
   end
 
-  # Authenticated routes
   scope "/", DestilaWeb do
-    pipe_through [:browser, :require_auth]
+    pipe_through :browser
 
     live "/", DashboardLive
     live "/crafting", CraftingBoardLive

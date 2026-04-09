@@ -13,7 +13,7 @@ defmodule DestilaWeb.CraftingBoardLive do
     done: "Done"
   }
 
-  def mount(_params, session, socket) do
+  def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
       Phoenix.PubSub.subscribe(Destila.PubSub, Destila.AI.AlivenessTracker.topic())
@@ -21,7 +21,6 @@ defmodule DestilaWeb.CraftingBoardLive do
 
     {:ok,
      socket
-     |> assign(:current_user, session["current_user"])
      |> assign(:page_title, "Crafting Board")
      |> assign(:alive_sessions, %{})}
   end
@@ -208,7 +207,7 @@ defmodule DestilaWeb.CraftingBoardLive do
       |> assign(:section_empty_messages, @section_empty_messages)
 
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} page_title={@page_title}>
+    <Layouts.app flash={@flash} page_title={@page_title}>
       <div class="p-6 lg:p-8">
         <%!-- Header --%>
         <div class="flex items-center justify-between mb-4">

@@ -12,8 +12,6 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
   @feature "crafting_board"
 
   setup %{conn: conn} do
-    conn = post(conn, "/login", %{"email" => "test@example.com"})
-
     {:ok, project_a} =
       Destila.Projects.create_project(%{
         name: "destila",

@@ -10,8 +10,6 @@ defmodule DestilaWeb.ArchivedSessionsLiveTest do
   @feature "session_archiving"
 
   setup %{conn: conn} do
-    conn = post(conn, "/login", %{"email" => "test@example.com"})
-
     {:ok, project} =
       Destila.Projects.create_project(%{
         name: "destila",
