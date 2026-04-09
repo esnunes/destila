@@ -58,12 +58,6 @@ defmodule DestilaWeb.UserPromptSidebarLiveTest do
 
       assert has_element?(view, "#user-prompt-section")
       assert has_element?(view, "#view-user-prompt-btn")
-
-      # Verify it appears before source code (both exist in sidebar)
-      html = render(view)
-      user_prompt_pos = :binary.match(html, "user-prompt-section") |> elem(0)
-      # The section should exist in the rendered HTML
-      assert user_prompt_pos > 0
     end
 
     @tag feature: "exported_metadata",
