@@ -116,12 +116,9 @@ defmodule Destila.Workflows do
         user_prompt: input_text
       }
       |> maybe_put(:project_id, project_id)
+      |> maybe_put(:source_session_id, selected_session_id)
 
     with {:ok, ws} <- insert_workflow_session(session_attrs) do
-      if selected_session_id do
-        upsert_metadata(ws.id, "creation", "source_session", %{"id" => selected_session_id})
-      end
-
       if title_generating do
         %{"workflow_session_id" => ws.id, "idea" => input_text}
         |> Destila.Workers.TitleGenerationWorker.new()

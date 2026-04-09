@@ -234,7 +234,7 @@ defmodule Destila.WorkflowsMetadataTest do
                Workflows.upsert_metadata(
                  ws.id,
                  "creation",
-                 "source_session",
+                 "config",
                  %{"id" => "some-uuid"}
                )
     end

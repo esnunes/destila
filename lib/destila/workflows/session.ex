@@ -21,6 +21,7 @@ defmodule Destila.Workflows.Session do
     field(:archived_at, :utc_datetime)
 
     belongs_to(:project, Destila.Projects.Project)
+    belongs_to(:source_session, __MODULE__)
     has_many(:ai_sessions, Destila.AI.Session, foreign_key: :workflow_session_id)
     has_many(:messages, Destila.AI.Message, foreign_key: :workflow_session_id)
 
@@ -45,7 +46,8 @@ defmodule Destila.Workflows.Session do
       :title_generating,
       :position,
       :archived_at,
-      :user_prompt
+      :user_prompt,
+      :source_session_id
     ])
     |> validate_required([:title, :workflow_type])
   end
