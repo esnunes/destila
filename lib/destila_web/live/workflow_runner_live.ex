@@ -798,7 +798,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             >
               <.icon name="hero-x-mark" class="size-6" />
             </button>
-            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden">
+            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden max-h-[80vh] overflow-y-auto">
               <.markdown_viewer
                 id="markdown-modal-viewer"
                 content={modal_meta.value["markdown"]}
@@ -827,7 +827,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             >
               <.icon name="hero-x-mark" class="size-6" />
             </button>
-            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden">
+            <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden max-h-[80vh] overflow-y-auto">
               <.markdown_viewer
                 id="user-prompt-modal-viewer"
                 content={@workflow_session.user_prompt}
