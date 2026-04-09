@@ -280,7 +280,7 @@ defmodule DestilaWeb.ChatComponents do
     assigns =
       assigns
       |> assign(:message, processed)
-      |> assign(:exports, processed[:exports] || [])
+      |> assign(:exports, processed.exports)
 
     ~H"""
     <%= if @exports == [] do %>
