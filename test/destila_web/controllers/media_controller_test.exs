@@ -62,5 +62,4 @@ defmodule DestilaWeb.MediaControllerTest do
       assert byte_size(conn.resp_body) == 924
     end
   end
-
 end
