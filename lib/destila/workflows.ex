@@ -191,11 +191,9 @@ defmodule Destila.Workflows do
     |> Enum.reject(fn {_ws, text} -> is_nil(text) || text == "" end)
   end
 
-  defp extract_metadata_text(value) when is_map(value) do
+  defp extract_metadata_text(value) do
     Enum.find_value(@valid_metadata_types, fn type -> value[type] end)
   end
-
-  defp extract_metadata_text(_), do: nil
 
   def count_by_project(project_id) do
     Repo.aggregate(
@@ -274,14 +272,12 @@ defmodule Destila.Workflows do
     end
   end
 
-  defp valid_exported_value?(value) when is_map(value) do
+  defp valid_exported_value?(value) do
     case Map.keys(value) do
       [type] -> type in @valid_metadata_types
       _ -> false
     end
   end
-
-  defp valid_exported_value?(_), do: false
 
   def get_metadata(workflow_session_id) do
     workflow_session_id
