@@ -756,14 +756,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
               <.icon name="hero-x-mark" class="size-6" />
             </button>
             <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden">
-              <div class="px-4 py-2 bg-primary/10 border-b border-primary/20">
-                <span class="text-xs font-medium text-primary uppercase tracking-wide">
-                  {humanize_key(modal_meta.key)}
-                </span>
-              </div>
               <.markdown_viewer
                 id="markdown-modal-viewer"
                 content={modal_meta.value["markdown"]}
+                label={humanize_key(modal_meta.key)}
               />
             </div>
           </div>

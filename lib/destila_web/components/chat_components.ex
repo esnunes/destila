@@ -419,7 +419,7 @@ defmodule DestilaWeb.ChatComponents do
 
   attr :id, :string, required: true
   attr :content, :string, required: true
-  attr :label, :string, default: nil
+  attr :label, :string, required: true
 
   def markdown_viewer(assigns) do
     ~H"""
@@ -429,14 +429,8 @@ defmodule DestilaWeb.ChatComponents do
       phx-hook=".MarkdownCard"
       data-content={@content}
     >
-      <div class={[
-        "flex items-center gap-2 px-4 py-2",
-        if(@label,
-          do: "bg-primary/10 border-b border-primary/20 justify-between",
-          else: "justify-end"
-        )
-      ]}>
-        <span :if={@label} class="text-xs font-medium text-primary uppercase tracking-wide">
+      <div class="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 justify-between">
+        <span class="text-xs font-medium text-primary uppercase tracking-wide">
           {@label}
         </span>
         <div class="flex items-center gap-1">
