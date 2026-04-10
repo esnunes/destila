@@ -18,6 +18,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   alias Destila.AI
   alias Destila.AI.ResponseProcessor
+  alias Destila.DevTools
   alias Destila.Sessions.SessionProcess
   alias Destila.Workflows
   alias Destila.Workflows.Session
@@ -315,6 +316,20 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      socket
      |> assign(:markdown_modal_content, nil)
      |> assign(:markdown_modal_label, nil)}
+  end
+
+  def handle_event("open_terminal", _params, socket) do
+    case DevTools.open_terminal(
+           socket.assigns.workflow_session.title,
+           socket.assigns.worktree_path,
+           socket.assigns.claude_session_id
+         ) do
+      :ok ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not open Ghostty: #{reason}")}
+    end
   end
 
   # PubSub: workflow session updated — refresh shared chrome
@@ -644,9 +659,17 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                       name="hero-folder-open-micro"
                       class="size-4 text-base-content/30"
                     />
-                    <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">
+                    <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide flex-1">
                       Source Code
                     </h3>
+                    <button
+                      id="open-terminal-btn"
+                      phx-click="open_terminal"
+                      class="p-1 rounded-md hover:bg-base-300/50 transition-colors text-[0px]"
+                      aria-label="Open terminal at worktree path"
+                    >
+                      <.icon name="hero-command-line-micro" class="size-4 text-primary" />
+                    </button>
                   </div>
                   <code class="text-xs text-base-content/50 break-all leading-relaxed">
                     {@worktree_path}
@@ -905,7 +928,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   defp assign_worktree_path(socket, ws_id) do
     ai_session = AI.get_ai_session_for_workflow(ws_id)
-    assign(socket, :worktree_path, ai_session && ai_session.worktree_path)
+
+    socket
+    |> assign(:worktree_path, ai_session && ai_session.worktree_path)
+    |> assign(:claude_session_id, ai_session && ai_session.claude_session_id)
   end
 
   defp metadata_value_block(assigns) do
