@@ -189,7 +189,7 @@ defmodule Destila.WorkflowsMetadataTest do
     test "accepts all valid metadata types" do
       ws = create_session()
 
-      for type <- ~w(text text_file markdown video_file) do
+      for type <- ~w(text text_file markdown markdown_file video_file) do
         assert {:ok, _} =
                  Workflows.upsert_metadata(
                    ws.id,
