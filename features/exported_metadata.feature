@@ -114,3 +114,16 @@ Feature: Exported Metadata
     Then a full-screen modal overlay should appear with a dark backdrop
     And the modal should display the user prompt content with "Rendered" and "Markdown" tabs
     And the modal should default to the rendered HTML view
+
+  # --- Source Code Terminal ---
+
+  Scenario: Source code section shows open terminal button
+    Given I am on a session detail page
+    And the session has a worktree path
+    Then the source code section should display an "Open Terminal" button
+
+  Scenario: Open terminal button opens a Ghostty tab at the worktree path
+    Given I am on a session detail page
+    And the session has a worktree path
+    When I click the "Open Terminal" button
+    Then a new Ghostty terminal tab should open at the worktree path
