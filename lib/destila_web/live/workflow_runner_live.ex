@@ -66,8 +66,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:video_modal_meta_id, nil)
        |> assign(:markdown_modal_content, nil)
        |> assign(:markdown_modal_label, nil)
-       |> assign(:text_file_modal_content, nil)
-       |> assign(:text_file_modal_label, nil)
+       |> assign(:text_modal_content, nil)
+       |> assign(:text_modal_label, nil)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -320,27 +320,35 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:markdown_modal_label, nil)}
   end
 
-  def handle_event("open_text_file_modal", %{"id" => id}, socket) do
+  def handle_event("open_text_modal", %{"id" => id}, socket) do
     meta = Enum.find(socket.assigns.exported_metadata, &(&1.id == id))
-    path = meta.value["text_file"]
 
-    case File.read(path) do
-      {:ok, content} ->
+    case meta.value do
+      %{"text_file" => path} ->
+        case File.read(path) do
+          {:ok, content} ->
+            {:noreply,
+             socket
+             |> assign(:text_modal_content, content)
+             |> assign(:text_modal_label, humanize_key(meta.key))}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, "Could not read file: #{path}")}
+        end
+
+      %{"text" => content} ->
         {:noreply,
          socket
-         |> assign(:text_file_modal_content, content)
-         |> assign(:text_file_modal_label, humanize_key(meta.key))}
-
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Could not read file: #{path}")}
+         |> assign(:text_modal_content, content)
+         |> assign(:text_modal_label, humanize_key(meta.key))}
     end
   end
 
-  def handle_event("close_text_file_modal", _params, socket) do
+  def handle_event("close_text_modal", _params, socket) do
     {:noreply,
      socket
-     |> assign(:text_file_modal_content, nil)
-     |> assign(:text_file_modal_label, nil)}
+     |> assign(:text_modal_content, nil)
+     |> assign(:text_modal_label, nil)}
   end
 
   def handle_event("open_markdown_file_modal", %{"id" => id}, socket) do
@@ -785,7 +793,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                                 <.icon name="hero-eye-micro" class="size-4 text-primary" />
                               </button>
                             </div>
-                          <% Map.has_key?(meta.value, "text_file") -> %>
+                          <% Map.has_key?(meta.value, "text_file") or Map.has_key?(meta.value, "text") -> %>
                             <div
                               id={"metadata-entry-#{meta.id}"}
                               class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
@@ -798,7 +806,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                                 {humanize_key(meta.key)}
                               </span>
                               <button
-                                phx-click="open_text_file_modal"
+                                phx-click="open_text_modal"
                                 phx-value-id={meta.id}
                                 class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
                                 aria-label={"View #{humanize_key(meta.key)}"}
@@ -921,32 +929,32 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         </div>
       <% end %>
 
-      <%!-- Text file modal --%>
-      <%= if @text_file_modal_content do %>
+      <%!-- Text modal --%>
+      <%= if @text_modal_content do %>
         <div
-          id="text-file-modal"
+          id="text-modal"
           class="fixed inset-0 z-50 flex items-center justify-center"
         >
           <div
             class="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            phx-click="close_text_file_modal"
+            phx-click="close_text_modal"
           />
           <div class="relative z-10 w-full max-w-3xl mx-4">
             <button
-              phx-click="close_text_file_modal"
+              phx-click="close_text_modal"
               class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
-              aria-label="Close text file"
+              aria-label="Close text"
             >
               <.icon name="hero-x-mark" class="size-6" />
             </button>
             <div class="rounded-xl bg-base-200 shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
               <div class="px-4 py-3 bg-base-300/50 border-b border-base-300 flex items-center justify-between">
                 <span class="text-sm font-medium text-base-content/70">
-                  {@text_file_modal_label}
+                  {@text_modal_label}
                 </span>
               </div>
               <div class="overflow-y-auto p-4">
-                <pre class="text-sm text-base-content/80 whitespace-pre-wrap break-words leading-relaxed">{@text_file_modal_content}</pre>
+                <pre class="text-sm text-base-content/80 whitespace-pre-wrap break-words leading-relaxed">{@text_modal_content}</pre>
               </div>
             </div>
           </div>

@@ -81,7 +81,7 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
       {ws, _path} = create_session_with_text_file_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert has_element?(view, "button[phx-click='open_text_file_modal'][phx-value-id]")
+      assert has_element?(view, "button[phx-click='open_text_modal'][phx-value-id]")
       assert has_element?(view, "[id^='metadata-entry-'] .hero-document-text-micro")
     end
 
@@ -91,12 +91,12 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
       {ws, _path} = create_session_with_text_file_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      view |> element("button[phx-click='open_text_file_modal']") |> render_click()
+      view |> element("button[phx-click='open_text_modal']") |> render_click()
 
-      assert has_element?(view, "#text-file-modal")
-      assert has_element?(view, "#text-file-modal pre")
+      assert has_element?(view, "#text-modal")
+      assert has_element?(view, "#text-modal pre")
 
-      modal_html = view |> element("#text-file-modal") |> render()
+      modal_html = view |> element("#text-modal") |> render()
       assert modal_html =~ "Hello from text file"
       assert modal_html =~ "Build Log"
     end
@@ -107,14 +107,14 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
       {ws, _path} = create_session_with_text_file_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      view |> element("button[phx-click='open_text_file_modal']") |> render_click()
-      assert has_element?(view, "#text-file-modal")
+      view |> element("button[phx-click='open_text_modal']") |> render_click()
+      assert has_element?(view, "#text-modal")
 
       view
-      |> element("#text-file-modal button[phx-click='close_text_file_modal']")
+      |> element("#text-modal button[phx-click='close_text_modal']")
       |> render_click()
 
-      refute has_element?(view, "#text-file-modal")
+      refute has_element?(view, "#text-modal")
     end
   end
 
