@@ -44,6 +44,51 @@ defmodule Destila.AI.ConversationTest do
       assert msg.content =~ "claude login"
     end
 
+    test "auth error detected from result text containing authentication_error" do
+      ws = create_session()
+
+      reason = %{
+        result:
+          ~s|Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}|,
+        is_error: true,
+        errors: nil,
+        text: "",
+        session_id: nil,
+        subtype: :error_during_execution,
+        auth_error: nil,
+        mcp_tool_uses: []
+      }
+
+      AI.Conversation.handle_ai_error(ws, reason)
+      msg = last_message(ws.id)
+
+      assert msg.content =~ "authentication failed"
+      assert msg.content =~ "claude login"
+    end
+
+    test "auth error detected from errors list containing authentication_error" do
+      ws = create_session()
+
+      reason = %{
+        result: nil,
+        is_error: true,
+        errors: [
+          ~s|API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}|
+        ],
+        text: "",
+        session_id: nil,
+        subtype: :error_during_execution,
+        auth_error: nil,
+        mcp_tool_uses: []
+      }
+
+      AI.Conversation.handle_ai_error(ws, reason)
+      msg = last_message(ws.id)
+
+      assert msg.content =~ "authentication failed"
+      assert msg.content =~ "claude login"
+    end
+
     test "non-auth error with errors list shows the errors" do
       ws = create_session()
 

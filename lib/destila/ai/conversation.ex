@@ -127,18 +127,35 @@ defmodule Destila.AI.Conversation do
   end
 
   defp error_message(%{auth_error: auth_error}) when is_binary(auth_error) do
-    "Claude authentication failed: #{auth_error}. " <>
-      "Please run `claude login` in your terminal to re-authenticate, then retry."
+    auth_failed_message(auth_error)
   end
 
   defp error_message(reason) do
     text = extract_error_text(reason)
 
-    if text != "" do
-      "Something went wrong: #{text}"
-    else
-      "Something went wrong. Please try sending your message again."
+    cond do
+      text != "" && authentication_error?(text) ->
+        auth_failed_message(text)
+
+      text != "" ->
+        "Something went wrong: #{text}"
+
+      true ->
+        "Something went wrong. Please try sending your message again."
     end
+  end
+
+  defp auth_failed_message(detail) do
+    "Claude authentication failed: #{detail}. " <>
+      "Please run `claude login` in your terminal to re-authenticate, then retry."
+  end
+
+  defp authentication_error?(text) do
+    downcased = String.downcase(text)
+
+    String.contains?(downcased, "authentication_error") or
+      String.contains?(downcased, "invalid authentication") or
+      (String.contains?(downcased, "401") and String.contains?(downcased, "authenticate"))
   end
 
   defp extract_error_text(%{errors: [_ | _] = errors}), do: Enum.join(errors, "; ")
