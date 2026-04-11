@@ -54,6 +54,12 @@ Feature: Brainstorm Idea Workflow
     Then the text input should be re-enabled
     And I should be able to continue the conversation in the current phase
 
+  Scenario: Advance button appears when AI exports metadata in the same turn
+    Given the AI suggests advancing from the current phase
+    And the same AI response also exported metadata (e.g. gherkin scenarios)
+    Then I should see a "Continue to Phase N" button
+    And I should see the exported metadata card in the chat
+
   Scenario: Phase 2 - Gherkin Review
     Given the session is in Phase 2 - Gherkin Review
     Then the AI should review or propose Gherkin feature scenarios

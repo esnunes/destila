@@ -55,6 +55,27 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
              }
            ]}
 
+        :phase_advance_with_export ->
+          {"Gherkin scenarios agreed.",
+           [
+             %{
+               "name" => "mcp__destila__session",
+               "input" => %{
+                 "action" => "export",
+                 "key" => "gherkin_scenarios",
+                 "type" => "markdown",
+                 "value" => "```gherkin\nFeature: Example\n  Scenario: One\n```"
+               }
+             },
+             %{
+               "name" => "mcp__destila__session",
+               "input" => %{
+                 "action" => "suggest_phase_complete",
+                 "message" => "Gherkin scenarios agreed."
+               }
+             }
+           ]}
+
         :phase_complete ->
           {"Moving to the next phase.",
            [
@@ -263,6 +284,22 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       refute has_element?(view, "button[phx-click='confirm_advance']")
       assert has_element?(view, "input[name='content']:not([disabled])")
+    end
+
+    @tag feature: @feature,
+         scenario: "Advance button appears when AI exports metadata in the same turn"
+    test "shows advance button and export card when AI exports + suggests advance", %{conn: conn} do
+      ws =
+        create_session_in_phase(2,
+          pe_status: :awaiting_confirmation,
+          last_message_type: :phase_advance_with_export
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "button[phx-click='confirm_advance']")
+      assert render(view) =~ "Continue to Phase 3"
+      assert render(view) =~ "Gherkin Scenarios"
     end
 
     @tag feature: @feature, scenario: "Skip Gherkin Review when not applicable"

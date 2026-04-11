@@ -287,9 +287,6 @@ defmodule DestilaWeb.ChatComponents do
       |> assign(:exports, processed.exports)
 
     ~H"""
-    <%= if @exports == [] do %>
-      {render_chat_message(assigns)}
-    <% end %>
     <%= for {export, idx} <- Enum.with_index(@exports) do %>
       <%= cond do %>
         <% (export.type || "text") == "markdown" -> %>
@@ -314,6 +311,9 @@ defmodule DestilaWeb.ChatComponents do
             content={export.value}
           />
       <% end %>
+    <% end %>
+    <%= if @exports == [] or @message.message_type == :phase_advance do %>
+      {render_chat_message(assigns)}
     <% end %>
     """
   end
