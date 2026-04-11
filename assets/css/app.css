@@ -209,3 +209,62 @@ a, button, .card, .btn, input {
 .sortable-drag {
   opacity: 1;
 }
+
+/* Terminal */
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("/fonts/JetBrainsMonoNerdFont-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("/fonts/JetBrainsMonoNerdFont-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+.terminal-window {
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid oklch(0.746 0.01 264 / 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid oklch(0.746 0.01 264 / 0.15);
+  background: oklch(0.869 0.005 264 / 0.95);
+}
+
+.terminal-view {
+  outline: none;
+}
+
+.terminal-view pre {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  margin: 0;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.terminal-view pre span {
+  display: inline-block;
+  /*letter-spacing: 0.1px;*/
+}
+
+.terminal-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  font-size: 14px;
+  color: oklch(0.556 0.01 264);
+}

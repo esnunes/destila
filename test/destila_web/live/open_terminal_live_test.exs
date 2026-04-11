@@ -1,6 +1,6 @@
 defmodule DestilaWeb.OpenTerminalLiveTest do
   @moduledoc """
-  LiveView tests for Open Terminal button in sidebar.
+  LiveView tests for Open Terminal link in sidebar.
   Feature: features/exported_metadata.feature
   """
   use DestilaWeb.ConnCase, async: false
@@ -41,26 +41,24 @@ defmodule DestilaWeb.OpenTerminalLiveTest do
     {ws, view}
   end
 
-  describe "open terminal button" do
+  describe "open terminal link" do
     @tag feature: "exported_metadata",
-         scenario: "Source code section shows open terminal button"
-    test "button is present when worktree path exists", %{conn: conn} do
+         scenario: "Source code section shows open terminal link"
+    test "link is present when worktree path exists", %{conn: conn} do
       {_ws, view} = create_session_with_worktree(conn)
 
       assert has_element?(view, "#open-terminal-btn")
     end
 
     @tag feature: "exported_metadata",
-         scenario: "Open terminal button opens a Ghostty tab at the worktree path"
-    test "clicking the button sends the open_terminal event", %{conn: conn} do
-      {_ws, view} = create_session_with_worktree(conn)
+         scenario: "Source code section shows open terminal link"
+    test "link points to terminal page", %{conn: conn} do
+      {ws, view} = create_session_with_worktree(conn)
 
-      # Click the button — the System.cmd call will likely fail in test
-      # (Ghostty not running), but we verify the event is handled without crash
-      view |> element("#open-terminal-btn") |> render_click()
-
-      # The LiveView should still be alive (event was handled gracefully)
-      assert has_element?(view, "#open-terminal-btn")
+      assert has_element?(
+               view,
+               ~s(a#open-terminal-btn[href="/sessions/#{ws.id}/terminal"])
+             )
     end
   end
 end

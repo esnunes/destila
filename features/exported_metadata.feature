@@ -117,13 +117,14 @@ Feature: Exported Metadata
 
   # --- Source Code Terminal ---
 
-  Scenario: Source code section shows open terminal button
+  Scenario: Source code section shows open terminal link
     Given I am on a session detail page
     And the session has a worktree path
-    Then the source code section should display an "Open Terminal" button
+    Then the source code section should display an "Open Terminal" link to the terminal page
 
-  Scenario: Open terminal button opens a Ghostty tab at the worktree path
+  Scenario: Terminal page renders an interactive terminal
     Given I am on a session detail page
     And the session has a worktree path
-    When I click the "Open Terminal" button
-    Then a new Ghostty terminal tab should open at the worktree path
+    When I open the terminal page in a new tab
+    Then I should see an interactive terminal at the worktree path
+    And the terminal header should show a back link to the session

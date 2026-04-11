@@ -66,7 +66,8 @@ defmodule Destila.MixProject do
       {:earmark, "~> 1.4"},
       {:html_sanitize_ex, "~> 1.4"},
       {:oban, "~> 2.20"},
-      {:oban_web, "~> 2.11"}
+      {:oban_web, "~> 2.11"},
+      {:ghostty, "~> 0.3"}
     ]
   end
 

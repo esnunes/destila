@@ -28,6 +28,7 @@ defmodule DestilaWeb.Router do
     live "/workflows/:workflow_type", CreateSessionLive
     live "/sessions/archived", ArchivedSessionsLive
     get "/media/:id", MediaController, :show
+    live "/sessions/:id/terminal", TerminalLive
     live "/sessions/:id", WorkflowRunnerLive
   end
 end
