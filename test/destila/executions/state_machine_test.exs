@@ -50,8 +50,8 @@ defmodule Destila.Executions.StateMachineTest do
              ]
     end
 
-    test "returns empty list for terminal states" do
-      assert StateMachine.allowed_transitions(:completed) == []
+    test "completed allows transition back to awaiting_input" do
+      assert StateMachine.allowed_transitions(:completed) == [:awaiting_input]
     end
 
     test "returns empty list for unknown states" do
