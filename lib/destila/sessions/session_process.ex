@@ -250,6 +250,7 @@ defmodule Destila.Sessions.SessionProcess do
 
   def done({:call, from}, :mark_undone, data) do
     {:ok, ws} = Workflows.update_workflow_session(data.ws, %{done_at: nil})
+    with_current_pe(%{data | ws: ws}, &Executions.await_input/1)
     state = reconstruct_state(ws)
     broadcast_updated(ws)
 
@@ -339,7 +340,7 @@ defmodule Destila.Sessions.SessionProcess do
           %{status: :awaiting_input} -> :awaiting_input
           %{status: :awaiting_confirmation} -> :awaiting_confirmation
           %{status: :failed} -> :awaiting_input
-          %{status: :completed} -> :processing
+          %{status: :completed} -> :awaiting_input
         end
     end
   end
