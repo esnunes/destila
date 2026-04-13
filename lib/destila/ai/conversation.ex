@@ -40,15 +40,15 @@ defmodule Destila.AI.Conversation do
         phase_prompt
       end
 
-    # Add non-interactive context for autonomous phases
-    prompt_with_context =
+    # Auto-add non_interactive skill for autonomous phases
+    all_skills =
       if non_interactive do
-        prompt_with_tools <> Tools.non_interactive_context()
+        Enum.uniq(["non_interactive" | phase_skills])
       else
-        prompt_with_tools
+        phase_skills
       end
 
-    query = Skills.assemble_prompt(phase_skills, prompt_with_context)
+    query = Skills.assemble_prompt(all_skills, prompt_with_tools)
     enqueue_ai_worker(ws, phase_number, query)
     :processing
   end

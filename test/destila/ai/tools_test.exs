@@ -44,21 +44,4 @@ defmodule Destila.AI.ToolsTest do
       assert "mcp__destila__ask_user_question" in names
     end
   end
-
-  describe "non_interactive_context/0" do
-    test "includes phase_complete instruction" do
-      result = Tools.non_interactive_context()
-      assert result =~ "phase_complete"
-    end
-
-    test "warns against suggest_phase_complete" do
-      result = Tools.non_interactive_context()
-      assert result =~ "Do NOT use `suggest_phase_complete`"
-    end
-
-    test "warns against ask_user_question" do
-      result = Tools.non_interactive_context()
-      assert result =~ "Do NOT call `mcp__destila__ask_user_question`"
-    end
-  end
 end

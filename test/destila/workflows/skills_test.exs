@@ -8,6 +8,7 @@ defmodule Destila.Workflows.SkillsTest do
       skills = Skills.all_skills()
       identifiers = Enum.map(skills, & &1.identifier)
       assert "code_quality" in identifiers
+      assert "non_interactive" in identifiers
     end
 
     test "parses name from frontmatter" do

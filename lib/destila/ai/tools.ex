@@ -133,16 +133,4 @@ defmodule Destila.AI.Tools do
   Used as fallback when a phase has no explicit `allowed_tools`.
   """
   def described_tool_names, do: Map.keys(@tool_descriptions)
-
-  @doc """
-  Returns additional phase context for non-interactive (autonomous) phases.
-  """
-  def non_interactive_context do
-    """
-    This phase runs autonomously. When this phase's work is complete, call \
-    `mcp__destila__session` with `action: "phase_complete"` and a `message` \
-    summarizing what was done. Do NOT use `suggest_phase_complete`. \
-    Do NOT call `mcp__destila__ask_user_question` — no user is present.
-    """
-  end
 end
