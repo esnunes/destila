@@ -18,11 +18,11 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   alias Destila.AI
   alias Destila.AI.ResponseProcessor
-  alias Destila.DevTools
   alias Destila.Sessions.SessionProcess
   alias Destila.Workflows
   alias Destila.Workflows.Session
 
+  @impl true
   def mount(%{"id" => id}, _session, socket) do
     mount_session(id, socket)
   end
@@ -81,6 +81,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # --- Session management events ---
 
+  @impl true
   def handle_event("edit_title", _params, socket) do
     {:noreply, assign(socket, :editing_title, true)}
   end
@@ -367,21 +368,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
-  def handle_event("open_terminal", _params, socket) do
-    case DevTools.open_terminal(
-           socket.assigns.workflow_session.title,
-           socket.assigns.worktree_path,
-           socket.assigns.claude_session_id
-         ) do
-      :ok ->
-        {:noreply, socket}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Could not open Ghostty: #{reason}")}
-    end
-  end
-
   # PubSub: workflow session updated — refresh shared chrome
+  @impl true
   def handle_info({:workflow_session_updated, updated_ws}, socket) do
     if socket.assigns[:workflow_session] &&
          updated_ws.id == socket.assigns.workflow_session.id do
@@ -487,6 +475,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   # --- Render: running workflow ---
 
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} page_title={@page_title}>
@@ -711,14 +700,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                     <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide flex-1">
                       Source Code
                     </h3>
-                    <button
+                    <.link
                       id="open-terminal-btn"
-                      phx-click="open_terminal"
-                      class="p-1 rounded-md hover:bg-base-300/50 transition-colors text-[0px]"
-                      aria-label="Open terminal at worktree path"
+                      navigate={~p"/sessions/#{@workflow_session.id}/terminal"}
+                      class="p-1 rounded-md transition-colors text-[0px] hover:bg-base-300/50 text-primary"
+                      aria-label="Open terminal"
                     >
-                      <.icon name="hero-command-line-micro" class="size-4 text-primary" />
-                    </button>
+                      <.icon name="hero-command-line-micro" class="size-4" />
+                    </.link>
                   </div>
                   <code class="text-xs text-base-content/50 break-all leading-relaxed">
                     {@worktree_path}

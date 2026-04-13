@@ -1,6 +1,6 @@
 defmodule DestilaWeb.OpenTerminalLiveTest do
   @moduledoc """
-  LiveView tests for Open Terminal button in sidebar.
+  LiveView tests for terminal link in sidebar and terminal page.
   Feature: features/exported_metadata.feature
   """
   use DestilaWeb.ConnCase, async: false
@@ -20,7 +20,7 @@ defmodule DestilaWeb.OpenTerminalLiveTest do
     {:ok, conn: conn}
   end
 
-  defp create_session_with_worktree(conn) do
+  defp create_session_with_worktree do
     {:ok, ws} =
       Destila.Workflows.insert_workflow_session(%{
         title: "Test Session",
@@ -34,33 +34,40 @@ defmodule DestilaWeb.OpenTerminalLiveTest do
     {:ok, _ai_session} =
       Destila.AI.create_ai_session(%{
         workflow_session_id: ws.id,
-        worktree_path: "/tmp/test-worktree"
+        worktree_path: System.tmp_dir!()
       })
 
-    {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-    {ws, view}
+    ws
   end
 
-  describe "open terminal button" do
+  describe "terminal link in session sidebar" do
     @tag feature: "exported_metadata",
-         scenario: "Source code section shows open terminal button"
-    test "button is present when worktree path exists", %{conn: conn} do
-      {_ws, view} = create_session_with_worktree(conn)
+         scenario: "Source code section shows terminal toggle button"
+    test "link is present when worktree path exists", %{conn: conn} do
+      ws = create_session_with_worktree()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "#open-terminal-btn")
     end
 
     @tag feature: "exported_metadata",
-         scenario: "Open terminal button opens a Ghostty tab at the worktree path"
-    test "clicking the button sends the open_terminal event", %{conn: conn} do
-      {_ws, view} = create_session_with_worktree(conn)
+         scenario: "Terminal toggle opens an inline xterm.js terminal"
+    test "link navigates to terminal page", %{conn: conn} do
+      ws = create_session_with_worktree()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      # Click the button — the System.cmd call will likely fail in test
-      # (Ghostty not running), but we verify the event is handled without crash
-      view |> element("#open-terminal-btn") |> render_click()
+      assert has_element?(view, ~s|#open-terminal-btn[href="/sessions/#{ws.id}/terminal"]|)
+    end
+  end
 
-      # The LiveView should still be alive (event was handled gracefully)
-      assert has_element?(view, "#open-terminal-btn")
+  describe "terminal page" do
+    @tag feature: "exported_metadata",
+         scenario: "Terminal toggle opens an inline xterm.js terminal"
+    test "mounts and shows terminal panel", %{conn: conn} do
+      ws = create_session_with_worktree()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/terminal")
+
+      assert has_element?(view, "#terminal-panel-#{ws.id}")
     end
   end
 end
