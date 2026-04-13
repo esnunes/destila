@@ -175,8 +175,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     require new browser tests.
 
     If tests need attention:
-    1. You MUST use the compound engineering skill `test-browser` in headless mode to run \
-    the test suite and identify failures
+    1. You MUST use the compound engineering skill `test-browser` in headless mode
     2. Fix any broken tests
     3. Add new tests for new functionality if appropriate
     4. Commit changes
