@@ -116,7 +116,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     </user_prompt>
 
     Steps:
-    1. Use the compound engineering skill `ce:plan` to create a plan
+    1. You MUST use the compound engineering skill `ce:plan` to create a plan
     2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
     `key: "plan"`, `type: "text_file", and `value` set to the path to the plan file.
     3. Commit your changes
@@ -131,7 +131,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     would be beneficial for the implementation.
 
     If the plan needs more detail:
-    1. Use the compound engineering skill `deepen-pla` to deepen the plan
+    1. You MUST use the compound engineering skill `deepen-pla` to deepen the plan
     2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
     `key: "plan"`, `type: "text_file", and `value` set to the path to the plan file.
     3. Commit your changes
@@ -150,7 +150,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     `*-plan.md` file) and implement it completely.
 
     Steps:
-    1. Use the compound engineering skill `ce:work` to implement the plan
+    1. You MUST use the compound engineering skill `ce:work` to implement the plan
     2. Ensure the code compiles and basic tests pass
     3. Commit all changes
     4. Push to the remote
@@ -163,7 +163,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     recently added `*-plan.md` file).
 
     Steps:
-    1. Use the compound engineering skill `ce:review` and automatically fix P1 and P2 issues
+    1. You MUST use the compound engineering skill `ce:review` and automatically fix P1 and P2 issues
     2. Commit all changes
     3. Push to the remote
     """
@@ -175,8 +175,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     require new browser tests.
 
     If tests need attention:
-    1. Use the compound engineering skill `test-browser` in headless mode
-    the test suite to identify failures
+    1. You MUST use the compound engineering skill `test-browser` in headless mode to run \
+    the test suite and identify failures
     2. Fix any broken tests
     3. Add new tests for new functionality if appropriate
     4. Commit changes
@@ -194,7 +194,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     Record a feature video walkthrough of the implemented changes.
 
     Steps:
-    1. Use the compound engineering skill `feature-video` to record a walkthrough \
+    1. You MUST use the compound engineering skill `feature-video` to record a walkthrough \
     demonstrating the changes
     2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
     `key` set to the name of the file without extension, and `value` set to the path \
