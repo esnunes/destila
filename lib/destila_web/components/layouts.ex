@@ -12,7 +12,7 @@ defmodule DestilaWeb.Layouts do
     <div class="min-h-screen bg-base-100">
       <.sidebar page_title={@page_title} />
 
-      <main class="min-h-screen transition-[margin-left] duration-200 ml-16 sidebar-open:ml-60">
+      <main class="min-h-screen transition-[margin-left] duration-200 ml-16 sidebar-open:ml-60 overflow-hidden">
         {render_slot(@inner_block)}
       </main>
 

@@ -7,6 +7,28 @@
 @source "../../lib/destila_web";
 @source "../../lib/destila/workflows";
 
+@import "../vendor/xterm.css";
+
+/* JetBrains Mono Nerd Font for terminal */
+@font-face {
+  font-family: "JetBrains Mono NF";
+  src: url("/fonts/JetBrainsMonoNerdFont-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: "JetBrains Mono NF";
+  src: url("/fonts/JetBrainsMonoNerdFont-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+}
+@font-face {
+  font-family: "JetBrains Mono NF";
+  src: url("/fonts/JetBrainsMonoNerdFont-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+}
+
 /* A Tailwind plugin that makes "hero-#{ICON}" classes available.
    The heroicons installation itself is managed by your mix.exs */
 @plugin "../vendor/heroicons";
