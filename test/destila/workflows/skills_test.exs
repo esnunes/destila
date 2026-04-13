@@ -23,7 +23,6 @@ defmodule Destila.Workflows.SkillsTest do
 
     test "parses body content after frontmatter" do
       skill = Skills.all_skills() |> Enum.find(&(&1.identifier == "code_quality"))
-      assert skill.body =~ "Code Quality"
       assert skill.body =~ "simple, direct, and minimal"
     end
   end

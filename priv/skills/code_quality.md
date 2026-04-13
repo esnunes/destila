@@ -3,8 +3,6 @@ name: Code Quality
 always: false
 ---
 
-## Code Quality
-
 Write code that is simple, direct, and minimal. Do NOT write unnecessary
 defensive code — no redundant nil checks, fallback values, error handling,
 or validation for scenarios that cannot happen. Trust internal code and
