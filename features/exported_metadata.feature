@@ -131,13 +131,21 @@ Feature: Exported Metadata
 
   # --- Source Code Terminal ---
 
-  Scenario: Source code section shows open terminal button
+  Scenario: Source code section shows terminal toggle button
     Given I am on a session detail page
     And the session has a worktree path
-    Then the source code section should display an "Open Terminal" button
+    Then the source code section should display a terminal toggle button
 
-  Scenario: Open terminal button opens a Ghostty tab at the worktree path
+  Scenario: Terminal toggle opens an inline xterm.js terminal
     Given I am on a session detail page
     And the session has a worktree path
-    When I click the "Open Terminal" button
-    Then a new Ghostty terminal tab should open at the worktree path
+    When I click the terminal toggle button
+    Then an inline terminal panel should appear below the chat area
+    And the terminal should be connected to a shell at the worktree path
+
+  Scenario: Terminal toggle closes the inline terminal
+    Given I am on a session detail page
+    And the session has an open inline terminal
+    When I click the terminal toggle button again
+    Then the terminal panel should close
+    And the terminal process should be stopped
