@@ -107,12 +107,11 @@ Feature: Exported Metadata
     When I click the view button
     Then a modal overlay should open displaying the file's text content
 
-  Scenario: Markdown file metadata sidebar entry has view button
+  Scenario: Text file with .md extension uses markdown viewer
     Given I am on a session detail page
-    And the session has exported metadata of type "markdown_file"
-    Then the sidebar entry should display a view button instead of an expandable text preview
+    And the session has exported metadata of type "text_file" with a ".md" file extension
     When I click the view button
-    Then a modal overlay should open with the rendered markdown from the file
+    Then the markdown modal should open instead of the plain text modal
 
   # --- User Prompt in Sidebar ---
 
