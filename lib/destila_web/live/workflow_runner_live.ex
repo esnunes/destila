@@ -328,10 +328,17 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       %{"text_file" => path} ->
         case File.read(path) do
           {:ok, content} ->
-            {:noreply,
-             socket
-             |> assign(:text_modal_content, content)
-             |> assign(:text_modal_label, humanize_key(meta.key))}
+            if Path.extname(path) == ".md" do
+              {:noreply,
+               socket
+               |> assign(:markdown_modal_content, content)
+               |> assign(:markdown_modal_label, humanize_key(meta.key))}
+            else
+              {:noreply,
+               socket
+               |> assign(:text_modal_content, content)
+               |> assign(:text_modal_label, humanize_key(meta.key))}
+            end
 
           {:error, _reason} ->
             {:noreply, put_flash(socket, :error, "Could not read file: #{path}")}

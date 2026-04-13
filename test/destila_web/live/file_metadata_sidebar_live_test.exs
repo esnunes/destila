@@ -118,6 +118,50 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
     end
   end
 
+  describe "text_file with .md extension" do
+    defp create_session_with_md_text_file_export do
+      path = Path.join(System.tmp_dir!(), "destila_test_#{System.unique_integer([:positive])}.md")
+      File.write!(path, "# Heading\n\nSome **bold** text")
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, ws} =
+        Destila.Workflows.insert_workflow_session(%{
+          title: "Test Session",
+          workflow_type: :brainstorm_idea,
+          project_id: nil,
+          done_at: DateTime.utc_now(),
+          current_phase: 4,
+          total_phases: 4
+        })
+
+      {:ok, _} =
+        Destila.Workflows.upsert_metadata(
+          ws.id,
+          "phase_4",
+          "plan_doc",
+          %{"text_file" => path},
+          exported: true
+        )
+
+      {ws, path}
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Text file with .md extension uses markdown viewer"
+    test "opens markdown modal instead of text modal", %{conn: conn} do
+      {ws, _path} = create_session_with_md_text_file_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("button[phx-click='open_text_modal']") |> render_click()
+
+      assert has_element?(view, "#markdown-modal")
+      refute has_element?(view, "#text-modal")
+
+      modal_html = view |> element("#markdown-modal") |> render()
+      assert modal_html =~ "Plan Doc"
+    end
+  end
+
   describe "markdown_file sidebar entry" do
     @tag feature: "exported_metadata",
          scenario: "Markdown file metadata sidebar entry has view button"
