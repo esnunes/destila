@@ -29,7 +29,8 @@ defmodule Destila.Workflows.CodeChatWorkflow do
       %Phase{
         name: "Chat",
         system_prompt: &chat_prompt/1,
-        allowed_tools: @chat_tools
+        allowed_tools: @chat_tools,
+        skills: ["code_quality"]
       }
     ]
   end
@@ -71,22 +72,6 @@ defmodule Destila.Workflows.CodeChatWorkflow do
     - Use tools proactively when they would help answer the user's question
     - When making changes, explain what you did and why
     - Ask clarifying questions when the request is ambiguous
-    - Write simple, direct code. Do NOT add unnecessary defensive code — no \
-    redundant nil checks, fallback values, error handling, or validation for \
-    scenarios that cannot happen. Trust internal code and framework guarantees. \
-    Only validate at system boundaries (user input, external APIs). Do not add \
-    features or "improvements" beyond what was asked
-
-    When asking questions with clear, discrete options, use the \
-    `mcp__destila__ask_user_question` tool to present structured choices. \
-    The tool accepts a `questions` array — batch all your independent questions \
-    in a single call. An 'Other' free-text input is always available automatically.
-
-    For open-ended questions without clear options, just ask in plain text.
-
-    To store a key-value pair as session metadata, call `mcp__destila__session` with \
-    `action: "export"`, a `key` string, and a `value` string. You can optionally \
-    specify a `type` string: `text` (default), `text_file`, `markdown`, or `video_file`.
 
     IMPORTANT: Never call `mcp__destila__session` with `suggest_phase_complete` or \
     `phase_complete`. The user controls when this session ends via the UI.

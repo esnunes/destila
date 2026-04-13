@@ -73,13 +73,8 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     - Use codebase knowledge to ask better questions, but do not include implementation \
       details - technical details will be gathered in a later step
 
-    You may batch multiple independent questions in a single response when their answers \
-    do not depend on each other. Never batch questions where the answer to one would change \
-    the options of another.
-
-    Keep your questions concise and specific. When you believe you have a clear understanding \
-    of the task, call the `mcp__destila__session` tool with `action: "suggest_phase_complete"` \
-    and a message summarizing your understanding.
+    When you believe you have a clear understanding of the task, call the `mcp__destila__session` \
+    tool with `action: "suggest_phase_complete"` and a message summarizing your understanding.
     """ <> idea_context
   end
 
@@ -142,10 +137,6 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     - Dependencies or integrations affected
     - Testing strategy
 
-    You may batch multiple independent questions in a single response when their answers \
-    do not depend on each other. Never batch questions where the answer to one would change \
-    the options of another.
-
     When the technical approach is sufficiently clear, call the `mcp__destila__session` \
     tool with `action: "suggest_phase_complete"` and a message summarizing the agreed approach.
     """
@@ -167,12 +158,6 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     - Database schema designs
     - File-by-file change lists
     - Time estimates
-
-    The prompt MUST include a code quality instruction telling the implementer: \
-    do not write unnecessary defensive code — no redundant nil checks, fallback \
-    values, error handling, or validation for scenarios that cannot happen. Trust \
-    internal code and framework guarantees. Only validate at system boundaries. \
-    Keep code simple and direct.
 
     IMPORTANT: Output ONLY the prompt itself — no introductory text, headers, footers, \
     or commentary around it. Do not wrap it in a code block. Do not say "Here is the prompt:" \

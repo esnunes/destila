@@ -45,6 +45,10 @@ defmodule Destila.AI.Tools do
     in a single call. The user will see clickable buttons for each question. \
     An 'Other' free-text input is always available automatically — do not include it.
 
+    You may batch multiple independent questions in a single response when their answers \
+    do not depend on each other. Never batch questions where the answer to one would change \
+    the options of another.
+
     For open-ended questions without clear options, just ask in plain text.
 
     IMPORTANT: Never call `mcp__destila__ask_user_question` with a phase transition \

@@ -39,7 +39,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
         name: "Generate Plan",
         system_prompt: &plan_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools
+        allowed_tools: @implementation_tools,
+        skills: ["code_quality"]
       },
       %Phase{
         name: "Deepen Plan",
@@ -115,16 +116,11 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     </user_prompt>
 
     Steps:
-    1. Analyze the codebase to understand the project structure and conventions
-    2. Create a detailed implementation plan
-    3. Save the plan to `docs/plans/` using the naming convention \
-    `YYYY-MM-DD-<type>-<slug>-plan.md` where:
-       - `YYYY-MM-DD` is today's date
-       - `<type>` is `feat`, `refactor`, `fix`, etc.
-       - `<slug>` is a short kebab-case description of the change
-       Look at existing files in `docs/plans/` for examples.
-    4. Commit your changes: `git add . && git commit -m "Add implementation plan"`
-    5. Push to the remote: `git push`
+    1. Use the compound engineering skill `ce:plan` to create a plan
+    2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
+    `key: "plan"`, `type: "text_file", and `value` set to the path to the plan file.
+    3. Commit your changes
+    4. Push to the remote
     """
   end
 
@@ -135,10 +131,12 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     would be beneficial for the implementation.
 
     If the plan needs more detail:
-    1. Enhance the plan with additional implementation specifics
-    2. Commit your changes: `git add . && git commit -m "Deepen implementation plan"`
-    3. Push to the remote: `git push`
-    4. Call `mcp__destila__session` with `action: "phase_complete"`
+    1. Use the compound engineering skill `deepen-pla` to deepen the plan
+    2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
+    `key: "plan"`, `type: "text_file", and `value` set to the path to the plan file.
+    3. Commit your changes
+    4. Push to the remote
+    5. Call `mcp__destila__session` with `action: "phase_complete"`
 
     If the plan is already sufficient:
     - Call `mcp__destila__session` with `action: "phase_complete"` and a message \
@@ -152,11 +150,10 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     `*-plan.md` file) and implement it completely.
 
     Steps:
-    1. Find and read the plan file in `docs/plans/` to understand what needs to be done
-    2. Implement all changes described in the plan
-    3. Ensure the code compiles and basic tests pass
-    4. Commit all changes: `git add . && git commit -m "Implement plan"`
-    5. Push to the remote: `git push`
+    1. Use the compound engineering skill `ce:work` to implement the plan
+    2. Ensure the code compiles and basic tests pass
+    3. Commit all changes
+    4. Push to the remote
     """
   end
 
@@ -166,15 +163,9 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     recently added `*-plan.md` file).
 
     Steps:
-    1. Read the plan and understand the requirements
-    2. Review all changed files for correctness, quality, and completeness
-    3. Identify P1 (critical) and P2 (important) issues — unnecessary defensive \
-    code counts as P2 (remove redundant nil checks, fallback values, error \
-    handling for impossible scenarios, and validation that duplicates framework \
-    guarantees)
-    4. Fix all P1 and P2 items
-    5. Commit fixes: `git add . && git commit -m "Fix review issues"`
-    6. Push to the remote: `git push`
+    1. Use the compound engineering skill `ce:review` and automatically fix P1 and P2 issues
+    2. Commit all changes
+    3. Push to the remote
     """
   end
 
@@ -184,11 +175,12 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     require new browser tests.
 
     If tests need attention:
-    1. Run the test suite to identify failures
+    1. Use the compound engineering skill `test-browser` in headless mode
+    the test suite to identify failures
     2. Fix any broken tests
     3. Add new tests for new functionality if appropriate
-    4. Commit changes: `git add . && git commit -m "Fix and add tests"`
-    5. Push to the remote: `git push`
+    4. Commit changes
+    5. Push to the remote
     6. Call `mcp__destila__session` with `action: "phase_complete"`
 
     If no test-impacting changes exist:
@@ -202,14 +194,11 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     Record a feature video walkthrough of the implemented changes.
 
     Steps:
-    1. Identify the key features and changes that were implemented
-    2. Record a walkthrough demonstrating the changes
-    3. Commit any artifacts: `git add . && git commit -m "Add feature video"`
-    4. Push to the remote: `git push`
-
-    When exporting the video, use the original video filename (without extension) as the \
-    export key — for example, if the file is `feature-demo.mp4`, export with \
-    `key: "feature_demo"`. This ensures each video export has a distinct, descriptive key.
+    1. Use the compound engineering skill `feature-video` to record a walkthrough \
+    demonstrating the changes
+    2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
+    `key` set to the name of the file without extension, and `value` set to the path \
+    to the video. This ensures each video has a distinct, descriptive key.
     """
   end
 
@@ -232,12 +221,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     fix issues, or adjust the implementation. Apply any requested changes, \
     commit, and push. The PR will update automatically.
 
-    When writing or modifying code, keep it simple and direct. Do NOT add \
-    unnecessary defensive code — no redundant nil checks, fallback values, \
-    error handling, or validation for scenarios that cannot happen. Only \
-    validate at system boundaries.
-
-    The user will mark this phase as done when they are satisfied.
+    The user will mark this phase as done when they are satisfied. Never do \
+    it unless told.
     """
   end
 end
