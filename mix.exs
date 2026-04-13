@@ -90,7 +90,11 @@ defmodule Destila.MixProject do
       "ecto.setup": ["ecto.create --quiet", "ecto.migrate --quiet"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       "git.hooks": ["cmd git config core.hooksPath .githooks"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      "assets.setup": [
+        "tailwind.install --if-missing",
+        "esbuild.install --if-missing",
+        "cmd --cd assets npm install"
+      ],
       "assets.build": ["compile", "tailwind destila", "esbuild destila"],
       "assets.deploy": [
         "tailwind destila --minify",
