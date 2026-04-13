@@ -26,22 +26,17 @@ defmodule Destila.Workflows.Skills do
   end
 
   @doc """
-  Assembles a full prompt string: always-included skills + phase skills + phase prompt.
+  Returns the rendered skills section for always-included + phase skills.
   Each skill is rendered as `## Skill: <name>\n\n<body>`.
+  Returns an empty string when no skills apply.
   """
-  def assemble_prompt(phase_skills, phase_prompt) do
+  def assemble_skills(phase_skills) do
     skills = always_included() ++ by_identifiers(phase_skills)
     skills = Enum.uniq_by(skills, & &1.identifier)
 
-    skill_sections =
-      Enum.map_join(skills, "\n\n", fn skill ->
-        "## Skill: #{skill.name}\n\n#{skill.body}"
-      end)
-
-    case skill_sections do
-      "" -> phase_prompt
-      sections -> sections <> "\n\n" <> phase_prompt
-    end
+    Enum.map_join(skills, "\n\n", fn skill ->
+      "## Skill: #{skill.name}\n\n#{skill.body}"
+    end)
   end
 
   @doc """

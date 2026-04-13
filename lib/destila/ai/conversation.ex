@@ -31,15 +31,6 @@ defmodule Destila.AI.Conversation do
     session = ensure_ai_session(ws)
     phase_prompt = prompt_fn.(ws)
 
-    # Inject tool descriptions only on the first prompt of a new AI session
-    prompt_with_tools =
-      if is_nil(session.claude_session_id) do
-        tools = if allowed_tools == [], do: Tools.described_tool_names(), else: allowed_tools
-        phase_prompt <> Tools.tool_descriptions(tools)
-      else
-        phase_prompt
-      end
-
     # Auto-add non_interactive skill for autonomous phases
     all_skills =
       if non_interactive do
@@ -48,7 +39,23 @@ defmodule Destila.AI.Conversation do
         phase_skills
       end
 
-    query = Skills.assemble_prompt(all_skills, prompt_with_tools)
+    # Assemble: tools + skills + phase prompt
+    # Tool descriptions are only injected on the first prompt of a new AI session
+    tool_section =
+      if is_nil(session.claude_session_id) do
+        tools = if allowed_tools == [], do: Tools.described_tool_names(), else: allowed_tools
+        Tools.tool_descriptions(tools)
+      else
+        ""
+      end
+
+    skill_section = Skills.assemble_skills(all_skills)
+
+    query =
+      [tool_section, skill_section, phase_prompt]
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join("\n\n")
+
     enqueue_ai_worker(ws, phase_number, query)
     :processing
   end

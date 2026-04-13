@@ -46,20 +46,18 @@ defmodule Destila.Workflows.SkillsTest do
     end
   end
 
-  describe "assemble_prompt/2" do
-    test "prepends skill sections before phase prompt" do
-      result = Skills.assemble_prompt(["code_quality"], "Do the task.")
+  describe "assemble_skills/1" do
+    test "renders skill sections" do
+      result = Skills.assemble_skills(["code_quality"])
       assert result =~ "## Skill: Code Quality"
-      assert result |> String.split("Do the task.") |> length() == 2
     end
 
-    test "returns phase prompt unchanged when no skills apply" do
-      result = Skills.assemble_prompt([], "Do the task.")
-      assert String.ends_with?(result, "Do the task.")
+    test "returns empty string when no skills apply" do
+      assert Skills.assemble_skills([]) == ""
     end
 
     test "deduplicates skills by identifier" do
-      result = Skills.assemble_prompt(["code_quality", "code_quality"], "Do the task.")
+      result = Skills.assemble_skills(["code_quality", "code_quality"])
 
       occurrences =
         result
@@ -71,7 +69,7 @@ defmodule Destila.Workflows.SkillsTest do
     end
 
     test "renders each skill with correct heading format" do
-      result = Skills.assemble_prompt(["code_quality"], "Task.")
+      result = Skills.assemble_skills(["code_quality"])
       assert result =~ "## Skill: Code Quality\n\n"
     end
   end
