@@ -39,14 +39,8 @@ defmodule Destila.AI.Tools do
     end
   end
 
-  @doc """
-  Returns prompt instructions for Destila tools based on the phase mode.
-
-  `:interactive` — for phases where the user is present and can confirm transitions.
-  `:non_interactive` — for autonomous phases that auto-advance.
-  """
-  def prompt_instructions(:interactive) do
-    """
+  @tool_descriptions %{
+    "mcp__destila__ask_user_question" => """
 
     ## Asking Questions
 
@@ -57,6 +51,11 @@ defmodule Destila.AI.Tools do
     An 'Other' free-text input is always available automatically — do not include it.
 
     For open-ended questions without clear options, just ask in plain text.
+
+    IMPORTANT: Never call both `mcp__destila__ask_user_question` and `mcp__destila__session` \
+    with a phase transition action in the same response.
+    """,
+    "mcp__destila__session" => """
 
     ## Phase Transitions
 
@@ -72,9 +71,6 @@ defmodule Destila.AI.Tools do
     response as unanswered questions. If you still need information from the user, ask your \
     questions and wait for their answers before signaling phase completion.
 
-    IMPORTANT: Never call both `mcp__destila__ask_user_question` and `mcp__destila__session` \
-    with a phase transition action in the same response.
-
     ## Exporting Data
 
     To store a key-value pair as session metadata, call `mcp__destila__session` with \
@@ -85,28 +81,34 @@ defmodule Destila.AI.Tools do
     interpreted: `text` (default), `text_file` (absolute path to a text file), \
     `markdown` (markdown content), or `video_file` (absolute path to a video file).
     """
+  }
+
+  @doc """
+  Returns assembled prompt descriptions for the given tool names.
+  Only includes descriptions for Destila custom tools.
+  """
+  def tool_descriptions(tool_names) do
+    tool_names
+    |> Enum.filter(&Map.has_key?(@tool_descriptions, &1))
+    |> Enum.map_join(&@tool_descriptions[&1])
   end
 
-  def prompt_instructions(:non_interactive) do
+  @doc """
+  Returns the names of all Destila tools that have prompt descriptions.
+  Used as fallback when a phase has no explicit `allowed_tools`.
+  """
+  def described_tool_names, do: Map.keys(@tool_descriptions)
+
+  @doc """
+  Returns additional phase context for non-interactive (autonomous) phases.
+  """
+  def non_interactive_context do
     """
 
-    ## Phase Transitions
-
-    When you have completed this phase's work, call `mcp__destila__session` \
-    with `action: "phase_complete"` and a `message` summarizing what was done.
-
-    Do NOT use `suggest_phase_complete` — this phase runs autonomously.
+    This phase runs autonomously. When this phase's work is complete, call \
+    `mcp__destila__session` with `action: "phase_complete"` and a `message` \
+    summarizing what was done. Do NOT use `suggest_phase_complete`. \
     Do NOT call `mcp__destila__ask_user_question` — no user is present.
-
-    ## Exporting Data
-
-    To store a key-value pair as session metadata, call `mcp__destila__session` with \
-    `action: "export"`, a `key` string, and a `value` string. You may call export \
-    multiple times in a single response and may combine it with a phase transition action.
-
-    You can optionally specify a `type` string to indicate how the value should be \
-    interpreted: `text` (default), `text_file` (absolute path to a text file), \
-    `markdown` (markdown content), or `video_file` (absolute path to a video file).
     """
   end
 

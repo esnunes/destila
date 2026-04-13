@@ -20,15 +20,35 @@ defmodule Destila.AI.Conversation do
   def phase_start(ws) do
     phase_number = ws.current_phase
 
-    %{system_prompt: prompt_fn, skills: phase_skills, non_interactive: non_interactive} =
-      get_phase(ws, phase_number)
+    %{
+      system_prompt: prompt_fn,
+      skills: phase_skills,
+      non_interactive: non_interactive,
+      allowed_tools: allowed_tools
+    } = get_phase(ws, phase_number)
 
     handle_session_strategy(ws, phase_number)
-    ensure_ai_session(ws)
+    session = ensure_ai_session(ws)
     phase_prompt = prompt_fn.(ws)
-    mode = if non_interactive, do: :non_interactive, else: :interactive
-    prompt_with_tools = phase_prompt <> Tools.prompt_instructions(mode)
-    query = Skills.assemble_prompt(phase_skills, prompt_with_tools)
+
+    # Inject tool descriptions only on the first prompt of a new AI session
+    prompt_with_tools =
+      if is_nil(session.claude_session_id) do
+        tools = if allowed_tools == [], do: Tools.described_tool_names(), else: allowed_tools
+        phase_prompt <> Tools.tool_descriptions(tools)
+      else
+        phase_prompt
+      end
+
+    # Add non-interactive context for autonomous phases
+    prompt_with_context =
+      if non_interactive do
+        prompt_with_tools <> Tools.non_interactive_context()
+      else
+        prompt_with_tools
+      end
+
+    query = Skills.assemble_prompt(phase_skills, prompt_with_context)
     enqueue_ai_worker(ws, phase_number, query)
     :processing
   end
