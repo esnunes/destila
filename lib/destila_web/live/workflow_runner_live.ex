@@ -359,22 +359,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      |> assign(:text_modal_label, nil)}
   end
 
-  def handle_event("open_markdown_file_modal", %{"id" => id}, socket) do
-    meta = Enum.find(socket.assigns.exported_metadata, &(&1.id == id))
-    path = meta.value["markdown_file"]
-
-    case File.read(path) do
-      {:ok, content} ->
-        {:noreply,
-         socket
-         |> assign(:markdown_modal_content, content)
-         |> assign(:markdown_modal_label, humanize_key(meta.key))}
-
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Could not read file: #{path}")}
-    end
-  end
-
   # PubSub: workflow session updated — refresh shared chrome
   @impl true
   def handle_info({:workflow_session_updated, updated_ws}, socket) do
@@ -810,27 +794,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                                 <.icon name="hero-eye-micro" class="size-4 text-primary" />
                               </button>
                             </div>
-                          <% Map.has_key?(meta.value, "markdown_file") -> %>
-                            <div
-                              id={"metadata-entry-#{meta.id}"}
-                              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
-                            >
-                              <.icon
-                                name="hero-document-text-micro"
-                                class="size-3 text-base-content/30 shrink-0"
-                              />
-                              <span class="font-medium text-sm text-base-content/70 truncate flex-1">
-                                {humanize_key(meta.key)}
-                              </span>
-                              <button
-                                phx-click="open_markdown_file_modal"
-                                phx-value-id={meta.id}
-                                class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
-                                aria-label={"View #{humanize_key(meta.key)}"}
-                              >
-                                <.icon name="hero-eye-micro" class="size-4 text-primary" />
-                              </button>
-                            </div>
                           <% true -> %>
                             <details
                               id={"metadata-entry-#{meta.id}"}
@@ -1076,7 +1039,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   defp format_metadata_value(%{"text" => text}) when is_binary(text), do: text
   defp format_metadata_value(%{"markdown" => md}) when is_binary(md), do: md
   defp format_metadata_value(%{"text_file" => path}) when is_binary(path), do: path
-  defp format_metadata_value(%{"markdown_file" => path}) when is_binary(path), do: path
   defp format_metadata_value(%{"video_file" => path}) when is_binary(path), do: path
   defp format_metadata_value(value) when is_map(value), do: Jason.encode!(value, pretty: true)
   defp format_metadata_value(value), do: inspect(value)

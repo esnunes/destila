@@ -9,7 +9,7 @@ defmodule Destila.Workflows do
   alias Destila.Repo
   alias Destila.Workflows.{Session, SessionMetadata}
 
-  @valid_metadata_types ~w(text text_file markdown markdown_file video_file)
+  @valid_metadata_types ~w(text text_file markdown video_file)
 
   @doc """
   Returns the list of valid metadata types for exported metadata values.
