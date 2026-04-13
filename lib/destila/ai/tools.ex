@@ -9,10 +9,7 @@ defmodule Destila.AI.Tools do
 
   tool :ask_user_question,
        "Present one or more structured questions to the user with selectable options. " <>
-         "Use this when you want the user to choose from specific options. " <>
-         "The user will see the options as clickable buttons. " <>
-         "An 'Other' free-text option is always available automatically — do not include it. " <>
-         "You may batch multiple independent questions in a single call." do
+         "Use this when you want the user to choose from specific options. " do
     field(
       :questions,
       {:list,
@@ -38,6 +35,25 @@ defmodule Destila.AI.Tools do
       {:ok, "Questions presented to the user. Stop here and wait for their response."}
     end
   end
+
+  @ask_user_question_details """
+  ## Asking Questions
+
+  When asking questions with clear, discrete options, use the \
+  `mcp__destila__ask_user_question` tool to present structured choices. \
+  The tool accepts a `questions` array — batch all your independent questions \
+  in a single call. The user will see clickable buttons for each question. \
+  An 'Other' free-text input is always available automatically — do not include it.
+
+  You may batch multiple independent questions in a single response when their answers \
+  do not depend on each other. Never batch questions where the answer to one would change \
+  the options of another.
+
+  For open-ended questions without clear options, just ask in plain text.
+
+  IMPORTANT: Never call `mcp__destila__ask_user_question` with a phase transition \
+  action in the same response.
+  """
 
   tool :session,
        "Signal a phase transition or export metadata in the workflow session. " <>
@@ -74,4 +90,51 @@ defmodule Destila.AI.Tools do
       {:ok, "Action recorded."}
     end
   end
+
+  @session_details """
+  ## Phase Transitions
+
+  When you believe the current phase's work is complete, call the \
+  `mcp__destila__session` tool. Use the `message` parameter to explain your reasoning.
+
+  - Use `action: "suggest_phase_complete"` when you have enough information and want the \
+  user to confirm moving to the next phase.
+  - Use `action: "phase_complete"` when the phase is definitively not applicable or already \
+  satisfied (e.g., no Gherkin scenarios needed). This auto-advances without user confirmation.
+
+  IMPORTANT: Never call `mcp__destila__session` with a phase transition action in the same \
+  response as unanswered questions. If you still need information from the user, ask your \
+  questions and wait for their answers before signaling phase completion.
+
+  ## Exporting Data
+
+  To store a key-value pair as session metadata, call `mcp__destila__session` with \
+  `action: "export"`, a `key` string, and a `value` string. You may call export \
+  multiple times in a single response and may combine it with a phase transition action.
+
+  You can optionally specify a `type` string to indicate how the value should be \
+  interpreted: `text` (default), `text_file` (absolute path to a text file), \
+  `markdown` (markdown content), or `video_file` (absolute path to a video file).
+  """
+
+  @tool_descriptions %{
+    "mcp__destila__ask_user_question" => @ask_user_question_details,
+    "mcp__destila__session" => @session_details
+  }
+
+  @doc """
+  Returns assembled prompt descriptions for the given tool names.
+  Only includes descriptions for Destila custom tools.
+  """
+  def tool_descriptions(tool_names) do
+    tool_names
+    |> Enum.filter(&Map.has_key?(@tool_descriptions, &1))
+    |> Enum.map_join("\n", &@tool_descriptions[&1])
+  end
+
+  @doc """
+  Returns the names of all Destila tools that have prompt descriptions.
+  Used as fallback when a phase has no explicit `allowed_tools`.
+  """
+  def described_tool_names, do: Map.keys(@tool_descriptions)
 end

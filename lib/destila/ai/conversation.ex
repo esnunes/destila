@@ -8,7 +8,8 @@ defmodule Destila.AI.Conversation do
   """
 
   alias Destila.{AI, Workflows}
-  alias Destila.AI.ResponseProcessor
+  alias Destila.AI.{ResponseProcessor, Tools}
+  alias Destila.Workflows.Skills
 
   @doc """
   Starts a phase by reading the system prompt, handling session strategy,
@@ -18,11 +19,47 @@ defmodule Destila.AI.Conversation do
   """
   def phase_start(ws) do
     phase_number = ws.current_phase
-    %{system_prompt: prompt_fn} = get_phase(ws, phase_number)
+
+    %{
+      system_prompt: prompt_fn,
+      skills: phase_skills,
+      non_interactive: non_interactive,
+      allowed_tools: allowed_tools
+    } = get_phase(ws, phase_number)
 
     handle_session_strategy(ws, phase_number)
-    ensure_ai_session(ws)
-    query = prompt_fn.(ws)
+    session = ensure_ai_session(ws)
+    phase_prompt = prompt_fn.(ws)
+
+    # Auto-add non_interactive skill for autonomous phases
+    all_skills =
+      if non_interactive do
+        Enum.uniq(["non_interactive" | phase_skills])
+      else
+        phase_skills
+      end
+
+    # Assemble: tools + skills + phase prompt
+    # Tool descriptions are only injected on the first prompt of a new AI session
+    tool_section =
+      if is_nil(session.claude_session_id) do
+        tools = if allowed_tools == [], do: Tools.described_tool_names(), else: allowed_tools
+        Tools.tool_descriptions(tools)
+      else
+        ""
+      end
+
+    skill_section = Skills.assemble_skills(all_skills)
+
+    sections =
+      [
+        if(tool_section != "", do: "# Tools\n\n#{tool_section}"),
+        if(skill_section != "", do: "# Skills\n\n#{skill_section}"),
+        "# Prompt\n\n#{phase_prompt}"
+      ]
+
+    query = sections |> Enum.reject(&is_nil/1) |> Enum.join("\n\n")
+
     enqueue_ai_worker(ws, phase_number, query)
     :processing
   end
