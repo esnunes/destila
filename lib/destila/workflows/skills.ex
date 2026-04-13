@@ -27,7 +27,7 @@ defmodule Destila.Workflows.Skills do
 
   @doc """
   Returns the rendered skills section for always-included + phase skills.
-  Each skill is rendered as `## Skill: <name>\n\n<body>`.
+  Each skill is rendered as `## <name>\n\n<body>`.
   Returns an empty string when no skills apply.
   """
   def assemble_skills(phase_skills) do
@@ -35,7 +35,7 @@ defmodule Destila.Workflows.Skills do
     skills = Enum.uniq_by(skills, & &1.identifier)
 
     Enum.map_join(skills, "\n\n", fn skill ->
-      "## Skill: #{skill.name}\n\n#{skill.body}"
+      "## #{skill.name}\n\n#{skill.body}"
     end)
   end
 

@@ -49,7 +49,7 @@ defmodule Destila.Workflows.SkillsTest do
   describe "assemble_skills/1" do
     test "renders skill sections" do
       result = Skills.assemble_skills(["code_quality"])
-      assert result =~ "## Skill: Code Quality"
+      assert result =~ "## Code Quality"
     end
 
     test "returns empty string when no skills apply" do
@@ -61,7 +61,7 @@ defmodule Destila.Workflows.SkillsTest do
 
       occurrences =
         result
-        |> String.split("## Skill: Code Quality")
+        |> String.split("## Code Quality")
         |> length()
 
       # Should appear exactly once (2 parts = 1 occurrence)
@@ -70,7 +70,7 @@ defmodule Destila.Workflows.SkillsTest do
 
     test "renders each skill with correct heading format" do
       result = Skills.assemble_skills(["code_quality"])
-      assert result =~ "## Skill: Code Quality\n\n"
+      assert result =~ "## Code Quality\n\n"
     end
   end
 end

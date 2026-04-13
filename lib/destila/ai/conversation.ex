@@ -51,10 +51,14 @@ defmodule Destila.AI.Conversation do
 
     skill_section = Skills.assemble_skills(all_skills)
 
-    query =
-      [tool_section, skill_section, phase_prompt]
-      |> Enum.reject(&(&1 == ""))
-      |> Enum.join("\n\n")
+    sections =
+      [
+        if(tool_section != "", do: "# Tools\n\n#{tool_section}"),
+        if(skill_section != "", do: "# Skills\n\n#{skill_section}"),
+        "# Prompt\n\n#{phase_prompt}"
+      ]
+
+    query = sections |> Enum.reject(&is_nil/1) |> Enum.join("\n\n")
 
     enqueue_ai_worker(ws, phase_number, query)
     :processing
