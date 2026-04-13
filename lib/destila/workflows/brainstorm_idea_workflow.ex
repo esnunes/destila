@@ -19,9 +19,21 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
 
   def phases do
     [
-      %Phase{name: "Task Description", system_prompt: &task_description_prompt/1},
-      %Phase{name: "Gherkin Review", system_prompt: &gherkin_review_prompt/1},
-      %Phase{name: "Technical Concerns", system_prompt: &technical_concerns_prompt/1},
+      %Phase{
+        name: "Task Description",
+        system_prompt: &task_description_prompt/1,
+        skills: ["interactive_tool_instructions"]
+      },
+      %Phase{
+        name: "Gherkin Review",
+        system_prompt: &gherkin_review_prompt/1,
+        skills: ["interactive_tool_instructions"]
+      },
+      %Phase{
+        name: "Technical Concerns",
+        system_prompt: &technical_concerns_prompt/1,
+        skills: ["interactive_tool_instructions"]
+      },
       %Phase{name: "Prompt Generation", system_prompt: &prompt_generation_prompt/1}
     ]
   end
@@ -41,46 +53,6 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
   end
 
   # --- AI system prompts ---
-
-  @tool_instructions """
-
-  ## Asking Questions
-
-  When asking questions with clear, discrete options, use the \
-  `mcp__destila__ask_user_question` tool to present structured choices. \
-  The tool accepts a `questions` array — batch all your independent questions \
-  in a single call. The user will see clickable buttons for each question. \
-  An 'Other' free-text input is always available automatically — do not include it.
-
-  For open-ended questions without clear options, just ask in plain text.
-
-  ## Phase Transitions
-
-  When you believe the current phase's work is complete, call the \
-  `mcp__destila__session` tool. Use the `message` parameter to explain your reasoning.
-
-  - Use `action: "suggest_phase_complete"` when you have enough information and want the \
-  user to confirm moving to the next phase.
-  - Use `action: "phase_complete"` when the phase is definitively not applicable or already \
-  satisfied (e.g., no Gherkin scenarios needed). This auto-advances without user confirmation.
-
-  IMPORTANT: Never call `mcp__destila__session` with a phase transition action in the same \
-  response as unanswered questions. If you still need information from the user, ask your \
-  questions and wait for their answers before signaling phase completion.
-
-  IMPORTANT: Never call both `mcp__destila__ask_user_question` and `mcp__destila__session` \
-  with a phase transition action in the same response.
-
-  ## Exporting Data
-
-  To store a key-value pair as session metadata, call `mcp__destila__session` with \
-  `action: "export"`, a `key` string, and a `value` string. You may call export \
-  multiple times in a single response and may combine it with a phase transition action.
-
-  You can optionally specify a `type` string to indicate how the value should be \
-  interpreted: `text` (default), `text_file` (absolute path to a text file), \
-  `markdown` (markdown content), or `video_file` (absolute path to a video file).
-  """
 
   defp task_description_prompt(workflow_session) do
     idea = workflow_session.user_prompt
@@ -111,7 +83,7 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     Keep your questions concise and specific. When you believe you have a clear understanding \
     of the task, call the `mcp__destila__session` tool with `action: "suggest_phase_complete"` \
     and a message summarizing your understanding.
-    """ <> @tool_instructions <> idea_context
+    """ <> idea_context
   end
 
   defp gherkin_review_prompt(workflow_session) do
@@ -159,7 +131,7 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     3. If the task doesn't require Gherkin changes:
        - Call `mcp__destila__session` with `action: "phase_complete"` and a \
          message explaining why.
-    """ <> @tool_instructions
+    """
   end
 
   defp technical_concerns_prompt(_workflow_session) do
@@ -179,7 +151,7 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
 
     When the technical approach is sufficiently clear, call the `mcp__destila__session` \
     tool with `action: "suggest_phase_complete"` and a message summarizing the agreed approach.
-    """ <> @tool_instructions
+    """
   end
 
   defp prompt_generation_prompt(_workflow_session) do

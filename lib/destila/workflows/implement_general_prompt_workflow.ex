@@ -33,65 +33,50 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   alias Destila.Workflows.Phase
 
-  @non_interactive_tool_instructions """
-
-  ## Phase Transitions
-
-  When you have completed this phase's work, call `mcp__destila__session` \
-  with `action: "phase_complete"` and a `message` summarizing what was done.
-
-  Do NOT use `suggest_phase_complete` — this phase runs autonomously.
-  Do NOT call `mcp__destila__ask_user_question` — no user is present.
-
-  ## Exporting Data
-
-  To store a key-value pair as session metadata, call `mcp__destila__session` with \
-  `action: "export"`, a `key` string, and a `value` string. You may call export \
-  multiple times in a single response and may combine it with a phase transition action.
-
-  You can optionally specify a `type` string to indicate how the value should be \
-  interpreted: `text` (default), `text_file` (absolute path to a text file), \
-  `markdown` (markdown content), or `video_file` (absolute path to a video file).
-  """
-
   def phases do
     [
       %Phase{
         name: "Generate Plan",
         system_prompt: &plan_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools
+        allowed_tools: @implementation_tools,
+        skills: ["non_interactive_tool_instructions"]
       },
       %Phase{
         name: "Deepen Plan",
         system_prompt: &deepen_plan_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools
+        allowed_tools: @implementation_tools,
+        skills: ["non_interactive_tool_instructions"]
       },
       %Phase{
         name: "Work",
         system_prompt: &work_prompt/1,
         non_interactive: true,
         allowed_tools: @implementation_tools,
-        session_strategy: :new
+        session_strategy: :new,
+        skills: ["non_interactive_tool_instructions"]
       },
       %Phase{
         name: "Review",
         system_prompt: &review_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools
+        allowed_tools: @implementation_tools,
+        skills: ["non_interactive_tool_instructions"]
       },
       %Phase{
         name: "Browser Tests",
         system_prompt: &browser_tests_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools
+        allowed_tools: @implementation_tools,
+        skills: ["non_interactive_tool_instructions"]
       },
       %Phase{
         name: "Feature Video",
         system_prompt: &feature_video_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools
+        allowed_tools: @implementation_tools,
+        skills: ["non_interactive_tool_instructions"]
       },
       %Phase{
         name: "Adjustments",
@@ -145,7 +130,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
        Look at existing files in `docs/plans/` for examples.
     4. Commit your changes: `git add . && git commit -m "Add implementation plan"`
     5. Push to the remote: `git push`
-    """ <> @non_interactive_tool_instructions
+    """
   end
 
   defp deepen_plan_prompt(_workflow_session) do
@@ -163,7 +148,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     If the plan is already sufficient:
     - Call `mcp__destila__session` with `action: "phase_complete"` and a message \
     explaining why further detail is not needed
-    """ <> @non_interactive_tool_instructions
+    """
   end
 
   defp work_prompt(_workflow_session) do
@@ -187,7 +172,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     external APIs). Three simple lines are better than a premature abstraction. \
     Do not add features, configurability, or "improvements" beyond what the \
     plan specifies.
-    """ <> @non_interactive_tool_instructions
+    """
   end
 
   defp review_prompt(_workflow_session) do
@@ -205,7 +190,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     4. Fix all P1 and P2 items
     5. Commit fixes: `git add . && git commit -m "Fix review issues"`
     6. Push to the remote: `git push`
-    """ <> @non_interactive_tool_instructions
+    """
   end
 
   defp browser_tests_prompt(_workflow_session) do
@@ -224,7 +209,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     If no test-impacting changes exist:
     - Call `mcp__destila__session` with `action: "phase_complete"` and a message \
     explaining why no test changes are needed
-    """ <> @non_interactive_tool_instructions
+    """
   end
 
   defp feature_video_prompt(_workflow_session) do
@@ -240,7 +225,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     When exporting the video, use the original video filename (without extension) as the \
     export key — for example, if the file is `feature-demo.mp4`, export with \
     `key: "feature_demo"`. This ensures each video export has a distinct, descriptive key.
-    """ <> @non_interactive_tool_instructions
+    """
   end
 
   defp adjustments_prompt(workflow_session) do

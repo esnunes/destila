@@ -11,6 +11,7 @@ defmodule Destila.Workflows.Phase do
     :system_prompt,
     non_interactive: false,
     allowed_tools: [],
-    session_strategy: :resume
+    session_strategy: :resume,
+    skills: []
   ]
 end
