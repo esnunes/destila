@@ -39,15 +39,13 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
         name: "Generate Plan",
         system_prompt: &plan_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools,
-        skills: ["non_interactive_tool_instructions"]
+        allowed_tools: @implementation_tools
       },
       %Phase{
         name: "Deepen Plan",
         system_prompt: &deepen_plan_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools,
-        skills: ["non_interactive_tool_instructions"]
+        allowed_tools: @implementation_tools
       },
       %Phase{
         name: "Work",
@@ -55,28 +53,25 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
         non_interactive: true,
         allowed_tools: @implementation_tools,
         session_strategy: :new,
-        skills: ["non_interactive_tool_instructions"]
+        skills: ["code_quality"]
       },
       %Phase{
         name: "Review",
         system_prompt: &review_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools,
-        skills: ["non_interactive_tool_instructions"]
+        allowed_tools: @implementation_tools
       },
       %Phase{
         name: "Browser Tests",
         system_prompt: &browser_tests_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools,
-        skills: ["non_interactive_tool_instructions"]
+        allowed_tools: @implementation_tools
       },
       %Phase{
         name: "Feature Video",
         system_prompt: &feature_video_prompt/1,
         non_interactive: true,
-        allowed_tools: @implementation_tools,
-        skills: ["non_interactive_tool_instructions"]
+        allowed_tools: @implementation_tools
       },
       %Phase{
         name: "Adjustments",
@@ -162,16 +157,6 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     3. Ensure the code compiles and basic tests pass
     4. Commit all changes: `git add . && git commit -m "Implement plan"`
     5. Push to the remote: `git push`
-
-    ## Code Quality
-
-    Write code that is simple, direct, and minimal. Do NOT write unnecessary \
-    defensive code — no redundant nil checks, fallback values, error handling, \
-    or validation for scenarios that cannot happen. Trust internal code and \
-    framework guarantees. Only validate at system boundaries (user input, \
-    external APIs). Three simple lines are better than a premature abstraction. \
-    Do not add features, configurability, or "improvements" beyond what the \
-    plan specifies.
     """
   end
 
@@ -253,15 +238,6 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     validate at system boundaries.
 
     The user will mark this phase as done when they are satisfied.
-
-    ## Asking Questions
-
-    When asking questions with clear, discrete options, use the \
-    `mcp__destila__ask_user_question` tool to present structured choices. \
-    The tool accepts a `questions` array — batch all your independent questions \
-    in a single call. An 'Other' free-text input is always available automatically.
-
-    For open-ended questions without clear options, just ask in plain text.
     """
   end
 end

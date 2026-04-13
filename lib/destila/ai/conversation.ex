@@ -8,7 +8,7 @@ defmodule Destila.AI.Conversation do
   """
 
   alias Destila.{AI, Workflows}
-  alias Destila.AI.ResponseProcessor
+  alias Destila.AI.{ResponseProcessor, Tools}
   alias Destila.Workflows.Skills
 
   @doc """
@@ -19,12 +19,16 @@ defmodule Destila.AI.Conversation do
   """
   def phase_start(ws) do
     phase_number = ws.current_phase
-    %{system_prompt: prompt_fn, skills: phase_skills} = get_phase(ws, phase_number)
+
+    %{system_prompt: prompt_fn, skills: phase_skills, non_interactive: non_interactive} =
+      get_phase(ws, phase_number)
 
     handle_session_strategy(ws, phase_number)
     ensure_ai_session(ws)
     phase_prompt = prompt_fn.(ws)
-    query = Skills.assemble_prompt(phase_skills, phase_prompt)
+    mode = if non_interactive, do: :non_interactive, else: :interactive
+    prompt_with_tools = phase_prompt <> Tools.prompt_instructions(mode)
+    query = Skills.assemble_prompt(phase_skills, prompt_with_tools)
     enqueue_ai_worker(ws, phase_number, query)
     :processing
   end

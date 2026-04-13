@@ -21,18 +21,15 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     [
       %Phase{
         name: "Task Description",
-        system_prompt: &task_description_prompt/1,
-        skills: ["interactive_tool_instructions"]
+        system_prompt: &task_description_prompt/1
       },
       %Phase{
         name: "Gherkin Review",
-        system_prompt: &gherkin_review_prompt/1,
-        skills: ["interactive_tool_instructions"]
+        system_prompt: &gherkin_review_prompt/1
       },
       %Phase{
         name: "Technical Concerns",
-        system_prompt: &technical_concerns_prompt/1,
-        skills: ["interactive_tool_instructions"]
+        system_prompt: &technical_concerns_prompt/1
       },
       %Phase{name: "Prompt Generation", system_prompt: &prompt_generation_prompt/1}
     ]

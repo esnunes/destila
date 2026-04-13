@@ -7,30 +7,23 @@ defmodule Destila.Workflows.SkillsTest do
     test "discovers skill files from priv/skills/" do
       skills = Skills.all_skills()
       identifiers = Enum.map(skills, & &1.identifier)
-      assert "interactive_tool_instructions" in identifiers
-      assert "non_interactive_tool_instructions" in identifiers
+      assert "code_quality" in identifiers
     end
 
     test "parses name from frontmatter" do
-      skill =
-        Skills.all_skills() |> Enum.find(&(&1.identifier == "interactive_tool_instructions"))
-
-      assert skill.name == "Interactive Tool Instructions"
+      skill = Skills.all_skills() |> Enum.find(&(&1.identifier == "code_quality"))
+      assert skill.name == "Code Quality"
     end
 
     test "parses always field from frontmatter" do
-      skill =
-        Skills.all_skills() |> Enum.find(&(&1.identifier == "interactive_tool_instructions"))
-
+      skill = Skills.all_skills() |> Enum.find(&(&1.identifier == "code_quality"))
       assert skill.always == false
     end
 
     test "parses body content after frontmatter" do
-      skill =
-        Skills.all_skills() |> Enum.find(&(&1.identifier == "interactive_tool_instructions"))
-
-      assert skill.body =~ "Asking Questions"
-      assert skill.body =~ "mcp__destila__ask_user_question"
+      skill = Skills.all_skills() |> Enum.find(&(&1.identifier == "code_quality"))
+      assert skill.body =~ "Code Quality"
+      assert skill.body =~ "simple, direct, and minimal"
     end
   end
 
@@ -43,9 +36,9 @@ defmodule Destila.Workflows.SkillsTest do
 
   describe "by_identifiers/1" do
     test "returns skills matching given identifiers" do
-      skills = Skills.by_identifiers(["interactive_tool_instructions"])
+      skills = Skills.by_identifiers(["code_quality"])
       assert length(skills) == 1
-      assert hd(skills).identifier == "interactive_tool_instructions"
+      assert hd(skills).identifier == "code_quality"
     end
 
     test "returns empty list for unknown identifiers" do
@@ -55,8 +48,8 @@ defmodule Destila.Workflows.SkillsTest do
 
   describe "assemble_prompt/2" do
     test "prepends skill sections before phase prompt" do
-      result = Skills.assemble_prompt(["interactive_tool_instructions"], "Do the task.")
-      assert result =~ "## Skill: Interactive Tool Instructions"
+      result = Skills.assemble_prompt(["code_quality"], "Do the task.")
+      assert result =~ "## Skill: Code Quality"
       assert result |> String.split("Do the task.") |> length() == 2
     end
 
@@ -66,15 +59,11 @@ defmodule Destila.Workflows.SkillsTest do
     end
 
     test "deduplicates skills by identifier" do
-      result =
-        Skills.assemble_prompt(
-          ["interactive_tool_instructions", "interactive_tool_instructions"],
-          "Do the task."
-        )
+      result = Skills.assemble_prompt(["code_quality", "code_quality"], "Do the task.")
 
       occurrences =
         result
-        |> String.split("## Skill: Interactive Tool Instructions")
+        |> String.split("## Skill: Code Quality")
         |> length()
 
       # Should appear exactly once (2 parts = 1 occurrence)
@@ -82,8 +71,8 @@ defmodule Destila.Workflows.SkillsTest do
     end
 
     test "renders each skill with correct heading format" do
-      result = Skills.assemble_prompt(["non_interactive_tool_instructions"], "Task.")
-      assert result =~ "## Skill: Non-Interactive Tool Instructions\n\n"
+      result = Skills.assemble_prompt(["code_quality"], "Task.")
+      assert result =~ "## Skill: Code Quality\n\n"
     end
   end
 end
