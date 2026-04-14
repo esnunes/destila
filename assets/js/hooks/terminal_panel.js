@@ -93,14 +93,14 @@ export default {
 
     // Wait for fonts to load before fitting so xterm measures glyphs correctly
     document.fonts.ready.then(() => {
-      requestAnimationFrame(() => {
-        this.fitAddon.fit()
-        this.term.focus()
-        const dims = this.fitAddon.proposeDimensions()
-        if (dims) {
-          this.pushEvent("resize", { cols: dims.cols-3, rows: dims.rows })
-        }
-      })
+      //requestAnimationFrame(() => {
+      //  this.fitAddon.fit()
+      //  this.term.focus()
+      //  const dims = this.fitAddon.proposeDimensions()
+      //  if (dims) {
+      //    this.pushEvent("resize", { cols: dims.cols-3, rows: dims.rows })
+      //  }
+      //})
     })
 
     // Terminal input -> LiveView
@@ -131,7 +131,9 @@ export default {
         this.fitAddon.fit()
         const dims = this.fitAddon.proposeDimensions()
         if (dims) {
-          this.pushEvent("resize", { cols: dims.cols-3, rows: dims.rows })
+          const canvasDims = this.term._core._renderService.dimensions.css.canvas
+          const cols = Math.floor(canvasDims.width / 7.32)
+          this.pushEvent("resize", { cols, rows: dims.rows })
         }
       }, 150)
     })
