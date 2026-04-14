@@ -98,7 +98,9 @@ export default {
         this.term.focus()
         const dims = this.fitAddon.proposeDimensions()
         if (dims) {
-          this.pushEvent("resize", { cols: dims.cols-3, rows: dims.rows })
+          const canvasDims = this.term._core._renderService.dimensions.css.canvas
+          const cols = Math.floor(canvasDims.width / 7.32)
+          this.pushEvent("resize", { cols, rows: dims.rows })
         }
       })
     })
@@ -131,7 +133,9 @@ export default {
         this.fitAddon.fit()
         const dims = this.fitAddon.proposeDimensions()
         if (dims) {
-          this.pushEvent("resize", { cols: dims.cols-3, rows: dims.rows })
+          const canvasDims = this.term._core._renderService.dimensions.css.canvas
+          const cols = Math.floor(canvasDims.width / 7.32)
+          this.pushEvent("resize", { cols, rows: dims.rows })
         }
       }, 150)
     })
