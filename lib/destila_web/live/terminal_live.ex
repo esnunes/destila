@@ -46,7 +46,7 @@ defmodule DestilaWeb.TerminalLive do
       TerminalServer.start_link(
         cwd: ai_session.worktree_path,
         topic: "terminal:#{ws.id}",
-        session_name: ws.title,
+        session_name: Destila.Terminal.Tmux.session_name(ws),
         claude_session_id: ai_session.claude_session_id
       )
 
