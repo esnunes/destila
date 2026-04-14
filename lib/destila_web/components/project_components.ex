@@ -10,9 +10,7 @@ defmodule DestilaWeb.ProjectComponents do
   attr :projects, :list, required: true
   attr :selected_id, :string, default: nil
   attr :step, :atom, default: :select
-  attr :form, :map, default: nil
   attr :errors, :map, default: %{}
-  attr :port_definitions, :list, default: []
   attr :target, :any, required: true
 
   def project_selector(assigns) do
@@ -86,171 +84,12 @@ defmodule DestilaWeb.ProjectComponents do
         </p>
       </div>
 
-      <form
-        phx-submit="create_and_select_project"
-        phx-change="validate_project_form"
-        phx-target={@target}
-        class="space-y-4"
-        id="inline-project-form"
-      >
-        <fieldset class="fieldset">
-          <label class="fieldset-label text-xs font-medium" for="project-name">
-            Project name <span class="text-error">*</span>
-          </label>
-          <input
-            type="text"
-            id="project-name"
-            name="name"
-            value={@form["name"].value}
-            placeholder="My Project"
-            aria-invalid={@errors[:name] && "true"}
-            phx-mounted={Phoenix.LiveView.JS.focus()}
-            class={[
-              "input input-bordered w-full",
-              @errors[:name] && "input-error"
-            ]}
-          />
-          <p :if={@errors[:name]} class="text-xs text-error mt-1">
-            {@errors[:name]}
-          </p>
-        </fieldset>
-
-        <div class={[
-          "rounded-lg p-3 space-y-3",
-          if(@errors[:location],
-            do: "ring-1 ring-error/30 bg-error/5",
-            else: "bg-base-200/50"
-          )
-        ]}>
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-medium text-base-content/50">Location</span>
-            <span class="text-xs text-base-content/30">at least one required</span>
-          </div>
-
-          <fieldset class="fieldset">
-            <label class="fieldset-label text-xs font-medium" for="project-git-repo-url">
-              Git repository URL
-            </label>
-            <input
-              type="url"
-              id="project-git-repo-url"
-              name="git_repo_url"
-              value={@form["git_repo_url"].value}
-              placeholder="https://github.com/org/repo"
-              aria-invalid={@errors[:location] && "true"}
-              class={[
-                "input input-bordered w-full",
-                @errors[:location] && "input-error"
-              ]}
-            />
-          </fieldset>
-
-          <div class="flex items-center gap-3">
-            <div class="flex-1 h-px bg-base-300" />
-            <span class="text-xs text-base-content/30">or</span>
-            <div class="flex-1 h-px bg-base-300" />
-          </div>
-
-          <fieldset class="fieldset">
-            <label class="fieldset-label text-xs font-medium" for="project-local-folder">
-              Local folder
-            </label>
-            <input
-              type="text"
-              id="project-local-folder"
-              name="local_folder"
-              value={@form["local_folder"].value}
-              placeholder="/path/to/project"
-              aria-invalid={@errors[:location] && "true"}
-              class={[
-                "input input-bordered w-full",
-                @errors[:location] && "input-error"
-              ]}
-            />
-          </fieldset>
-
-          <p :if={@errors[:location]} class="text-xs text-error">
-            {@errors[:location]}
-          </p>
-        </div>
-
-        <div class="rounded-lg p-3 space-y-3 bg-base-200/50">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-medium text-base-content/50">Service</span>
-            <span class="text-xs text-base-content/30">optional</span>
-          </div>
-
-          <fieldset class="fieldset">
-            <label class="fieldset-label text-xs font-medium" for="project-run-command">
-              Run command
-            </label>
-            <input
-              type="text"
-              id="project-run-command"
-              name="run_command"
-              value={@form["run_command"] && @form["run_command"].value}
-              placeholder="mix setup && mix phx.server"
-              class="input input-bordered w-full"
-            />
-          </fieldset>
-
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <label class="text-xs font-medium text-base-content/70">Port definitions</label>
-              <button
-                type="button"
-                phx-click="add_port"
-                phx-target={@target}
-                class="btn btn-ghost btn-xs"
-                id="inline-add-port-btn"
-              >
-                <.icon name="hero-plus-micro" class="size-3" /> Add port
-              </button>
-            </div>
-
-            <div :if={@port_definitions != []} class="space-y-2">
-              <div
-                :for={{pd, idx} <- Enum.with_index(@port_definitions)}
-                class="flex items-center gap-2"
-                id={"inline-port-def-#{idx}"}
-              >
-                <input
-                  type="text"
-                  name={"port_def_#{idx}"}
-                  value={pd}
-                  placeholder="PORT"
-                  phx-blur="update_port"
-                  phx-target={@target}
-                  phx-value-index={idx}
-                  class={[
-                    "input input-bordered w-full font-mono uppercase",
-                    @errors[:port_definitions] && "input-error"
-                  ]}
-                  id={"inline-port-input-#{idx}"}
-                />
-                <button
-                  type="button"
-                  phx-click="remove_port"
-                  phx-target={@target}
-                  phx-value-index={idx}
-                  class="btn btn-ghost btn-xs text-error/60 hover:text-error"
-                  id={"inline-remove-port-#{idx}"}
-                >
-                  <.icon name="hero-x-mark-micro" class="size-4" />
-                </button>
-              </div>
-            </div>
-
-            <p :if={@errors[:port_definitions]} class="text-xs text-error mt-1">
-              {@errors[:port_definitions]}
-            </p>
-          </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary w-full" id="create-and-select-btn">
-          <.icon name="hero-plus-micro" class="size-4" /> Create & Select
-        </button>
-      </form>
+      <.live_component
+        module={DestilaWeb.ProjectFormLive}
+        id="project-form-inline"
+        mode={:create}
+        submit_label="Create & Select"
+      />
 
       <button
         phx-click="back_to_select"
