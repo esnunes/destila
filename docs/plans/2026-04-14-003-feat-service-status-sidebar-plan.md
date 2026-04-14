@@ -1,7 +1,7 @@
 ---
 title: "feat: Add service status item to workflow session sidebar"
 type: feat
-status: active
+status: completed
 date: 2026-04-14
 ---
 
