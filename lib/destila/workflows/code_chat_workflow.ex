@@ -21,7 +21,8 @@ defmodule Destila.Workflows.CodeChatWorkflow do
     "WebFetch",
     "Skill",
     "mcp__destila__ask_user_question",
-    "mcp__destila__session"
+    "mcp__destila__session",
+    "mcp__destila__service"
   ]
 
   def phases do

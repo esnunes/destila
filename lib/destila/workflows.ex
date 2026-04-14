@@ -204,6 +204,10 @@ defmodule Destila.Workflows do
   end
 
   def archive_workflow_session(%Session{} = ws) do
+    if ws.service_state do
+      Destila.Services.ServiceManager.cleanup(ws)
+    end
+
     Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
     ws
@@ -221,7 +225,7 @@ defmodule Destila.Workflows do
     end
 
     ws
-    |> Session.changeset(%{archived_at: nil})
+    |> Session.changeset(%{archived_at: nil, service_state: nil})
     |> Repo.update()
     |> broadcast(:workflow_session_updated)
   end

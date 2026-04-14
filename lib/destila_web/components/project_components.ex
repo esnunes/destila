@@ -12,6 +12,7 @@ defmodule DestilaWeb.ProjectComponents do
   attr :step, :atom, default: :select
   attr :form, :map, default: nil
   attr :errors, :map, default: %{}
+  attr :port_definitions, :list, default: []
   attr :target, :any, required: true
 
   def project_selector(assigns) do
@@ -87,6 +88,7 @@ defmodule DestilaWeb.ProjectComponents do
 
       <form
         phx-submit="create_and_select_project"
+        phx-change="validate_project_form"
         phx-target={@target}
         class="space-y-4"
         id="inline-project-form"
@@ -170,6 +172,79 @@ defmodule DestilaWeb.ProjectComponents do
           <p :if={@errors[:location]} class="text-xs text-error">
             {@errors[:location]}
           </p>
+        </div>
+
+        <div class="rounded-lg p-3 space-y-3 bg-base-200/50">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-medium text-base-content/50">Service</span>
+            <span class="text-xs text-base-content/30">optional</span>
+          </div>
+
+          <fieldset class="fieldset">
+            <label class="fieldset-label text-xs font-medium" for="project-run-command">
+              Run command
+            </label>
+            <input
+              type="text"
+              id="project-run-command"
+              name="run_command"
+              value={@form["run_command"] && @form["run_command"].value}
+              placeholder="mix setup && mix phx.server"
+              class="input input-bordered w-full"
+            />
+          </fieldset>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-xs font-medium text-base-content/70">Port definitions</label>
+              <button
+                type="button"
+                phx-click="add_port"
+                phx-target={@target}
+                class="btn btn-ghost btn-xs"
+                id="inline-add-port-btn"
+              >
+                <.icon name="hero-plus-micro" class="size-3" /> Add port
+              </button>
+            </div>
+
+            <div :if={@port_definitions != []} class="space-y-2">
+              <div
+                :for={{pd, idx} <- Enum.with_index(@port_definitions)}
+                class="flex items-center gap-2"
+                id={"inline-port-def-#{idx}"}
+              >
+                <input
+                  type="text"
+                  name={"port_def_#{idx}"}
+                  value={pd}
+                  placeholder="PORT"
+                  phx-blur="update_port"
+                  phx-target={@target}
+                  phx-value-index={idx}
+                  class={[
+                    "input input-bordered w-full font-mono uppercase",
+                    @errors[:port_definitions] && "input-error"
+                  ]}
+                  id={"inline-port-input-#{idx}"}
+                />
+                <button
+                  type="button"
+                  phx-click="remove_port"
+                  phx-target={@target}
+                  phx-value-index={idx}
+                  class="btn btn-ghost btn-xs text-error/60 hover:text-error"
+                  id={"inline-remove-port-#{idx}"}
+                >
+                  <.icon name="hero-x-mark-micro" class="size-4" />
+                </button>
+              </div>
+            </div>
+
+            <p :if={@errors[:port_definitions]} class="text-xs text-error mt-1">
+              {@errors[:port_definitions]}
+            </p>
+          </div>
         </div>
 
         <button type="submit" class="btn btn-primary w-full" id="create-and-select-btn">

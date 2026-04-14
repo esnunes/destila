@@ -26,7 +26,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     "Grep",
     "WebFetch",
     "Skill",
-    "mcp__destila__session"
+    "mcp__destila__session",
+    "mcp__destila__service"
   ]
 
   use Destila.Workflows.Workflow

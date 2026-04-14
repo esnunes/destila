@@ -117,9 +117,53 @@ defmodule Destila.AI.Tools do
   `markdown` (markdown content), or `video_file` (absolute path to a video file).
   """
 
+  tool :service,
+       "Manage the project's development service lifecycle. " <>
+         "Use this to start, stop, restart, or check the status of the project's service." do
+    field(:action, :string,
+      required: true,
+      description:
+        "One of: start (start the service), stop (stop the service), " <>
+          "restart (restart the service), status (check current service status)"
+    )
+
+    def execute(%{action: action}, frame) do
+      try do
+        workflow_session_id = frame.assigns[:workflow_session_id]
+        ws = Destila.Workflows.get_workflow_session!(workflow_session_id)
+        ai_session = Destila.AI.get_ai_session_for_workflow(ws.id)
+        worktree_path = ai_session && ai_session.worktree_path
+
+        case Destila.Services.ServiceManager.execute(ws, action, worktree_path: worktree_path) do
+          {:ok, state} -> {:ok, Jason.encode!(state)}
+          {:error, reason} -> {:ok, "Service error: #{reason}"}
+        end
+      rescue
+        e -> {:ok, "Service error: #{Exception.message(e)}"}
+      end
+    end
+  end
+
+  @service_details """
+  ## Service Management
+
+  Use the `mcp__destila__service` tool to manage the project's development server. \
+  The tool accepts an `action` parameter:
+
+  - `start` — Start the service using the project's configured run command. \
+  Returns the assigned port mappings (e.g., `{"PORT": 54321}`).
+  - `stop` — Stop the running service gracefully.
+  - `restart` — Stop and restart the service with fresh port assignments.
+  - `status` — Check the current service status and port mappings.
+
+  The tool result contains the service state as JSON, including status and \
+  port mappings. Use these ports when configuring or accessing the service.
+  """
+
   @tool_descriptions %{
     "mcp__destila__ask_user_question" => @ask_user_question_details,
-    "mcp__destila__session" => @session_details
+    "mcp__destila__session" => @session_details,
+    "mcp__destila__service" => @service_details
   }
 
   @doc """

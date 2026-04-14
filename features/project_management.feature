@@ -1,8 +1,9 @@
 Feature: Project Management
   Users can manage projects independently from sessions. A project has a name,
-  an optional git repository URL, and an optional local folder path. At least
-  one of git repository URL or local folder must be provided. Projects can be
-  shared across multiple sessions.
+  an optional git repository URL, an optional local folder path, an optional
+  run command, and optional port definitions. At least one of git repository
+  URL or local folder must be provided. Projects can be shared across multiple
+  sessions.
 
   Scenario: View list of projects
     Given there are existing projects
@@ -75,3 +76,28 @@ Feature: Project Management
     When I navigate to the projects page
     And I click delete on the project
     Then I should see a message indicating the project cannot be deleted while linked to sessions
+
+  Scenario: Create a project with run command and port definitions
+    When I navigate to the projects page
+    And I click "New Project"
+    When I fill in the name, a git repository URL, a run command, and port definitions
+    And I click "Create"
+    Then the project should be created
+    And I should see the run command displayed in the project card
+
+  Scenario: Edit a project's run configuration
+    Given there is an existing project with a run command
+    When I navigate to the projects page
+    And I click edit on the project
+    Then I should see the run command pre-filled
+    When I update the run command
+    And I click "Save"
+    Then the project should be updated with the new run command
+
+  Scenario: Port definitions require a valid environment variable name
+    When I navigate to the projects page
+    And I click "New Project"
+    When I fill in the name and a git repository URL
+    And I add a port definition with an invalid name
+    And I click "Create"
+    Then I should see a validation error for the port definition

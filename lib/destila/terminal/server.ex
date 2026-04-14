@@ -1,6 +1,8 @@
 defmodule Destila.Terminal.Server do
   use GenServer
 
+  alias Destila.Terminal.Tmux
+
   defstruct [:pty, :topic, :cols, :rows]
 
   def start_link(opts) do
@@ -10,41 +12,32 @@ defmodule Destila.Terminal.Server do
   def write(server, data), do: GenServer.cast(server, {:write, data})
   def resize(server, cols, rows), do: GenServer.cast(server, {:resize, cols, rows})
 
-  require Logger
-
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
 
     cwd = Keyword.fetch!(opts, :cwd)
     topic = Keyword.fetch!(opts, :topic)
+    session_name = Keyword.get(opts, :session_name, "destila")
+    claude_session_id = Keyword.get(opts, :claude_session_id)
     cols = Keyword.get(opts, :cols, 80)
     rows = Keyword.get(opts, :rows, 24)
 
-    script = build_tmux_command(opts)
+    Tmux.ensure_session(session_name, cwd)
+    setup_claude_window(session_name, cwd, claude_session_id)
 
-    Logger.info(
-      "Terminal starting: /usr/bin/env TERM=xterm-256color COLORTERM=truecolor /bin/sh -c #{inspect(script)}"
-    )
+    attach_cmd = "tmux attach -t #{Tmux.escape_shell(session_name)}"
 
     {:ok, pty} =
       ExPTY.spawn(
         "/usr/bin/env",
-        [
-          "TERM=xterm-256color",
-          "COLORTERM=truecolor",
-          "/bin/sh",
-          "-c",
-          script
-        ],
+        ["TERM=xterm-256color", "COLORTERM=truecolor", "/bin/sh", "-c", attach_cmd],
         cwd: cwd,
         cols: cols,
         rows: rows,
         closeFDs: true
       )
 
-    # ExPTY uses GenServer.start (not start_link), so link manually to ensure
-    # the PTY process is cleaned up if Terminal.Server is killed without terminate/2
     Process.link(pty)
 
     ExPTY.on_data(pty, fn _pty, _pid, data ->
@@ -84,32 +77,23 @@ defmodule Destila.Terminal.Server do
     :ok
   end
 
-  defp build_tmux_command(opts) do
-    session_name = Keyword.get(opts, :session_name, "destila")
-    cwd = Keyword.fetch!(opts, :cwd)
-    claude_session_id = Keyword.get(opts, :claude_session_id)
+  defp setup_claude_window(_session_name, _cwd, nil), do: :ok
 
-    session = escape_shell(session_name)
-    dir = escape_shell(cwd)
+  defp setup_claude_window(session_name, cwd, claude_session_id) do
+    window = "#{session_name}:claude-code"
 
-    attach = "tmux attach -t #{session}"
+    unless Tmux.window_exists?(window) do
+      claude_cmd = build_claude_resume_cmd(claude_session_id)
 
-    create =
-      if claude_session_id do
-        claude_cmd = build_claude_resume_cmd(claude_session_id)
+      cmd =
+        "clear && echo '# run the following command to resume the claude code session:' && " <>
+          "echo '# #{claude_cmd}' && exec $SHELL"
 
-        claude_window_cmd =
-          "clear && echo '# run the following command to resume the claude code session:' && " <>
-            "echo '# #{claude_cmd}' && exec $SHELL"
+      Tmux.new_window(session_name, name: "claude-code", cwd: cwd)
+      Tmux.send_keys(window, cmd)
 
-        "tmux new-session -s #{session} -n shell -c #{dir} \\; " <>
-          "new-window -n 'claude code' -c #{dir} #{escape_shell(claude_window_cmd)} \\; " <>
-          "select-window -t 1"
-      else
-        "tmux new-session -s #{session} -n shell -c #{dir}"
-      end
-
-    "tmux has-session -t #{session} 2>/dev/null && #{attach} || #{create}"
+      System.cmd("tmux", ["select-window", "-t", "#{session_name}:1"], stderr_to_stdout: true)
+    end
   end
 
   defp build_claude_resume_cmd(session_id) do
@@ -132,6 +116,4 @@ defmodule Destila.Terminal.Server do
 
     Enum.join(parts, " ")
   end
-
-  defp escape_shell(str), do: "'" <> String.replace(str, "'", "'\\''") <> "'"
 end
