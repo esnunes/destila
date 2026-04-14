@@ -1,7 +1,7 @@
 Feature: Project Inline Creation
   Users can create a new project inline from the workflow wizard phase.
   A project requires a name and at least one of a git repository URL or
-  a local folder path.
+  a local folder path. Optionally, a run command can be configured.
 
   Background:
     Given I am on the workflow wizard page

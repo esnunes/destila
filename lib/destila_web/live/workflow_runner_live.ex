@@ -685,7 +685,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                         />
                       </span>
                       <span class="text-sm text-base-content/60 truncate flex-1">
-                        Source Code
+                        Terminal
                       </span>
                       <.icon
                         name="hero-arrow-top-right-on-square-micro"
