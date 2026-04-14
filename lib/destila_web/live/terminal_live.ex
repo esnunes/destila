@@ -80,32 +80,34 @@ defmodule DestilaWeb.TerminalLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} page_title={@page_title}>
-      <div class="flex flex-col h-screen">
-        <%!-- Minimal header with back link --%>
-        <div class="flex items-center gap-3 px-4 py-2 border-b border-base-300 bg-base-100 shrink-0">
+      <div class="flex flex-col h-screen bg-base-200">
+        <%!-- Header --%>
+        <div class="flex items-center gap-3 px-4 py-2.5 border-b border-base-300 bg-base-100 shrink-0">
           <.link
             navigate={~p"/sessions/#{@workflow_session.id}"}
-            class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
+            class="btn btn-ghost btn-sm btn-square"
           >
-            <.icon name="hero-arrow-left-micro" class="size-4 text-base-content/60" />
+            <.icon name="hero-arrow-left-micro" class="size-4" />
           </.link>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 min-w-0">
             <.icon name="hero-command-line-micro" class="size-4 text-base-content/40" />
-            <span class="text-sm font-medium text-base-content/70 truncate">
+            <span class="text-sm text-base-content/60 truncate">
               {@workflow_session.title}
             </span>
           </div>
         </div>
 
-        <%!-- Full-height terminal --%>
-        <div
-          id={"terminal-panel-#{@workflow_session.id}"}
-          phx-hook="TerminalPanel"
-          phx-update="ignore"
-          data-session-id={@workflow_session.id}
-          class="flex-1 min-h-0 overflow-hidden"
-        >
-          <div data-terminal-container class="h-full" />
+        <%!-- Terminal container with inset padding --%>
+        <div class="flex-1 min-h-0 p-2 pt-0">
+          <div
+            id={"terminal-panel-#{@workflow_session.id}"}
+            phx-hook="TerminalPanel"
+            phx-update="ignore"
+            data-session-id={@workflow_session.id}
+            class="h-full rounded-b-lg overflow-hidden"
+          >
+            <div data-terminal-container class="h-full" />
+          </div>
         </div>
       </div>
     </Layouts.app>
