@@ -44,7 +44,7 @@ defmodule DestilaWeb.CreateSessionLive do
      |> assign(:project_step, :select)
      |> assign(
        :project_form,
-       to_form(%{"name" => "", "git_repo_url" => "", "local_folder" => ""})
+       to_form(%{"name" => "", "git_repo_url" => "", "local_folder" => "", "run_command" => ""})
      )
      |> assign(:errors, %{})
      |> assign(:page_title, Workflows.default_title(workflow_type))}
@@ -112,6 +112,7 @@ defmodule DestilaWeb.CreateSessionLive do
     name = String.trim(params["name"] || "")
     git_repo_url = non_blank(params["git_repo_url"])
     local_folder = non_blank(params["local_folder"])
+    run_command = non_blank(params["run_command"])
 
     errors = %{}
     errors = if name == "", do: Map.put(errors, :name, "Name is required"), else: errors
@@ -128,7 +129,8 @@ defmodule DestilaWeb.CreateSessionLive do
         Destila.Projects.create_project(%{
           name: name,
           git_repo_url: git_repo_url,
-          local_folder: local_folder
+          local_folder: local_folder,
+          run_command: run_command
         })
 
       {:noreply,

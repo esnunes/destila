@@ -172,6 +172,27 @@ defmodule DestilaWeb.ProjectComponents do
           </p>
         </div>
 
+        <div class="rounded-lg p-3 space-y-3 bg-base-200/50">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-medium text-base-content/50">Service</span>
+            <span class="text-xs text-base-content/30">optional</span>
+          </div>
+
+          <fieldset class="fieldset">
+            <label class="fieldset-label text-xs font-medium" for="project-run-command">
+              Run command
+            </label>
+            <input
+              type="text"
+              id="project-run-command"
+              name="run_command"
+              value={@form["run_command"] && @form["run_command"].value}
+              placeholder="mix setup && mix phx.server"
+              class="input input-bordered w-full"
+            />
+          </fieldset>
+        </div>
+
         <button type="submit" class="btn btn-primary w-full" id="create-and-select-btn">
           <.icon name="hero-plus-micro" class="size-4" /> Create & Select
         </button>

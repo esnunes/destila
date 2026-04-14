@@ -165,6 +165,81 @@ defmodule DestilaWeb.ProjectsLiveTest do
     end
   end
 
+  describe "run configuration" do
+    @tag feature: @feature, scenario: "Create a project with run command and port definitions"
+    test "creates a project with run command and port definitions", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      # Add a port definition
+      view |> element("#add-port-btn") |> render_click()
+      assert has_element?(view, "#port-input-0")
+
+      view
+      |> form("#project-form-create_project", %{
+        "name" => "Service Project",
+        "git_repo_url" => "https://github.com/test/service",
+        "run_command" => "mix phx.server"
+      })
+      |> render_submit()
+
+      html = render(view)
+      assert html =~ "Service Project"
+      assert html =~ "mix phx.server"
+    end
+
+    @tag feature: @feature, scenario: "Edit a project's run configuration"
+    test "edits a project's run configuration", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Run Config Project",
+          git_repo_url: "https://github.com/test/repo",
+          run_command: "npm start"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      # Verify run command is pre-filled
+      assert has_element?(view, "#project-run-command")
+
+      view
+      |> form("#project-form-update_project", %{
+        "run_command" => "mix phx.server"
+      })
+      |> render_submit()
+
+      html = render(view)
+      assert html =~ "mix phx.server"
+    end
+
+    @tag feature: @feature,
+         scenario: "Port definitions require a valid environment variable name"
+    test "shows error for invalid port definition name", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      # Add a port and set an invalid value
+      view |> element("#add-port-btn") |> render_click()
+
+      view
+      |> element("#port-input-0")
+      |> render_blur(%{"index" => "0", "value" => "invalid-port"})
+
+      view
+      |> form("#project-form-create_project", %{
+        "name" => "Bad Port Project",
+        "git_repo_url" => "https://github.com/test/repo"
+      })
+      |> render_submit()
+
+      assert render(view) =~ "not a valid env var name"
+    end
+  end
+
   describe "delete project" do
     @tag feature: @feature, scenario: "Delete a project not linked to any sessions"
     test "deletes a project not linked to sessions", %{conn: conn} do
