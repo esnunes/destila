@@ -109,6 +109,22 @@ defmodule DestilaWeb.CreateSessionLive do
     {:noreply, assign(socket, :project_step, :select)}
   end
 
+  def handle_event("validate_project_form", params, socket) do
+    port_definitions =
+      params
+      |> Enum.filter(fn {k, _} -> String.starts_with?(k, "port_def_") end)
+      |> Enum.sort_by(fn {k, _} -> k end)
+      |> Enum.map(fn {_, v} -> v end)
+
+    port_definitions =
+      if port_definitions == [], do: socket.assigns.port_definitions, else: port_definitions
+
+    {:noreply,
+     socket
+     |> assign(:project_form, to_form(params))
+     |> assign(:port_definitions, port_definitions)}
+  end
+
   def handle_event("add_port", _params, socket) do
     {:noreply, assign(socket, :port_definitions, socket.assigns.port_definitions ++ [""])}
   end

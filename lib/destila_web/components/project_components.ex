@@ -88,6 +88,7 @@ defmodule DestilaWeb.ProjectComponents do
 
       <form
         phx-submit="create_and_select_project"
+        phx-change="validate_project_form"
         phx-target={@target}
         class="space-y-4"
         id="inline-project-form"
