@@ -620,12 +620,12 @@ defmodule DestilaWeb.WorkflowRunnerLive do
             <div
               id="metadata-sidebar"
               phx-hook=".MetadataSidebar"
-              class="flex flex-col border-l border-base-300 shrink-0"
+              class="flex flex-col border-l border-base-300 shrink-0 bg-base-100"
             >
               <%!-- Toggle button — always visible --%>
               <button
                 id="metadata-sidebar-toggle"
-                class="px-2 py-3 border-b border-base-300 bg-base-100 hover:bg-base-200 transition-colors duration-150 flex items-center gap-1.5"
+                class="px-3 py-2.5 border-b border-base-300 bg-base-100 hover:bg-base-200/60 transition-colors duration-150 flex items-center gap-1.5"
                 data-action="toggle-sidebar"
               >
                 <.icon
@@ -636,180 +636,172 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                   name="hero-chevron-left-micro"
                   class="size-3.5 text-base-content/40 sidebar-icon-expanded"
                 />
-                <span class="text-xs font-medium text-base-content/40 sidebar-label-expanded">
+                <span class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider sidebar-label-expanded">
                   Output
                 </span>
               </button>
 
               <%!-- Sidebar content — toggled by hook --%>
-              <div id="metadata-sidebar-content" class="w-80 overflow-y-auto flex-1 bg-base-100">
-                <%!-- User prompt section --%>
-                <div
-                  id="user-prompt-section"
-                  class="p-4 border-b border-base-300/60"
-                >
-                  <div class="flex items-center gap-2 mb-3">
-                    <.icon
-                      name="hero-chat-bubble-left-ellipsis-micro"
-                      class="size-4 text-base-content/30"
-                    />
-                    <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">
-                      User Prompt
-                    </h3>
-                  </div>
-                  <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150">
-                    <.icon
-                      name="hero-document-text-micro"
-                      class="size-3 text-base-content/30 shrink-0"
-                    />
-                    <span class="font-medium text-sm text-base-content/70 truncate flex-1">
-                      Prompt
-                    </span>
+              <div id="metadata-sidebar-content" class="w-80 overflow-y-auto flex-1">
+                <%!-- Input section — user prompt + source code --%>
+                <div id="user-prompt-section" class="px-3 pt-3 pb-3">
+                  <h3 class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5 px-2">
+                    Workflow Session
+                  </h3>
+                  <div class="space-y-0.5">
                     <button
                       id="view-user-prompt-btn"
                       phx-click="open_markdown_modal"
                       phx-value-content={@workflow_session.user_prompt}
                       phx-value-label="User Prompt"
-                      class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
+                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
                       aria-label="View user prompt"
                     >
-                      <.icon name="hero-eye-micro" class="size-4 text-primary" />
+                      <span class="size-5 rounded flex items-center justify-center shrink-0">
+                        <.icon
+                          name="hero-chat-bubble-left-ellipsis-micro"
+                          class="size-3.5 text-base-content/30"
+                        />
+                      </span>
+                      <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                        User Prompt
+                      </span>
+                      <.icon
+                        name="hero-eye-micro"
+                        class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                      />
                     </button>
-                  </div>
-                </div>
-
-                <%!-- Source code section --%>
-                <div
-                  :if={@worktree_path}
-                  class="p-4 border-b border-base-300/60"
-                >
-                  <div class="flex items-center gap-2 mb-3">
-                    <.icon
-                      name="hero-folder-open-micro"
-                      class="size-4 text-base-content/30"
-                    />
-                    <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide flex-1">
-                      Source Code
-                    </h3>
                     <.link
+                      :if={@worktree_path}
                       id="open-terminal-btn"
                       navigate={~p"/sessions/#{@workflow_session.id}/terminal"}
-                      class="p-1 rounded-md transition-colors text-[0px] hover:bg-base-300/50 text-primary"
+                      class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
                       aria-label="Open terminal"
                     >
-                      <.icon name="hero-command-line-micro" class="size-4" />
+                      <span class="size-5 rounded flex items-center justify-center shrink-0">
+                        <.icon
+                          name="hero-command-line-micro"
+                          class="size-3.5 text-base-content/30"
+                        />
+                      </span>
+                      <span class="text-sm text-base-content/60 truncate flex-1">
+                        Source Code
+                      </span>
+                      <.icon
+                        name="hero-arrow-top-right-on-square-micro"
+                        class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                      />
                     </.link>
                   </div>
-                  <code class="text-xs text-base-content/50 break-all leading-relaxed">
-                    {@worktree_path}
-                  </code>
                 </div>
 
-                <%!-- Exported metadata section --%>
-                <div class="p-4">
-                  <div class="flex items-center gap-2 mb-4">
-                    <.icon
-                      name="hero-arrow-up-tray-micro"
-                      class="size-4 text-base-content/30"
-                    />
-                    <h3 class="text-xs font-semibold text-base-content/50 uppercase tracking-wide">
-                      Exported Metadata
-                    </h3>
-                  </div>
+                <%!-- Divider between input and output --%>
+                <div class="border-t border-base-300/60 mx-3"></div>
+
+                <%!-- Exported metadata section — primary content --%>
+                <div class="px-3 pt-3 pb-6 flex-1">
+                  <h3 class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5 px-2">
+                    Exported Metadata
+                  </h3>
 
                   <%= if @exported_metadata == [] do %>
-                    <div class="flex flex-col items-center py-8 text-center">
+                    <div class="flex flex-col items-center py-10 text-center">
                       <.icon
                         name="hero-inbox-micro"
-                        class="size-8 text-base-content/15 mb-2"
+                        class="size-7 text-base-content/10 mb-2.5"
                       />
-                      <p class="text-xs text-base-content/30">
+                      <p class="text-xs text-base-content/25">
                         No metadata exported yet
                       </p>
                     </div>
                   <% else %>
-                    <div class="space-y-1.5">
+                    <div class="space-y-0.5">
                       <%= for meta <- @exported_metadata do %>
                         <%= cond do %>
                           <% Map.has_key?(meta.value, "video_file") -> %>
-                            <div
+                            <button
                               id={"metadata-entry-#{meta.id}"}
-                              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
+                              phx-click="open_video_modal"
+                              phx-value-id={meta.id}
+                              class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                              aria-label={"Play #{humanize_key(meta.key)}"}
                             >
-                              <.icon
-                                name="hero-film-micro"
-                                class="size-3 text-base-content/30 shrink-0"
-                              />
-                              <span class="font-medium text-sm text-base-content/70 truncate flex-1">
+                              <span class="size-5 rounded flex items-center justify-center bg-error/10 shrink-0">
+                                <.icon
+                                  name="hero-film-micro"
+                                  class="size-3 text-error/70"
+                                />
+                              </span>
+                              <span class="text-sm text-base-content/60 truncate flex-1 text-left">
                                 {humanize_key(meta.key)}
                               </span>
-                              <button
-                                phx-click="open_video_modal"
-                                phx-value-id={meta.id}
-                                class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
-                                aria-label={"Play #{humanize_key(meta.key)}"}
-                              >
-                                <.icon name="hero-play-micro" class="size-4 text-primary" />
-                              </button>
-                            </div>
+                              <.icon
+                                name="hero-play-micro"
+                                class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                              />
+                            </button>
                           <% Map.has_key?(meta.value, "markdown") -> %>
-                            <div
+                            <button
                               id={"metadata-entry-#{meta.id}"}
-                              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
+                              phx-click="open_markdown_modal"
+                              phx-value-id={meta.id}
+                              class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                              aria-label={"View #{humanize_key(meta.key)}"}
                             >
-                              <.icon
-                                name="hero-document-text-micro"
-                                class="size-3 text-base-content/30 shrink-0"
-                              />
-                              <span class="font-medium text-sm text-base-content/70 truncate flex-1">
+                              <span class="size-5 rounded flex items-center justify-center bg-info/10 shrink-0">
+                                <.icon
+                                  name="hero-document-text-micro"
+                                  class="size-3 text-info/70"
+                                />
+                              </span>
+                              <span class="text-sm text-base-content/60 truncate flex-1 text-left">
                                 {humanize_key(meta.key)}
                               </span>
-                              <button
-                                phx-click="open_markdown_modal"
-                                phx-value-id={meta.id}
-                                class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
-                                aria-label={"View #{humanize_key(meta.key)}"}
-                              >
-                                <.icon name="hero-eye-micro" class="size-4 text-primary" />
-                              </button>
-                            </div>
+                              <.icon
+                                name="hero-eye-micro"
+                                class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                              />
+                            </button>
                           <% Map.has_key?(meta.value, "text_file") or Map.has_key?(meta.value, "text") -> %>
-                            <div
+                            <button
                               id={"metadata-entry-#{meta.id}"}
-                              class="flex items-center gap-2 px-3 py-2 rounded-lg border border-base-300/60 hover:bg-base-200/50 transition-colors duration-150"
+                              phx-click="open_text_modal"
+                              phx-value-id={meta.id}
+                              class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                              aria-label={"View #{humanize_key(meta.key)}"}
                             >
-                              <.icon
-                                name="hero-document-text-micro"
-                                class="size-3 text-base-content/30 shrink-0"
-                              />
-                              <span class="font-medium text-sm text-base-content/70 truncate flex-1">
+                              <span class="size-5 rounded flex items-center justify-center bg-success/10 shrink-0">
+                                <.icon
+                                  name="hero-document-text-micro"
+                                  class="size-3 text-success/70"
+                                />
+                              </span>
+                              <span class="text-sm text-base-content/60 truncate flex-1 text-left">
                                 {humanize_key(meta.key)}
                               </span>
-                              <button
-                                phx-click="open_text_modal"
-                                phx-value-id={meta.id}
-                                class="p-1 rounded-md hover:bg-base-300/50 transition-colors"
-                                aria-label={"View #{humanize_key(meta.key)}"}
-                              >
-                                <.icon name="hero-eye-micro" class="size-4 text-primary" />
-                              </button>
-                            </div>
+                              <.icon
+                                name="hero-eye-micro"
+                                class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                              />
+                            </button>
                           <% true -> %>
                             <details
                               id={"metadata-entry-#{meta.id}"}
-                              class="group rounded-lg border border-base-300/60 overflow-hidden"
+                              class="group rounded-md overflow-hidden"
                               open
                             >
-                              <summary class="flex items-center gap-2 cursor-pointer px-3 py-2 hover:bg-base-200/50 transition-colors duration-150 text-sm select-none">
-                                <.icon
-                                  name="hero-chevron-right-micro"
-                                  class="size-3 text-base-content/30 group-open:rotate-90 transition-transform duration-150 shrink-0"
-                                />
-                                <span class="font-medium text-base-content/70 truncate">
+                              <summary class="flex items-center gap-2.5 cursor-pointer px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 text-sm select-none">
+                                <span class="size-5 rounded flex items-center justify-center bg-warning/10 shrink-0">
+                                  <.icon
+                                    name="hero-chevron-right-micro"
+                                    class="size-3 text-warning/70 group-open:rotate-90 transition-transform duration-150"
+                                  />
+                                </span>
+                                <span class="text-base-content/60 truncate">
                                   {humanize_key(meta.key)}
                                 </span>
                               </summary>
-                              <div class="border-t border-base-300/40 bg-base-200/30">
+                              <div class="ml-[18px] mt-0.5 border-l-2 border-base-300/60 bg-base-200/20 rounded-r-md">
                                 <.metadata_value_block value={meta.value} />
                               </div>
                             </details>
