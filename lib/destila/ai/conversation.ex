@@ -51,10 +51,13 @@ defmodule Destila.AI.Conversation do
 
     skill_section = Skills.assemble_skills(all_skills)
 
+    service_section = build_service_section(ws)
+
     sections =
       [
         if(tool_section != "", do: "# Tools\n\n#{tool_section}"),
         if(skill_section != "", do: "# Skills\n\n#{skill_section}"),
+        service_section,
         "# Prompt\n\n#{phase_prompt}"
       ]
 
@@ -248,6 +251,22 @@ defmodule Destila.AI.Conversation do
   end
 
   # --- Private ---
+
+  defp build_service_section(%{service_state: nil}), do: nil
+
+  defp build_service_section(%{service_state: state}) do
+    status = state["status"]
+    ports = state["ports"] || %{}
+
+    port_lines =
+      ports
+      |> Enum.map(fn {name, port} -> "#{name}=#{port}" end)
+      |> Enum.join(", ")
+
+    port_info = if port_lines != "", do: "\nPorts: #{port_lines}", else: ""
+
+    "# Service Status\n\nThe project service is currently #{status}.#{port_info}"
+  end
 
   defp get_phase(ws, phase_number) do
     Enum.at(Workflows.phases(ws.workflow_type), phase_number - 1)

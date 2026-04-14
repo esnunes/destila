@@ -17,7 +17,8 @@ defmodule Destila.AI.ClaudeSession do
     "Bash(git log:*)",
     "Bash(git show:*)",
     "mcp__destila__ask_user_question",
-    "mcp__destila__session"
+    "mcp__destila__session",
+    "mcp__destila__service"
   ]
 
   # Client API
@@ -147,7 +148,12 @@ defmodule Destila.AI.ClaudeSession do
     claude_opts = Keyword.put_new(claude_opts, :allowed_tools, @default_allowed_tools)
 
     claude_opts =
-      Keyword.put_new(claude_opts, :mcp_servers, %{"destila" => Destila.AI.Tools})
+      Keyword.put_new(claude_opts, :mcp_servers, %{
+        "destila" => %{
+          module: Destila.AI.Tools,
+          assigns: %{workflow_session_id: workflow_session_id}
+        }
+      })
 
     claude_opts = Keyword.put_new(claude_opts, :setting_sources, ["user", "project"])
 
