@@ -50,7 +50,7 @@ defmodule DestilaWeb.ChatComponents do
     <div class="flex flex-col h-full">
       <%!-- Scrollable chat area --%>
       <div class="flex-1 min-h-0 overflow-y-auto px-6 py-6" id="chat-messages" phx-hook="ScrollBottom">
-        <div class="max-w-2xl mx-auto">
+        <div class="max-w-3xl mx-auto">
           <%= for {phase, group} <- @phase_groups do %>
             <%= if @workflow_session.total_phases > 1 do %>
               <details
@@ -153,7 +153,7 @@ defmodule DestilaWeb.ChatComponents do
       <%!-- Non-interactive: retry/cancel controls --%>
       <div
         :if={@non_interactive && !@current_step.completed}
-        class="max-w-2xl mx-auto w-full px-6 pb-4"
+        class="max-w-3xl mx-auto w-full px-6 pb-4"
       >
         <div class="flex items-center justify-center gap-3">
           <button
@@ -182,7 +182,7 @@ defmodule DestilaWeb.ChatComponents do
             !@current_step.completed &&
             @phase_status not in [:awaiting_confirmation]
         }
-        class="max-w-2xl mx-auto w-full px-6 pb-4"
+        class="max-w-3xl mx-auto w-full px-6 pb-4"
       >
         <.text_input
           disabled={@phase_status == :processing}
@@ -429,17 +429,17 @@ defmodule DestilaWeb.ChatComponents do
       phx-hook=".MarkdownCard"
       data-content={@content}
     >
-      <div class="flex items-center gap-2 px-4 py-2 bg-primary/10 border-b border-primary/20 justify-between">
-        <span class="text-xs font-medium text-primary uppercase tracking-wide">
+      <div class="flex items-center gap-2 px-3 py-1.5 border-b border-base-300 justify-between">
+        <span class="text-[10px] font-semibold text-base-content/50 uppercase tracking-wider">
           {@label}
         </span>
         <div class="flex items-center gap-1">
-          <div role="tablist" class="flex rounded-lg bg-base-300/50 p-0.5">
+          <div role="tablist" class="flex rounded-md bg-base-300/40 p-0.5">
             <button
               role="tab"
               aria-selected="true"
               data-view="rendered"
-              class="md-card-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors bg-base-100 text-base-content shadow-sm"
+              class="md-card-tab px-2 py-0.5 text-[11px] font-medium rounded transition-colors bg-base-100 text-base-content shadow-sm"
             >
               Rendered
             </button>
@@ -447,24 +447,27 @@ defmodule DestilaWeb.ChatComponents do
               role="tab"
               aria-selected="false"
               data-view="markdown"
-              class="md-card-tab px-2 py-0.5 text-xs font-medium rounded-md transition-colors text-base-content/50 hover:text-base-content"
+              class="md-card-tab px-2 py-0.5 text-[11px] font-medium rounded transition-colors text-base-content/40 hover:text-base-content/60"
             >
               Markdown
             </button>
           </div>
           <button
-            class="md-card-copy-btn ml-1 p-1 rounded-md hover:bg-base-300/50 transition-colors"
+            class="md-card-copy-btn p-1 rounded-md hover:bg-base-300/50 transition-colors group"
             aria-label="Copy markdown to clipboard"
           >
-            <.icon name="hero-clipboard-document-micro" class="size-4 text-base-content/50" />
+            <.icon
+              name="hero-clipboard-document-micro"
+              class="size-3.5 text-base-content/30 group-hover:text-base-content/60 transition-colors"
+            />
           </button>
         </div>
       </div>
-      <div data-rendered class="px-4 py-3 text-sm text-base-content prose prose-sm max-w-none">
+      <div data-rendered class="px-3 py-2.5 text-sm text-base-content/80 prose prose-sm max-w-none">
         {raw(markdown_to_html(@content))}
       </div>
-      <div data-markdown class="hidden px-4 py-3">
-        <pre class="text-sm font-mono text-base-content whitespace-pre-wrap break-words bg-base-300/30 rounded-lg p-3 overflow-x-auto"><code>{@content}</code></pre>
+      <div data-markdown class="hidden px-3 py-2.5">
+        <pre class="text-xs font-mono text-base-content/70 whitespace-pre-wrap break-words bg-base-300/20 rounded-lg p-3 overflow-x-auto leading-relaxed"><code>{@content}</code></pre>
       </div>
     </div>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".MarkdownCard">
@@ -512,10 +515,10 @@ defmodule DestilaWeb.ChatComponents do
             tab.setAttribute("aria-selected", isActive)
             if (isActive) {
               tab.classList.add("bg-base-100", "text-base-content", "shadow-sm")
-              tab.classList.remove("text-base-content/50")
+              tab.classList.remove("text-base-content/40")
             } else {
               tab.classList.remove("bg-base-100", "text-base-content", "shadow-sm")
-              tab.classList.add("text-base-content/50")
+              tab.classList.add("text-base-content/40")
             }
           })
         },
@@ -563,7 +566,7 @@ defmodule DestilaWeb.ChatComponents do
         D
       </div>
       <div class="max-w-[80%]">
-        <div class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden">
+        <div class="rounded-xl border border-base-300 bg-base-200/50 overflow-hidden">
           <.markdown_viewer id={@id} content={@content} label={humanize_key(@key)} />
         </div>
       </div>
@@ -584,22 +587,25 @@ defmodule DestilaWeb.ChatComponents do
       <div class="max-w-[80%]">
         <div
           id={@id}
-          class="rounded-2xl border-2 border-primary/20 bg-base-200 overflow-hidden"
+          class="rounded-xl border border-base-300 bg-base-200/50 overflow-hidden"
           phx-hook=".PlainCard"
           data-content={@content}
         >
-          <div class="px-4 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2">
-            <span class="text-xs font-medium text-primary uppercase tracking-wide">
+          <div class="px-3 py-1.5 border-b border-base-300 flex items-center justify-between gap-2">
+            <span class="text-[10px] font-semibold text-base-content/50 uppercase tracking-wider">
               {humanize_key(@key)}
             </span>
             <button
-              class="plain-card-copy-btn p-1 rounded-md hover:bg-base-300/50 transition-colors"
+              class="plain-card-copy-btn p-1 rounded-md hover:bg-base-300/50 transition-colors group"
               aria-label="Copy to clipboard"
             >
-              <.icon name="hero-clipboard-document-micro" class="size-4 text-base-content/50" />
+              <.icon
+                name="hero-clipboard-document-micro"
+                class="size-3.5 text-base-content/30 group-hover:text-base-content/60 transition-colors"
+              />
             </button>
           </div>
-          <div class="px-4 py-3 text-sm text-base-content whitespace-pre-wrap break-words">
+          <div class="px-3 py-2.5 text-xs text-base-content/70 whitespace-pre-wrap break-words font-mono leading-relaxed">
             {@content}
           </div>
         </div>
