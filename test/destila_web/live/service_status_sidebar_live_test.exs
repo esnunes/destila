@@ -72,8 +72,11 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       assert has_element?(view, "#service-status-item")
       refute has_element?(view, "#service-status-link")
+      assert has_element?(view, "#service-status-item .text-base-content\\/20")
     end
 
+    @tag feature: "service_status_sidebar",
+         scenario: "Service item hidden when session has no project"
     test "does not show service item when session has no project", %{conn: conn} do
       ws = create_session(%{project_id: nil})
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -162,6 +165,8 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       refute has_element?(view, "#service-status-link")
     end
 
+    @tag feature: "service_status_sidebar",
+         scenario: "Running service without available port shows green icon"
     test "renders static element when running but port_definitions is empty", %{conn: conn} do
       project = create_project(%{run_command: "mix phx.server", port_definitions: []})
 
@@ -175,8 +180,11 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       assert has_element?(view, "#service-status-item")
       refute has_element?(view, "#service-status-link")
+      assert has_element?(view, "#service-status-item .text-green-500")
     end
 
+    @tag feature: "service_status_sidebar",
+         scenario: "Running service without available port shows green icon"
     test "renders static element when running but first port not in ports map", %{conn: conn} do
       project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
 
@@ -190,12 +198,13 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       assert has_element?(view, "#service-status-item")
       refute has_element?(view, "#service-status-link")
+      assert has_element?(view, "#service-status-item .text-green-500")
     end
   end
 
   describe "real-time updates" do
     @tag feature: "service_status_sidebar",
-         scenario: "Service icon is green when service is running"
+         scenario: "Service status updates in real-time"
     test "updates when service state changes via PubSub", %{conn: conn} do
       project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
       ws = create_session(%{project_id: project.id, service_state: nil})

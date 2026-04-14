@@ -41,3 +41,21 @@ Feature: Service Status Sidebar
     And the session's service_state is nil
     Then the service item should not be a clickable link
     And the service icon should be muted/gray
+
+  Scenario: Service item hidden when session has no project
+    Given I am on a session detail page
+    And the session has no project assigned
+    Then no service item should appear in the sidebar
+
+  Scenario: Running service without available port shows green icon
+    Given I am on a session detail page
+    And the session's service_state status is "running"
+    And the project has empty port_definitions or the port is not yet assigned
+    Then the service item should not be a clickable link
+    But the service icon should still be green
+
+  Scenario: Service status updates in real-time
+    Given I am on a session detail page
+    And the session's service_state changes from stopped to running
+    Then the service item should update to reflect the new state
+    And the service link should become clickable with the correct port
