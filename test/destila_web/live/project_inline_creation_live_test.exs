@@ -30,12 +30,12 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
 
       view |> element("#create-new-project-btn") |> render_click()
 
-      assert has_element?(view, "#project-name")
-      assert has_element?(view, "#project-git-repo-url")
-      assert has_element?(view, "#project-local-folder")
+      assert has_element?(view, "#project-form-inline-name")
+      assert has_element?(view, "#project-form-inline-git-repo-url")
+      assert has_element?(view, "#project-form-inline-local-folder")
 
       view
-      |> form("#inline-project-form", %{
+      |> form("#project-form-inline-form", %{
         "name" => "My New Project",
         "git_repo_url" => "https://github.com/test/new-repo"
       })
@@ -53,7 +53,7 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
       view |> element("#create-new-project-btn") |> render_click()
 
       view
-      |> form("#inline-project-form", %{
+      |> form("#project-form-inline-form", %{
         "name" => "Local Project",
         "local_folder" => "/home/user/projects/local"
       })
@@ -71,7 +71,7 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
       view |> element("#create-new-project-btn") |> render_click()
 
       view
-      |> form("#inline-project-form", %{
+      |> form("#project-form-inline-form", %{
         "name" => "Full Project",
         "git_repo_url" => "https://github.com/test/full",
         "local_folder" => "/home/user/projects/full"
@@ -90,12 +90,12 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
       view |> element("#create-new-project-btn") |> render_click()
 
       view
-      |> form("#inline-project-form", %{
+      |> form("#project-form-inline-form", %{
         "name" => "No Location Project"
       })
       |> render_submit()
 
-      assert render(view) =~ "Provide at least one"
+      assert render(view) =~ "provide at least one"
     end
 
     @tag feature: @feature, scenario: "Cannot create a project without a name"
@@ -105,13 +105,13 @@ defmodule DestilaWeb.ProjectInlineCreationLiveTest do
       view |> element("#create-new-project-btn") |> render_click()
 
       view
-      |> form("#inline-project-form", %{
+      |> form("#project-form-inline-form", %{
         "name" => "",
         "git_repo_url" => "https://github.com/test/repo"
       })
       |> render_submit()
 
-      assert render(view) =~ "Name is required"
+      assert render(view) =~ "can&#39;t be blank"
     end
   end
 end

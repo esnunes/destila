@@ -1,7 +1,7 @@
 ---
 title: "refactor: Extract project form into shared LiveComponent"
 type: refactor
-status: active
+status: completed
 date: 2026-04-14
 ---
 

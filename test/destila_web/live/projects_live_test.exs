@@ -46,7 +46,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
       assert has_element?(view, "#create-project-card")
 
       view
-      |> form("#project-form-create_project", %{
+      |> form("#project-form-create-form", %{
         "name" => "New Project",
         "git_repo_url" => "https://github.com/new/repo"
       })
@@ -63,7 +63,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#new-project-btn") |> render_click()
 
       view
-      |> form("#project-form-create_project", %{
+      |> form("#project-form-create-form", %{
         "name" => "Local Project",
         "local_folder" => "/path/to/project"
       })
@@ -79,7 +79,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#new-project-btn") |> render_click()
 
       view
-      |> form("#project-form-create_project", %{
+      |> form("#project-form-create-form", %{
         "name" => "Full Project",
         "git_repo_url" => "https://github.com/full/repo",
         "local_folder" => "/path/to/full"
@@ -96,10 +96,10 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#new-project-btn") |> render_click()
 
       view
-      |> form("#project-form-create_project", %{"name" => "Incomplete"})
+      |> form("#project-form-create-form", %{"name" => "Incomplete"})
       |> render_submit()
 
-      assert render(view) =~ "Provide at least one"
+      assert render(view) =~ "provide at least one"
     end
 
     @tag feature: @feature, scenario: "Cannot create a project without a name"
@@ -109,13 +109,13 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#new-project-btn") |> render_click()
 
       view
-      |> form("#project-form-create_project", %{
+      |> form("#project-form-create-form", %{
         "name" => "",
         "git_repo_url" => "https://github.com/test/repo"
       })
       |> render_submit()
 
-      assert render(view) =~ "Name is required"
+      assert render(view) =~ "can&#39;t be blank"
     end
   end
 
@@ -131,10 +131,10 @@ defmodule DestilaWeb.ProjectsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/projects")
 
       view |> element("#edit-project-#{project.id}") |> render_click()
-      assert has_element?(view, "#project-form-update_project")
+      assert has_element?(view, "#project-form-#{project.id}-form")
 
       view
-      |> form("#project-form-update_project", %{"name" => "Updated Name"})
+      |> form("#project-form-#{project.id}-form", %{"name" => "Updated Name"})
       |> render_submit()
 
       assert render(view) =~ "Updated Name"
@@ -153,15 +153,15 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#edit-project-#{project.id}") |> render_click()
 
       view
-      |> form("#project-form-update_project", %{
+      |> form("#project-form-#{project.id}-form", %{
         "name" => "",
         "git_repo_url" => "",
         "local_folder" => ""
       })
       |> render_submit()
 
-      assert render(view) =~ "Name is required"
-      assert render(view) =~ "Provide at least one"
+      assert render(view) =~ "can&#39;t be blank"
+      assert render(view) =~ "provide at least one"
     end
   end
 
@@ -173,11 +173,11 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#new-project-btn") |> render_click()
 
       # Add a port definition
-      view |> element("#add-port-btn") |> render_click()
-      assert has_element?(view, "#port-input-0")
+      view |> element("#project-form-create-add-port-btn") |> render_click()
+      assert has_element?(view, "#project-form-create-port-input-0")
 
       view
-      |> form("#project-form-create_project", %{
+      |> form("#project-form-create-form", %{
         "name" => "Service Project",
         "git_repo_url" => "https://github.com/test/service",
         "run_command" => "mix phx.server"
@@ -203,10 +203,10 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#edit-project-#{project.id}") |> render_click()
 
       # Verify run command is pre-filled
-      assert has_element?(view, "#project-run-command")
+      assert has_element?(view, "#project-form-#{project.id}-run-command")
 
       view
-      |> form("#project-form-update_project", %{
+      |> form("#project-form-#{project.id}-form", %{
         "run_command" => "mix phx.server"
       })
       |> render_submit()
@@ -223,20 +223,20 @@ defmodule DestilaWeb.ProjectsLiveTest do
       view |> element("#new-project-btn") |> render_click()
 
       # Add a port and set an invalid value
-      view |> element("#add-port-btn") |> render_click()
+      view |> element("#project-form-create-add-port-btn") |> render_click()
 
       view
-      |> element("#port-input-0")
+      |> element("#project-form-create-port-input-0")
       |> render_blur(%{"index" => "0", "value" => "invalid-port"})
 
       view
-      |> form("#project-form-create_project", %{
+      |> form("#project-form-create-form", %{
         "name" => "Bad Port Project",
         "git_repo_url" => "https://github.com/test/repo"
       })
       |> render_submit()
 
-      assert render(view) =~ "not a valid env var name"
+      assert render(view) =~ "must start with A-Z"
     end
   end
 
