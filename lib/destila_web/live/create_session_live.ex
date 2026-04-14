@@ -47,6 +47,7 @@ defmodule DestilaWeb.CreateSessionLive do
        to_form(%{"name" => "", "git_repo_url" => "", "local_folder" => "", "run_command" => ""})
      )
      |> assign(:errors, %{})
+     |> assign(:port_definitions, [])
      |> assign(:page_title, Workflows.default_title(workflow_type))}
   end
 
@@ -108,11 +109,35 @@ defmodule DestilaWeb.CreateSessionLive do
     {:noreply, assign(socket, :project_step, :select)}
   end
 
+  def handle_event("add_port", _params, socket) do
+    {:noreply, assign(socket, :port_definitions, socket.assigns.port_definitions ++ [""])}
+  end
+
+  def handle_event("remove_port", %{"index" => index}, socket) do
+    index = String.to_integer(index)
+
+    {:noreply,
+     assign(socket, :port_definitions, List.delete_at(socket.assigns.port_definitions, index))}
+  end
+
+  def handle_event("update_port", params, socket) do
+    index = String.to_integer(params["index"])
+    value = params["value"] || ""
+
+    {:noreply,
+     assign(
+       socket,
+       :port_definitions,
+       List.replace_at(socket.assigns.port_definitions, index, value)
+     )}
+  end
+
   def handle_event("create_and_select_project", params, socket) do
     name = String.trim(params["name"] || "")
     git_repo_url = non_blank(params["git_repo_url"])
     local_folder = non_blank(params["local_folder"])
     run_command = non_blank(params["run_command"])
+    port_defs = Enum.reject(socket.assigns.port_definitions, &(&1 == ""))
 
     errors = %{}
     errors = if name == "", do: Map.put(errors, :name, "Name is required"), else: errors
@@ -130,7 +155,8 @@ defmodule DestilaWeb.CreateSessionLive do
           name: name,
           git_repo_url: git_repo_url,
           local_folder: local_folder,
-          run_command: run_command
+          run_command: run_command,
+          port_definitions: port_defs
         })
 
       {:noreply,
@@ -138,6 +164,7 @@ defmodule DestilaWeb.CreateSessionLive do
        |> assign(:project_id, project.id)
        |> assign(:projects, Destila.Projects.list_projects())
        |> assign(:project_step, :select)
+       |> assign(:port_definitions, [])
        |> assign(:errors, %{})}
     else
       {:noreply,
@@ -328,6 +355,7 @@ defmodule DestilaWeb.CreateSessionLive do
               step={@project_step}
               form={@project_form}
               errors={@errors}
+              port_definitions={@port_definitions}
               target={nil}
             />
           </div>

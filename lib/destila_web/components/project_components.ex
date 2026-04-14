@@ -12,6 +12,7 @@ defmodule DestilaWeb.ProjectComponents do
   attr :step, :atom, default: :select
   attr :form, :map, default: nil
   attr :errors, :map, default: %{}
+  attr :port_definitions, :list, default: []
   attr :target, :any, required: true
 
   def project_selector(assigns) do
@@ -191,6 +192,58 @@ defmodule DestilaWeb.ProjectComponents do
               class="input input-bordered w-full"
             />
           </fieldset>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-xs font-medium text-base-content/70">Port definitions</label>
+              <button
+                type="button"
+                phx-click="add_port"
+                phx-target={@target}
+                class="btn btn-ghost btn-xs"
+                id="inline-add-port-btn"
+              >
+                <.icon name="hero-plus-micro" class="size-3" /> Add port
+              </button>
+            </div>
+
+            <div :if={@port_definitions != []} class="space-y-2">
+              <div
+                :for={{pd, idx} <- Enum.with_index(@port_definitions)}
+                class="flex items-center gap-2"
+                id={"inline-port-def-#{idx}"}
+              >
+                <input
+                  type="text"
+                  name={"port_def_#{idx}"}
+                  value={pd}
+                  placeholder="PORT"
+                  phx-blur="update_port"
+                  phx-target={@target}
+                  phx-value-index={idx}
+                  class={[
+                    "input input-bordered w-full font-mono uppercase",
+                    @errors[:port_definitions] && "input-error"
+                  ]}
+                  id={"inline-port-input-#{idx}"}
+                />
+                <button
+                  type="button"
+                  phx-click="remove_port"
+                  phx-target={@target}
+                  phx-value-index={idx}
+                  class="btn btn-ghost btn-xs text-error/60 hover:text-error"
+                  id={"inline-remove-port-#{idx}"}
+                >
+                  <.icon name="hero-x-mark-micro" class="size-4" />
+                </button>
+              </div>
+            </div>
+
+            <p :if={@errors[:port_definitions]} class="text-xs text-error mt-1">
+              {@errors[:port_definitions]}
+            </p>
+          </div>
         </div>
 
         <button type="submit" class="btn btn-primary w-full" id="create-and-select-btn">
