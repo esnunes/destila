@@ -8,6 +8,8 @@ defmodule Destila.Projects.Project do
     field(:name, :string)
     field(:git_repo_url, :string)
     field(:local_folder, :string)
+    field(:run_command, :string)
+    field(:port_definitions, {:array, :string}, default: [])
 
     has_many(:workflow_sessions, Destila.Workflows.Session)
 
@@ -16,10 +18,11 @@ defmodule Destila.Projects.Project do
 
   def changeset(project, attrs) do
     project
-    |> cast(attrs, [:name, :git_repo_url, :local_folder])
+    |> cast(attrs, [:name, :git_repo_url, :local_folder, :run_command, :port_definitions])
     |> validate_required([:name])
     |> validate_at_least_one_location()
     |> validate_git_repo_url()
+    |> validate_port_definitions()
   end
 
   defp validate_at_least_one_location(changeset) do
@@ -61,6 +64,44 @@ defmodule Destila.Projects.Project do
           true ->
             changeset
         end
+    end
+  end
+
+  @denied_env_vars ~w(PATH HOME SHELL USER TERM LANG LD_PRELOAD LD_LIBRARY_PATH)
+  @port_definition_pattern ~r/^[A-Z][A-Z0-9_]*$/
+
+  defp validate_port_definitions(changeset) do
+    definitions = get_field(changeset, :port_definitions)
+
+    if definitions in [nil, []] do
+      changeset
+    else
+      invalid =
+        Enum.find(definitions, fn d ->
+          d == "" or not Regex.match?(@port_definition_pattern, d) or d in @denied_env_vars
+        end)
+
+      case invalid do
+        nil ->
+          changeset
+
+        "" ->
+          add_error(changeset, :port_definitions, "port definition cannot be empty")
+
+        name when name in @denied_env_vars ->
+          add_error(
+            changeset,
+            :port_definitions,
+            "#{name} is a reserved system environment variable"
+          )
+
+        name ->
+          add_error(
+            changeset,
+            :port_definitions,
+            "#{name} must start with A-Z and contain only uppercase letters, digits, and underscores"
+          )
+      end
     end
   end
 

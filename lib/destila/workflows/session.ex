@@ -31,6 +31,8 @@ defmodule Destila.Workflows.Session do
 
     has_many(:metadata, Destila.Workflows.SessionMetadata, foreign_key: :workflow_session_id)
 
+    field(:service_state, :map)
+
     timestamps(type: :utc_datetime)
   end
 
@@ -47,7 +49,8 @@ defmodule Destila.Workflows.Session do
       :position,
       :archived_at,
       :user_prompt,
-      :source_session_id
+      :source_session_id,
+      :service_state
     ])
     |> validate_required([:title, :workflow_type])
   end
