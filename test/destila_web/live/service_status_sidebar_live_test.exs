@@ -72,7 +72,7 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       assert has_element?(view, "#service-status-item")
       refute has_element?(view, "#service-status-link")
-      assert has_element?(view, "#service-status-item .text-base-content\\/20")
+      assert has_element?(view, "#service-status-item .text-base-content\\/15")
     end
 
     @tag feature: "service_status_sidebar",

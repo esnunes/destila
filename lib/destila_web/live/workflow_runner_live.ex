@@ -743,13 +743,15 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                             class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
                             aria-label="Open service"
                           >
-                            <span class="size-5 rounded flex items-center justify-center shrink-0">
+                            <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
                               <.icon
                                 name="hero-server-micro"
-                                class="size-3.5 text-green-500"
+                                class="size-3.5 text-green-500 transition-colors duration-300"
                               />
+                              <span class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-green-500 ring-2 ring-base-100 animate-pulse">
+                              </span>
                             </span>
-                            <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                            <span class="text-sm text-base-content/80 truncate flex-1 text-left">
                               Service
                             </span>
                             <.icon
@@ -760,40 +762,57 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                         <% else %>
                           <div
                             id="service-status-item"
-                            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md"
+                            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150"
                             aria-label="Service status"
                           >
-                            <span class="size-5 rounded flex items-center justify-center shrink-0">
+                            <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
                               <.icon
                                 name="hero-server-micro"
                                 class={[
-                                  "size-3.5",
+                                  "size-3.5 transition-colors duration-300",
                                   if(service_running?,
                                     do: "text-green-500",
                                     else: "text-base-content/30"
                                   )
                                 ]}
                               />
+                              <span
+                                :if={service_running?}
+                                class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-green-500 ring-2 ring-base-100 animate-pulse"
+                              >
+                              </span>
                             </span>
-                            <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                            <span class={[
+                              "text-sm truncate flex-1 text-left transition-colors duration-300",
+                              if(service_running?,
+                                do: "text-base-content/80",
+                                else: "text-base-content/60"
+                              )
+                            ]}>
                               Service
+                            </span>
+                            <span
+                              :if={service_running?}
+                              class="text-[10px] font-medium text-green-600 dark:text-green-400 uppercase tracking-wide"
+                            >
+                              Live
                             </span>
                           </div>
                         <% end %>
                       <% else %>
                         <div
                           id="service-status-item"
-                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md opacity-40"
+                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-default"
                           aria-label="Service not configured"
                           title="No run command configured"
                         >
                           <span class="size-5 rounded flex items-center justify-center shrink-0">
                             <.icon
                               name="hero-server-micro"
-                              class="size-3.5 text-base-content/20"
+                              class="size-3.5 text-base-content/15"
                             />
                           </span>
-                          <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                          <span class="text-sm text-base-content/30 truncate flex-1 text-left">
                             Service
                           </span>
                         </div>
