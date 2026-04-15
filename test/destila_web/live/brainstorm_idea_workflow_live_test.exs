@@ -528,6 +528,56 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       assert render(view) =~ "Phoenix"
       assert render(view) =~ "SQLite"
     end
+
+    @tag feature: @feature,
+         scenario: "Edit a previously answered question in multi-question form"
+    test "clicking answered card reopens it for editing", %{conn: conn} do
+      ws = create_session_with_questions()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      # Answer first question
+      view
+      |> element("button[phx-click='answer_question'][phx-value-answer='Phoenix']")
+      |> render_click()
+
+      # First answer is locked in with a clickable reopen button
+      assert has_element?(view, "button[phx-click='reopen_question'][phx-value-index='0']")
+
+      # Answer second question
+      view
+      |> element("button[phx-click='answer_question'][phx-value-answer='SQLite']")
+      |> render_click()
+
+      # Both answered, submit button appears
+      assert has_element?(view, "button[phx-click='submit_all_answers']")
+
+      # Click first answered card to reopen it
+      view
+      |> element("button[phx-click='reopen_question'][phx-value-index='0']")
+      |> render_click()
+
+      # Submit button disappears (not all answered anymore)
+      refute has_element?(view, "button[phx-click='submit_all_answers']")
+
+      # Second question still answered
+      assert has_element?(view, "button[phx-click='reopen_question'][phx-value-index='1']")
+
+      # First question is interactive again — select a different answer
+      view
+      |> element("button[phx-click='answer_question'][phx-value-answer='Rails']")
+      |> render_click()
+
+      # Submit button reappears
+      assert has_element?(view, "button[phx-click='submit_all_answers']")
+
+      # Submit all
+      view |> element("button[phx-click='submit_all_answers']") |> render_click()
+
+      # Formatted response contains the new answer
+      html = render(view)
+      assert html =~ "Rails"
+      assert html =~ "SQLite"
+    end
   end
 
   # --- AI streaming ---

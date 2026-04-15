@@ -63,6 +63,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:streaming_chunks, nil)
        |> assign(:alive_session, alive_session)
        |> assign(:question_answers, %{})
+       |> assign(:editing_question_index, nil)
+       |> assign(:editing_previous_answer, nil)
        |> assign(:video_modal_meta_id, nil)
        |> assign(:markdown_modal_content, nil)
        |> assign(:markdown_modal_label, nil)
@@ -125,6 +127,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
          |> assign(:workflow_session, ws)
          |> assign(:page_title, ws.title)
          |> assign(:question_answers, %{})
+         |> assign(:editing_question_index, nil)
+         |> assign(:editing_previous_answer, nil)
          |> assign_ai_state(ws)}
 
       {:error, _} ->
@@ -216,7 +220,12 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     case Integer.parse(idx_str) do
       {idx, _} ->
         answers = Map.put(socket.assigns.question_answers, idx, answer)
-        {:noreply, assign(socket, :question_answers, answers)}
+
+        {:noreply,
+         socket
+         |> assign(:question_answers, answers)
+         |> assign(:editing_question_index, nil)
+         |> assign(:editing_previous_answer, nil)}
 
       :error ->
         {:noreply, socket}
@@ -224,6 +233,25 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_event("answer_question", _params, socket), do: {:noreply, socket}
+
+  def handle_event("reopen_question", %{"index" => idx_str}, socket) do
+    case Integer.parse(idx_str) do
+      {idx, _} ->
+        previous_answer = socket.assigns.question_answers[idx]
+        answers = Map.delete(socket.assigns.question_answers, idx)
+
+        {:noreply,
+         socket
+         |> assign(:question_answers, answers)
+         |> assign(:editing_question_index, idx)
+         |> assign(:editing_previous_answer, previous_answer)}
+
+      :error ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("reopen_question", _params, socket), do: {:noreply, socket}
 
   def handle_event("confirm_multi_answer", params, socket) do
     case Integer.parse(params["index"] || "") do
@@ -235,7 +263,12 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         if all_selected != [] do
           value = Enum.join(all_selected, ", ")
           answers = Map.put(socket.assigns.question_answers, idx, value)
-          {:noreply, assign(socket, :question_answers, answers)}
+
+          {:noreply,
+           socket
+           |> assign(:question_answers, answers)
+           |> assign(:editing_question_index, nil)
+           |> assign(:editing_previous_answer, nil)}
         else
           {:noreply, socket}
         end
@@ -263,7 +296,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         end)
 
       content = Enum.join(response_parts, "\n")
-      socket = assign(socket, :question_answers, %{})
+
+      socket =
+        socket
+        |> assign(:question_answers, %{})
+        |> assign(:editing_question_index, nil)
+        |> assign(:editing_previous_answer, nil)
+
       handle_event("send_text", %{"content" => content}, socket)
     else
       {:noreply, socket}
@@ -1044,6 +1083,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           phase_config={@phase_config}
           streaming_chunks={@streaming_chunks}
           question_answers={@question_answers}
+          editing_question_index={@editing_question_index}
+          editing_previous_answer={@editing_previous_answer}
           metadata={@metadata}
           current_step={@current_step}
           phase_status={@phase_status}
