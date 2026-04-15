@@ -156,6 +156,7 @@ defmodule Destila.AI.ClaudeSession do
       })
 
     claude_opts = Keyword.put_new(claude_opts, :setting_sources, ["user", "project"])
+    claude_opts = Keyword.put_new(claude_opts, :max_turns, 200)
 
     # Register marketplaces and install/enable plugins before starting the session.
     # Treat "already" errors as success since these operations aren't fully idempotent.
@@ -215,14 +216,9 @@ defmodule Destila.AI.ClaudeSession do
   def handle_call({:query_streaming, prompt, opts}, _from, state) do
     topic = Keyword.fetch!(opts, :stream_topic)
 
-    stream_opts =
-      opts
-      |> Keyword.delete(:stream_topic)
-      |> Keyword.put_new(:max_turns, 200)
-
     result =
       state.claude_session
-      |> ClaudeCode.stream(prompt, stream_opts)
+      |> ClaudeCode.stream(prompt)
       |> collect_with_mcp_and_broadcast(topic)
 
     state = reset_timer(state)

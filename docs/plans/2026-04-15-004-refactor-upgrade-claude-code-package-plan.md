@@ -1,7 +1,7 @@
 ---
 title: "refactor: Upgrade claude_code package from 0.32.2 to 0.36.3"
 type: refactor
-status: active
+status: completed
 date: 2026-04-15
 ---
 
