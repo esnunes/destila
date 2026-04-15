@@ -708,7 +708,7 @@ defmodule DestilaWeb.ChatComponents do
       <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
         D
       </div>
-      <div class="rounded-2xl px-4 py-3 max-w-[80%] border border-dashed border-base-content/20 bg-base-200/50 text-base-content/70">
+      <div class="rounded-2xl px-4 py-3 text-sm max-w-[80%] border border-dashed border-base-content/20 bg-base-200/50 text-base-content/70">
         <div class="prose prose-sm max-w-none">
           {raw(markdown_to_html(@text))}
         </div>
