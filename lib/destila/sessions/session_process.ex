@@ -13,7 +13,7 @@ defmodule Destila.Sessions.SessionProcess do
   alias Destila.{AI, Executions, Workflows}
   alias Destila.Workflows.Session
 
-  @inactivity_timeout :timer.minutes(30)
+  @inactivity_timeout :timer.hours(1)
 
   # --- Client API ---
 

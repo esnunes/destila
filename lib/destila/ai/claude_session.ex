@@ -215,9 +215,14 @@ defmodule Destila.AI.ClaudeSession do
   def handle_call({:query_streaming, prompt, opts}, _from, state) do
     topic = Keyword.fetch!(opts, :stream_topic)
 
+    stream_opts =
+      opts
+      |> Keyword.delete(:stream_topic)
+      |> Keyword.put_new(:max_turns, 200)
+
     result =
       state.claude_session
-      |> ClaudeCode.stream(prompt, Keyword.delete(opts, :stream_topic))
+      |> ClaudeCode.stream(prompt, stream_opts)
       |> collect_with_mcp_and_broadcast(topic)
 
     state = reset_timer(state)
