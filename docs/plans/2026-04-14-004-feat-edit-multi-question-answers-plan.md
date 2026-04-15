@@ -1,7 +1,7 @@
 ---
 title: "feat: Allow editing previously answered questions in multi-question forms"
 type: feat
-status: active
+status: completed
 date: 2026-04-14
 ---
 
