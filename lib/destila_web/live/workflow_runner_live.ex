@@ -453,7 +453,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     bubbles =
       case extract_intermediate_text(chunk) do
         {:ok, text} ->
-          bubbles ++ [%{id: System.unique_integer([:positive]), text: text}]
+          bubbles ++ [%{text: text}]
 
         :skip ->
           bubbles
@@ -485,8 +485,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   defp extract_intermediate_text(%ClaudeCode.Message.ResultMessage{result: result})
-       when is_binary(result) and result != "" do
-    {:ok, result}
+       when is_binary(result) do
+    if String.trim(result) != "", do: {:ok, result}, else: :skip
   end
 
   defp extract_intermediate_text(_chunk), do: :skip
