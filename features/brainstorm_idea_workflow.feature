@@ -147,6 +147,32 @@ Feature: Brainstorm Idea Workflow
     And new activity occurs in the current phase
     Then Phase 3 should remain collapsed
 
+  # --- Streaming Message Bubbles ---
+
+  Scenario: Intermediate text bubbles appear during AI processing
+    Given the session is processing an AI response
+    When the AI produces an AssistantMessage with text content
+    Then a transient intermediate bubble should appear in the chat
+    And the bubble should render the text as markdown
+    And the typing indicator should remain visible below the bubble
+
+  Scenario: Result text appears as an intermediate bubble
+    Given the session is processing an AI response
+    When the AI produces a ResultMessage with non-empty result text
+    Then a transient intermediate bubble should appear with the result text
+
+  Scenario: Tool messages do not create intermediate bubbles
+    Given the session is processing an AI response
+    When the AI produces ToolProgressMessage or PartialAssistantMessage chunks
+    Then no intermediate bubbles should appear
+    And only the typing indicator should be visible
+
+  Scenario: Intermediate bubbles replaced by final message on completion
+    Given the session is processing and intermediate bubbles are visible
+    When AI processing completes
+    Then all intermediate bubbles should be instantly removed
+    And the final merged message should appear as a standard system bubble
+
   # --- Aliveness Indicator ---
 
   Scenario: Workflow runner shows green indicator when Claude Code GenServer is running

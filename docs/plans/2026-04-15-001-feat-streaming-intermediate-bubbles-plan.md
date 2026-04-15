@@ -1,7 +1,7 @@
 ---
 title: "feat: Show intermediate text bubbles during AI streaming"
 type: feat
-status: active
+status: completed
 date: 2026-04-15
 ---
 
