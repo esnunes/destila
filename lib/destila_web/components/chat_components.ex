@@ -34,6 +34,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :streaming_chunks, :any, default: nil
   attr :question_answers, :map, required: true
   attr :editing_question_index, :integer, default: nil
+  attr :editing_previous_answer, :string, default: nil
   attr :metadata, :map, required: true
   attr :current_step, :map, required: true
   attr :phase_status, :atom, default: nil
@@ -147,6 +148,7 @@ defmodule DestilaWeb.ChatComponents do
               questions={@current_step.questions}
               answers={@question_answers}
               editing_question_index={@editing_question_index}
+              editing_previous_answer={@editing_previous_answer}
             />
           </div>
         </div>
@@ -981,6 +983,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :questions, :list, required: true
   attr :answers, :map, required: true
   attr :editing_question_index, :integer, default: nil
+  attr :editing_previous_answer, :string, default: nil
 
   def multi_question_input(assigns) do
     total = length(assigns.questions)
@@ -1054,6 +1057,7 @@ defmodule DestilaWeb.ChatComponents do
                   <input
                     type="text"
                     name="answer"
+                    value={if(@editing_question_index == idx, do: @editing_previous_answer, else: "")}
                     placeholder="Other (type your own)..."
                     class="input input-bordered input-sm flex-1"
                     autocomplete="off"
@@ -1087,6 +1091,7 @@ defmodule DestilaWeb.ChatComponents do
                   <input
                     type="text"
                     name="other"
+                    value={if(@editing_question_index == idx, do: @editing_previous_answer, else: "")}
                     placeholder="Other (type your own)..."
                     class="input input-bordered input-sm w-full"
                     autocomplete="off"
