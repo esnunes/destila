@@ -123,6 +123,16 @@ Feature: Brainstorm Idea Workflow
     And I click "Submit All Answers"
     Then all answers should be sent as a single formatted response
 
+  Scenario: Edit a previously answered question in multi-question form
+    Given the AI presents multiple questions at once
+    And I have answered the first question
+    When I click on the answered question card
+    Then the question reopens as interactive
+    And other answered questions retain their answers
+    When I select a different answer
+    Then the new answer locks in
+    And I can complete remaining questions and submit
+
   Scenario: Manually expanded previous phase stays open during updates
     Given the session is in Phase 3 - Technical Concerns
     And Phase 1 - Task Description is collapsed

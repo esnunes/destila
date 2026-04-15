@@ -33,6 +33,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :phase_config, :map, required: true
   attr :streaming_chunks, :any, default: nil
   attr :question_answers, :map, required: true
+  attr :editing_question_index, :integer, default: nil
   attr :metadata, :map, required: true
   attr :current_step, :map, required: true
   attr :phase_status, :atom, default: nil
@@ -145,6 +146,7 @@ defmodule DestilaWeb.ChatComponents do
             <.multi_question_input
               questions={@current_step.questions}
               answers={@question_answers}
+              editing_question_index={@editing_question_index}
             />
           </div>
         </div>
@@ -978,24 +980,37 @@ defmodule DestilaWeb.ChatComponents do
 
   attr :questions, :list, required: true
   attr :answers, :map, required: true
+  attr :editing_question_index, :integer, default: nil
 
   def multi_question_input(assigns) do
     total = length(assigns.questions)
     answered = map_size(assigns.answers)
     all_answered = answered == total
 
+    active_index =
+      if assigns.editing_question_index do
+        assigns.editing_question_index
+      else
+        Enum.find(0..(total - 1), fn i -> not Map.has_key?(assigns.answers, i) end)
+      end
+
     assigns =
       assigns
       |> assign(:total, total)
       |> assign(:answered_count, answered)
       |> assign(:all_answered, all_answered)
+      |> assign(:active_index, active_index)
 
     ~H"""
     <div class="space-y-4 py-2">
       <div :for={{q, idx} <- Enum.with_index(@questions)} class="space-y-2">
-        <%!-- Answered question: show locked-in state --%>
+        <%!-- Answered question: show locked-in state (clickable to reopen) --%>
         <%= if Map.has_key?(@answers, idx) do %>
-          <div class="rounded-lg border border-base-300/50 bg-base-200/30 p-3 space-y-1">
+          <button
+            phx-click="reopen_question"
+            phx-value-index={idx}
+            class="w-full text-left rounded-lg border border-base-300/50 bg-base-200/30 p-3 space-y-1 cursor-pointer hover:border-primary/30 hover:bg-base-200/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
             <div class="flex items-center gap-2">
               <.icon name="hero-check-circle-solid" class="size-4 text-success flex-shrink-0" />
               <p class="text-xs font-medium text-base-content/50 uppercase tracking-wide">
@@ -1003,10 +1018,10 @@ defmodule DestilaWeb.ChatComponents do
               </p>
             </div>
             <p class="text-sm text-base-content/70 pl-6">{@answers[idx]}</p>
-          </div>
+          </button>
         <% else %>
-          <%!-- Current unanswered question: show interactive --%>
-          <%= if map_size(@answers) == idx do %>
+          <%!-- Current active question: show interactive --%>
+          <%= if @active_index == idx do %>
             <div class="space-y-2">
               <p class="text-xs text-base-content/50 font-medium uppercase tracking-wide">
                 {q.title}
