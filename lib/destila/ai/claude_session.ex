@@ -105,7 +105,7 @@ defmodule Destila.AI.ClaudeSession do
   Resets the inactivity timer after each call completes.
   """
   def query_streaming(session, prompt, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout, :timer.minutes(15))
+    timeout = Keyword.get(opts, :timeout, :timer.hours(1))
     GenServer.call(session, {:query_streaming, prompt, opts}, timeout)
   end
 
