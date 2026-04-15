@@ -10,6 +10,7 @@ defmodule Destila.Projects.Project do
     field(:local_folder, :string)
     field(:run_command, :string)
     field(:port_definitions, {:array, :string}, default: [])
+    field(:archived_at, :utc_datetime)
 
     has_many(:workflow_sessions, Destila.Workflows.Session)
 
@@ -18,7 +19,14 @@ defmodule Destila.Projects.Project do
 
   def changeset(project, attrs) do
     project
-    |> cast(attrs, [:name, :git_repo_url, :local_folder, :run_command, :port_definitions])
+    |> cast(attrs, [
+      :name,
+      :git_repo_url,
+      :local_folder,
+      :run_command,
+      :port_definitions,
+      :archived_at
+    ])
     |> validate_required([:name])
     |> validate_at_least_one_location()
     |> validate_git_repo_url()
