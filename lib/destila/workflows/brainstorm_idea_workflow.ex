@@ -110,15 +110,18 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     1. If .feature files exist, review them against the task discussed.
        - If changes are needed, propose specific additions, modifications, or removals \
          in your message text.
-       - Discuss with the user until they agree on the changes.
-       - When done, call `mcp__destila__session` with `action: "suggest_phase_complete"`.
+       - Discuss with the user until they agree on the changes. Use the \
+         `mcp__destila__ask_user_question` tool to present approval options.
+       - When done, call `mcp__destila__session` with `action: "phase_complete"`.
 
     2. If no .feature files exist in the repository:
-       - Ask the user if they want to define new Gherkin scenarios for this task.
-       - If yes, help them draft scenarios in your message text and call \
-         `mcp__destila__session` with `action: "suggest_phase_complete"`.
-       - If no, call `mcp__destila__session` with `action: "phase_complete"` and a \
-         message explaining why.
+       - Use the `mcp__destila__ask_user_question` tool to ask the user if they want \
+         to define new Gherkin scenarios for this task.
+       - If yes, help them draft scenarios in your message text and discuss until \
+         they agree, using `mcp__destila__ask_user_question` for approval.
+       - When done, call `mcp__destila__session` with `action: "phase_complete"`.
+       - If the user declines, call `mcp__destila__session` with \
+         `action: "phase_complete"` and a message explaining why.
 
     3. If the task doesn't require Gherkin changes:
        - Call `mcp__destila__session` with `action: "phase_complete"` and a \

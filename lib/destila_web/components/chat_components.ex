@@ -397,10 +397,7 @@ defmodule DestilaWeb.ChatComponents do
 
       <div class={[
         "rounded-2xl px-4 py-3 text-sm",
-        if(@message.input_type in [:single_select, :multi_select, :questions],
-          do: "flex-1",
-          else: "max-w-[80%]"
-        ),
+        "max-w-[80%]",
         if(@message.role == :system,
           do: "bg-base-200 text-base-content",
           else: "bg-primary text-primary-content"

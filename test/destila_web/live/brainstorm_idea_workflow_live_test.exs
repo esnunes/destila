@@ -349,7 +349,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
   # --- Phase 2: Gherkin Review ---
 
   describe "Phase 2 - Gherkin Review" do
-    @tag feature: @feature, scenario: "Phase 2 - Gherkin Review"
+    @tag feature: @feature, scenario: "Phase 2 - Gherkin Review with structured approval"
     test "shows Gherkin Review phase with conversation input", %{conn: conn} do
       ws = create_session_in_phase(2)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
