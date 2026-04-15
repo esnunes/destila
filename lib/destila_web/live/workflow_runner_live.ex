@@ -692,6 +692,74 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                         class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
                       />
                     </.link>
+                    <%= if @project do %>
+                      <% service_running? = @workflow_session.service_state["status"] == "running" %>
+                      <% url = service_url(@project, @workflow_session.service_state) %>
+                      <%= if @project.run_command do %>
+                        <%= if url do %>
+                          <a
+                            id="service-status-link"
+                            href={url}
+                            target="_blank"
+                            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                            aria-label="Open service"
+                          >
+                            <span class="size-5 rounded flex items-center justify-center shrink-0">
+                              <.icon
+                                name="hero-server-micro"
+                                class="size-3.5 text-green-500"
+                              />
+                            </span>
+                            <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                              Service
+                            </span>
+                            <.icon
+                              name="hero-arrow-top-right-on-square-micro"
+                              class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                            />
+                          </a>
+                        <% else %>
+                          <div
+                            id="service-status-item"
+                            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md"
+                            aria-label="Service status"
+                          >
+                            <span class="size-5 rounded flex items-center justify-center shrink-0">
+                              <.icon
+                                name="hero-server-micro"
+                                class={[
+                                  "size-3.5",
+                                  if(service_running?,
+                                    do: "text-green-500",
+                                    else: "text-base-content/30"
+                                  )
+                                ]}
+                              />
+                            </span>
+                            <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                              Service
+                            </span>
+                          </div>
+                        <% end %>
+                      <% else %>
+                        <div
+                          id="service-status-item"
+                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md opacity-40"
+                          aria-label="Service not configured"
+                          title="No run command configured"
+                        >
+                          <span class="size-5 rounded flex items-center justify-center shrink-0">
+                            <.icon
+                              name="hero-server-micro"
+                              class="size-3.5 text-base-content/20"
+                            />
+                          </span>
+                          <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                            Service
+                          </span>
+                        </div>
+                      <% end %>
+                    <% end %>
                   </div>
                 </div>
 
@@ -999,6 +1067,19 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     |> assign(:metadata, Enum.reduce(all, %{}, fn m, acc -> Map.put(acc, m.key, m.value) end))
     |> assign(:exported_metadata, Enum.filter(all, & &1.exported))
   end
+
+  defp service_url(%{port_definitions: [first_port | _]}, %{
+         "status" => "running",
+         "ports" => ports
+       })
+       when is_map(ports) do
+    case Map.get(ports, first_port) do
+      nil -> nil
+      port -> "http://localhost:#{port}"
+    end
+  end
+
+  defp service_url(_project, _service_state), do: nil
 
   defp assign_worktree_path(socket, ws_id) do
     ai_session = AI.get_ai_session_for_workflow(ws_id)
