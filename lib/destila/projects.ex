@@ -5,7 +5,13 @@ defmodule Destila.Projects do
   alias Destila.Projects.Project
 
   def list_projects do
-    Repo.all(from(p in Project, order_by: p.name))
+    Repo.all(from(p in Project, where: is_nil(p.archived_at), order_by: p.name))
+  end
+
+  def list_archived_projects do
+    Repo.all(
+      from(p in Project, where: not is_nil(p.archived_at), order_by: [desc: p.archived_at])
+    )
   end
 
   def get_project(id) do
@@ -43,6 +49,20 @@ defmodule Destila.Projects do
           error
       end
     end
+  end
+
+  def archive_project(%Project{} = project) do
+    project
+    |> Project.changeset(%{archived_at: DateTime.utc_now()})
+    |> Repo.update()
+    |> broadcast(:project_updated)
+  end
+
+  def unarchive_project(%Project{} = project) do
+    project
+    |> Project.changeset(%{archived_at: nil})
+    |> Repo.update()
+    |> broadcast(:project_updated)
   end
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper

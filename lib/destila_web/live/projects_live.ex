@@ -16,7 +16,8 @@ defmodule DestilaWeb.ProjectsLive do
      |> assign(:session_counts, Destila.Workflows.count_by_projects())
      |> assign(:creating, false)
      |> assign(:editing_project_id, nil)
-     |> assign(:delete_confirming_id, nil)}
+     |> assign(:delete_confirming_id, nil)
+     |> assign(:archive_confirming_id, nil)}
   end
 
   def handle_event("new_project", _params, socket) do
@@ -31,9 +32,11 @@ defmodule DestilaWeb.ProjectsLive do
       socket
       |> maybe_restream_project(socket.assigns.editing_project_id)
       |> maybe_restream_project(socket.assigns.delete_confirming_id)
+      |> maybe_restream_project(socket.assigns.archive_confirming_id)
       |> assign(:creating, false)
       |> assign(:editing_project_id, nil)
       |> assign(:delete_confirming_id, nil)
+      |> assign(:archive_confirming_id, nil)
 
     {:noreply, socket}
   end
@@ -46,7 +49,9 @@ defmodule DestilaWeb.ProjectsLive do
        socket
        |> stream_insert(:projects, project)
        |> assign(:editing_project_id, id)
-       |> assign(:creating, false)}
+       |> assign(:creating, false)
+       |> assign(:delete_confirming_id, nil)
+       |> assign(:archive_confirming_id, nil)}
     else
       {:noreply, socket}
     end
@@ -62,7 +67,43 @@ defmodule DestilaWeb.ProjectsLive do
         socket
       end
 
-    {:noreply, assign(socket, :delete_confirming_id, id)}
+    {:noreply,
+     socket
+     |> assign(:delete_confirming_id, id)
+     |> assign(:editing_project_id, nil)
+     |> assign(:archive_confirming_id, nil)}
+  end
+
+  def handle_event("confirm_archive", %{"id" => id}, socket) do
+    project = Destila.Projects.get_project(id)
+
+    socket =
+      if project do
+        stream_insert(socket, :projects, project)
+      else
+        socket
+      end
+
+    {:noreply,
+     socket
+     |> assign(:archive_confirming_id, id)
+     |> assign(:editing_project_id, nil)
+     |> assign(:delete_confirming_id, nil)}
+  end
+
+  def handle_event("archive_project", %{"id" => id}, socket) do
+    case Destila.Projects.get_project(id) do
+      nil ->
+        {:noreply, assign(socket, :archive_confirming_id, nil)}
+
+      project ->
+        {:ok, _project} = Destila.Projects.archive_project(project)
+
+        {:noreply,
+         socket
+         |> assign(:archive_confirming_id, nil)
+         |> put_flash(:info, "Project archived")}
+    end
   end
 
   def handle_event("delete_project", %{"id" => id}, socket) do
@@ -158,14 +199,23 @@ defmodule DestilaWeb.ProjectsLive do
       <div class="p-6 lg:p-8">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold tracking-tight">Projects</h1>
-          <button
-            :if={!@creating}
-            phx-click="new_project"
-            class="btn btn-primary btn-sm"
-            id="new-project-btn"
-          >
-            <.icon name="hero-plus-micro" class="size-4" /> New Project
-          </button>
+          <div class="flex items-center gap-3">
+            <.link
+              navigate={~p"/projects/archived"}
+              class="btn btn-soft btn-sm"
+              id="archived-projects-link"
+            >
+              <.icon name="hero-archive-box-micro" class="size-4" /> Archived
+            </.link>
+            <button
+              :if={!@creating}
+              phx-click="new_project"
+              class="btn btn-primary btn-sm"
+              id="new-project-btn"
+            >
+              <.icon name="hero-plus-micro" class="size-4" /> New Project
+            </button>
+          </div>
         </div>
 
         <%!-- Create form --%>
@@ -255,36 +305,56 @@ defmodule DestilaWeb.ProjectsLive do
                     {linked_session_count(@session_counts, project.id)}
                   </span>
 
-                  <button
-                    phx-click="edit_project"
-                    phx-value-id={project.id}
-                    class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 transition-opacity"
-                    id={"edit-project-#{project.id}"}
-                  >
-                    <.icon name="hero-pencil-micro" class="size-4" />
-                  </button>
-
-                  <%= if @delete_confirming_id == project.id do %>
-                    <button
-                      phx-click="delete_project"
-                      phx-value-id={project.id}
-                      class="btn btn-error btn-xs"
-                      id={"confirm-delete-#{project.id}"}
-                    >
-                      Delete
-                    </button>
-                    <button phx-click="cancel" class="btn btn-ghost btn-xs">
-                      Cancel
-                    </button>
-                  <% else %>
-                    <button
-                      phx-click="confirm_delete"
-                      phx-value-id={project.id}
-                      class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 transition-opacity text-error/60 hover:text-error"
-                      id={"delete-project-#{project.id}"}
-                    >
-                      <.icon name="hero-trash-micro" class="size-4" />
-                    </button>
+                  <%= cond do %>
+                    <% @archive_confirming_id == project.id -> %>
+                      <button
+                        phx-click="archive_project"
+                        phx-value-id={project.id}
+                        class="btn btn-warning btn-xs"
+                        id={"confirm-archive-#{project.id}"}
+                      >
+                        Archive
+                      </button>
+                      <button phx-click="cancel" class="btn btn-ghost btn-xs">
+                        Cancel
+                      </button>
+                    <% @delete_confirming_id == project.id -> %>
+                      <button
+                        phx-click="delete_project"
+                        phx-value-id={project.id}
+                        class="btn btn-error btn-xs"
+                        id={"confirm-delete-#{project.id}"}
+                      >
+                        Delete
+                      </button>
+                      <button phx-click="cancel" class="btn btn-ghost btn-xs">
+                        Cancel
+                      </button>
+                    <% true -> %>
+                      <button
+                        phx-click="edit_project"
+                        phx-value-id={project.id}
+                        class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 transition-opacity"
+                        id={"edit-project-#{project.id}"}
+                      >
+                        <.icon name="hero-pencil-micro" class="size-4" />
+                      </button>
+                      <button
+                        phx-click="confirm_archive"
+                        phx-value-id={project.id}
+                        class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 transition-opacity"
+                        id={"archive-project-#{project.id}"}
+                      >
+                        <.icon name="hero-archive-box-micro" class="size-4" />
+                      </button>
+                      <button
+                        phx-click="confirm_delete"
+                        phx-value-id={project.id}
+                        class="btn btn-ghost btn-xs opacity-60 hover:opacity-100 transition-opacity text-error/60 hover:text-error"
+                        id={"delete-project-#{project.id}"}
+                      >
+                        <.icon name="hero-trash-micro" class="size-4" />
+                      </button>
                   <% end %>
                 </div>
               </div>
