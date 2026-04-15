@@ -88,7 +88,11 @@ defmodule DestilaWeb.ChatComponents do
                     :for={bubble <- @intermediate_bubbles}
                     text={bubble.text}
                   />
-                  <.chat_typing_indicator />
+                  <%= if @streaming_chunks && @streaming_chunks != [] do %>
+                    <.chat_stream_debug chunks={@streaming_chunks} />
+                  <% else %>
+                    <.chat_typing_indicator />
+                  <% end %>
                 <% end %>
               </details>
             <% else %>
@@ -111,7 +115,11 @@ defmodule DestilaWeb.ChatComponents do
                     :for={bubble <- @intermediate_bubbles}
                     text={bubble.text}
                   />
-                  <.chat_typing_indicator />
+                  <%= if @streaming_chunks && @streaming_chunks != [] do %>
+                    <.chat_stream_debug chunks={@streaming_chunks} />
+                  <% else %>
+                    <.chat_typing_indicator />
+                  <% end %>
                 <% end %>
               </div>
             <% end %>
