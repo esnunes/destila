@@ -31,5 +31,6 @@ defmodule DestilaWeb.Router do
     get "/media/:id", MediaController, :show
     live "/sessions/:id", WorkflowRunnerLive
     live "/sessions/:id/terminal", TerminalLive
+    live "/sessions/:id/ai/:ai_session_id", AiSessionLive
   end
 end

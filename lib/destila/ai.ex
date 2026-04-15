@@ -31,12 +31,40 @@ defmodule Destila.AI do
     )
   end
 
+  def list_ai_sessions_for_workflow(workflow_session_id) do
+    Repo.all(
+      from(s in Session,
+        left_join: m in Message,
+        on: m.ai_session_id == s.id,
+        where: s.workflow_session_id == ^workflow_session_id,
+        group_by: [s.id, s.inserted_at, s.claude_session_id],
+        order_by: [asc: s.inserted_at],
+        limit: 50,
+        select: %{
+          id: s.id,
+          inserted_at: s.inserted_at,
+          claude_session_id: s.claude_session_id,
+          message_count: count(m.id)
+        }
+      )
+    )
+  end
+
+  def get_ai_session(id) do
+    Repo.get(Session, id)
+  end
+
+  def get_ai_session!(id) do
+    Repo.get!(Session, id)
+  end
+
   def get_or_create_ai_session(workflow_session_id, attrs \\ %{}) do
     case get_ai_session_for_workflow(workflow_session_id) do
       nil ->
         %Session{}
         |> Session.changeset(Map.put(attrs, :workflow_session_id, workflow_session_id))
         |> Repo.insert()
+        |> broadcast(:ai_session_created)
 
       ai_session ->
         {:ok, ai_session}
@@ -47,6 +75,7 @@ defmodule Destila.AI do
     %Session{}
     |> Session.changeset(attrs)
     |> Repo.insert()
+    |> broadcast(:ai_session_created)
   end
 
   def update_ai_session(%Session{} = ai_session, attrs) do
@@ -62,6 +91,15 @@ defmodule Destila.AI do
       from(m in Message,
         where: m.workflow_session_id == ^workflow_session_id,
         order_by: m.inserted_at
+      )
+    )
+  end
+
+  def list_messages_for_ai_session(ai_session_id) do
+    Repo.all(
+      from(m in Message,
+        where: m.ai_session_id == ^ai_session_id,
+        order_by: [asc: m.inserted_at]
       )
     )
   end

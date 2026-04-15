@@ -59,6 +59,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:editing_title, false)
        |> assign_metadata(workflow_session.id)
        |> assign_worktree_path(workflow_session.id)
+       |> assign(:ai_sessions, AI.list_ai_sessions_for_workflow(workflow_session.id))
        |> assign(:page_title, workflow_session.title)
        |> assign(:streaming_chunks, nil)
        |> assign(:intermediate_bubbles, [])
@@ -473,6 +474,26 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
+  def handle_info({:ai_session_created, ai_session}, socket) do
+    if socket.assigns[:workflow_session] &&
+         ai_session.workflow_session_id == socket.assigns.workflow_session.id do
+      ws_id = socket.assigns.workflow_session.id
+      {:noreply, assign(socket, :ai_sessions, AI.list_ai_sessions_for_workflow(ws_id))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:message_added, message}, socket) do
+    if socket.assigns[:workflow_session] &&
+         message.workflow_session_id == socket.assigns.workflow_session.id do
+      ws_id = socket.assigns.workflow_session.id
+      {:noreply, assign(socket, :ai_sessions, AI.list_ai_sessions_for_workflow(ws_id))}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp extract_intermediate_text(%ClaudeCode.Message.AssistantMessage{message: message}) do
@@ -863,7 +884,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 <div class="border-t border-base-300/60 mx-3"></div>
 
                 <%!-- Exported metadata section — primary content --%>
-                <div class="px-3 pt-3 pb-6 flex-1">
+                <div class="px-3 pt-3 pb-3 flex-1">
                   <h3 class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5 px-2">
                     Exported Metadata
                   </h3>
@@ -970,6 +991,51 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                               </div>
                             </details>
                         <% end %>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+
+                <%!-- Divider between exported metadata and AI sessions --%>
+                <div class="border-t border-base-300/60 mx-3"></div>
+
+                <%!-- AI Sessions section --%>
+                <div id="ai-sessions-section" class="px-3 pt-3 pb-6">
+                  <h3 class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5 px-2">
+                    AI Sessions
+                  </h3>
+                  <%= if @ai_sessions == [] do %>
+                    <div
+                      id="ai-sessions-empty-state"
+                      class="flex flex-col items-center py-6 text-center"
+                    >
+                      <p class="text-xs text-base-content/25">No AI sessions yet</p>
+                    </div>
+                  <% else %>
+                    <div class="space-y-0.5">
+                      <%= for session <- @ai_sessions do %>
+                        <.link
+                          id={"ai-session-item-#{session.id}"}
+                          navigate={~p"/sessions/#{@workflow_session.id}/ai/#{session.id}"}
+                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                        >
+                          <span class="size-5 rounded flex items-center justify-center shrink-0">
+                            <.icon
+                              name="hero-cpu-chip-micro"
+                              class="size-3.5 text-base-content/30"
+                            />
+                          </span>
+                          <span class="text-sm text-base-content/60 truncate flex-1">
+                            AI Session
+                          </span>
+                          <span class="text-xs text-base-content/40 tabular-nums">
+                            {session.message_count}
+                          </span>
+                          <.icon
+                            name="hero-arrow-top-right-on-square-micro"
+                            class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                          />
+                        </.link>
                       <% end %>
                     </div>
                   <% end %>

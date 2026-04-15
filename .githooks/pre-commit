@@ -1,4 +1,16 @@
 #!/bin/bash
 
 eval "$(mise activate bash)" 2>/dev/null
+
+# Resolve _build and deps to their physical paths so that worktrees (where
+# these are symlinks) don't cause Mix to recompile deps with a wrong path.
+if [ -d "_build" ]; then
+  export MIX_BUILD_PATH
+  MIX_BUILD_PATH=$(cd _build && pwd -P)
+fi
+if [ -d "deps" ]; then
+  export MIX_DEPS_PATH
+  MIX_DEPS_PATH=$(cd deps && pwd -P)
+fi
+
 mix format --check-formatted
