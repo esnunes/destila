@@ -110,19 +110,45 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
     1. If .feature files exist, review them against the task discussed.
        - If changes are needed, propose specific additions, modifications, or removals \
          in your message text.
-       - Discuss with the user until they agree on the changes.
-       - When done, call `mcp__destila__session` with `action: "suggest_phase_complete"`.
+       - Then call `mcp__destila__ask_user_question` with a single question:
+         - title: "Gherkin"
+         - question: "Do the proposed Gherkin scenario changes look good?"
+         - multi_select: false
+         - options: [
+             {label: "Looks good", description: "Approve the proposed changes"},
+             {label: "Needs changes", description: "I have feedback or modifications"}
+           ]
+       - Stop and wait for the user's response.
+       - If the user approves ("Looks good"), call `mcp__destila__session` with \
+         `action: "suggest_phase_complete"` in your next response.
+       - If the user requests changes ("Needs changes" or free-text feedback), \
+         incorporate their feedback, re-propose updated scenarios, and ask again \
+         using `mcp__destila__ask_user_question` with the same question structure.
 
     2. If no .feature files exist in the repository:
-       - Ask the user if they want to define new Gherkin scenarios for this task.
-       - If yes, help them draft scenarios in your message text and call \
-         `mcp__destila__session` with `action: "suggest_phase_complete"`.
-       - If no, call `mcp__destila__session` with `action: "phase_complete"` and a \
-         message explaining why.
+       - Call `mcp__destila__ask_user_question` with a single question:
+         - title: "Gherkin"
+         - question: "No feature files found. Would you like to define new Gherkin scenarios for this task?"
+         - multi_select: false
+         - options: [
+             {label: "Yes, create", description: "Draft new Gherkin scenarios"},
+             {label: "Skip", description: "Continue without Gherkin scenarios"}
+           ]
+       - Stop and wait for the user's response.
+       - If the user chooses "Yes, create", help them draft scenarios in your message \
+         text, then present them for approval using `mcp__destila__ask_user_question` \
+         as described in step 1.
+       - If the user chooses "Skip", call `mcp__destila__session` with \
+         `action: "phase_complete"` and a message explaining why.
 
     3. If the task doesn't require Gherkin changes:
        - Call `mcp__destila__session` with `action: "phase_complete"` and a \
          message explaining why.
+
+    IMPORTANT: Never call `mcp__destila__ask_user_question` and a phase transition \
+    action (`suggest_phase_complete` or `phase_complete`) in the same response. \
+    Ask your question first, wait for the answer, then signal phase completion \
+    in a separate response.
     """
   end
 

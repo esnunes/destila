@@ -1,7 +1,7 @@
 ---
 title: "feat: Use structured tools in Gherkin Review phase"
 type: feat
-status: active
+status: completed
 date: 2026-04-15
 ---
 

@@ -60,11 +60,35 @@ Feature: Brainstorm Idea Workflow
     Then I should see a "Continue to Phase N" button
     And I should see the exported metadata card in the chat
 
-  Scenario: Phase 2 - Gherkin Review
+  Scenario: Phase 2 - Gherkin Review with structured approval
     Given the session is in Phase 2 - Gherkin Review
     Then the AI should review or propose Gherkin feature scenarios
-    When the user and AI agree on the scenarios
+    And the AI should present a structured question asking if the changes look good
+    When I approve the proposed changes
     Then the AI should suggest advancing
+
+  Scenario: Phase 2 - Gherkin Review with change requests
+    Given the session is in Phase 2 - Gherkin Review
+    And the AI has proposed Gherkin scenario changes
+    And the AI has presented a structured approval question
+    When I select "Needs changes" and provide feedback
+    Then the AI should incorporate my feedback and re-propose updated scenarios
+    And the AI should present the structured approval question again
+
+  Scenario: Phase 2 - No feature files with structured choice
+    Given the session is in Phase 2 - Gherkin Review
+    And no .feature files exist in the repository
+    Then the AI should present a structured question asking whether to create scenarios
+    When I choose to create new scenarios
+    Then the AI should help draft scenarios and present them for approval
+
+  Scenario: Phase 2 - Skip when no feature files and user declines
+    Given the session is in Phase 2 - Gherkin Review
+    And no .feature files exist in the repository
+    And the AI has presented a structured question asking whether to create scenarios
+    When I choose to skip Gherkin scenarios
+    Then the phase should be automatically completed
+    And the workflow should advance to Phase 3 - Technical Concerns
 
   Scenario: Skip Gherkin Review when not applicable
     Given the session is in Phase 2 - Gherkin Review
