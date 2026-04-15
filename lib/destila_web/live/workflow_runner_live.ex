@@ -688,7 +688,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         <%!-- Phase content + sidebar — full remaining height --%>
         <div class="flex flex-row flex-1 min-h-0">
           <%!-- Phase content — takes remaining space --%>
-          <div class="flex-1 min-h-0 overflow-hidden">
+          <div class="flex-1 min-w-0 min-h-0 overflow-hidden">
             {render_phase(assigns)}
           </div>
 
