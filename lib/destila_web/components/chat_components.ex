@@ -38,6 +38,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :metadata, :map, required: true
   attr :current_step, :map, required: true
   attr :phase_status, :atom, default: nil
+  attr :intermediate_bubbles, :list, default: []
   attr :exported_metadata, :list, default: []
 
   def chat_phase(assigns) do
@@ -83,6 +84,10 @@ defmodule DestilaWeb.ChatComponents do
                   </div>
                 <% end %>
                 <%= if phase == @phase_number && @phase_status == :processing do %>
+                  <.chat_intermediate_bubble
+                    :for={bubble <- @intermediate_bubbles}
+                    text={bubble.text}
+                  />
                   <%= if @streaming_chunks && @streaming_chunks != [] do %>
                     <.chat_stream_debug chunks={@streaming_chunks} />
                   <% else %>
@@ -106,6 +111,10 @@ defmodule DestilaWeb.ChatComponents do
                   </div>
                 <% end %>
                 <%= if phase == @phase_number && @phase_status == :processing do %>
+                  <.chat_intermediate_bubble
+                    :for={bubble <- @intermediate_bubbles}
+                    text={bubble.text}
+                  />
                   <%= if @streaming_chunks && @streaming_chunks != [] do %>
                     <.chat_stream_debug chunks={@streaming_chunks} />
                   <% else %>
@@ -690,6 +699,23 @@ defmodule DestilaWeb.ChatComponents do
   end
 
   # --- Streaming / typing ---
+
+  attr :text, :string, required: true
+
+  def chat_intermediate_bubble(assigns) do
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="rounded-2xl px-4 py-3 text-sm max-w-[80%] border border-dashed border-base-content/20 bg-base-200/50 text-base-content/70">
+        <div class="prose prose-sm max-w-none">
+          {raw(markdown_to_html(@text))}
+        </div>
+      </div>
+    </div>
+    """
+  end
 
   attr :chunks, :list, required: true
 

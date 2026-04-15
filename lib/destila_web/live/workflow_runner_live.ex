@@ -61,6 +61,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign_worktree_path(workflow_session.id)
        |> assign(:page_title, workflow_session.title)
        |> assign(:streaming_chunks, nil)
+       |> assign(:intermediate_bubbles, [])
        |> assign(:alive_session, alive_session)
        |> assign(:question_answers, %{})
        |> assign(:editing_question_index, nil)
@@ -418,6 +419,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
            else: nil
          )
        )
+       |> assign(
+         :intermediate_bubbles,
+         if(phase_status == :processing,
+           do: socket.assigns.intermediate_bubbles,
+           else: []
+         )
+       )
        |> assign_metadata(ws.id)
        |> assign_worktree_path(ws.id)
        |> assign_ai_state(ws)}
@@ -440,7 +448,21 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   def handle_info({:ai_stream_chunk, chunk}, socket) do
     chunks = socket.assigns[:streaming_chunks] || []
-    {:noreply, assign(socket, :streaming_chunks, chunks ++ [chunk])}
+    bubbles = socket.assigns.intermediate_bubbles
+
+    bubbles =
+      case extract_intermediate_text(chunk) do
+        {:ok, text} ->
+          bubbles ++ [%{text: text}]
+
+        :skip ->
+          bubbles
+      end
+
+    {:noreply,
+     socket
+     |> assign(:streaming_chunks, chunks ++ [chunk])
+     |> assign(:intermediate_bubbles, bubbles)}
   end
 
   def handle_info({:aliveness_changed, ws_id, alive?}, socket) do
@@ -452,6 +474,22 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  defp extract_intermediate_text(%ClaudeCode.Message.AssistantMessage{message: message}) do
+    text =
+      message.content
+      |> Enum.filter(&match?(%ClaudeCode.Content.TextBlock{}, &1))
+      |> Enum.map_join(& &1.text)
+
+    if String.trim(text) != "", do: {:ok, text}, else: :skip
+  end
+
+  defp extract_intermediate_text(%ClaudeCode.Message.ResultMessage{result: result})
+       when is_binary(result) do
+    if String.trim(result) != "", do: {:ok, result}, else: :skip
+  end
+
+  defp extract_intermediate_text(_chunk), do: :skip
 
   # --- Private: AI state management ---
 
@@ -1101,6 +1139,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           phase_number={@workflow_session.current_phase}
           phase_config={@phase_config}
           streaming_chunks={@streaming_chunks}
+          intermediate_bubbles={@intermediate_bubbles}
           question_answers={@question_answers}
           editing_question_index={@editing_question_index}
           editing_previous_answer={@editing_previous_answer}

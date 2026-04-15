@@ -580,18 +580,17 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     end
   end
 
-  # --- AI streaming ---
+  # --- Streaming intermediate bubbles ---
 
-  describe "AI streaming" do
-    @tag feature: @feature, scenario: "Streams AI response chunks to the chat UI"
-    test "streams AI response chunks to the chat UI", %{conn: conn} do
+  describe "Streaming intermediate bubbles" do
+    @tag feature: @feature,
+         scenario: "Intermediate text bubbles appear during AI processing"
+    test "AssistantMessage with text renders an intermediate bubble", %{conn: conn} do
       ws = create_session_in_phase(1, pe_status: :processing)
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      # Initially shows typing indicator
       assert has_element?(view, "[class*='animate-bounce']")
 
-      # Simulate a stream chunk broadcast
       topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
 
       chunk = %ClaudeCode.Message.AssistantMessage{
@@ -604,10 +603,143 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
 
-      # Verify streaming debug view shows the chunk content
       html = render(view)
       assert html =~ "Streaming text"
-      assert html =~ "[assistant]"
+      assert html =~ "border-dashed"
+      assert has_element?(view, "[class*='animate-bounce']")
+    end
+
+    @tag feature: @feature,
+         scenario: "Result text appears as an intermediate bubble"
+    test "ResultMessage with non-empty result renders an intermediate bubble", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = %ClaudeCode.Message.ResultMessage{
+        type: :result,
+        subtype: :success,
+        is_error: false,
+        result: "Final result text",
+        session_id: "test",
+        num_turns: 1,
+        duration_ms: 100,
+        duration_api_ms: 80,
+        total_cost_usd: 0.01,
+        usage: nil
+      }
+
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      html = render(view)
+      assert html =~ "Final result text"
+      assert html =~ "border-dashed"
+    end
+
+    @tag feature: @feature,
+         scenario: "Tool messages do not create intermediate bubbles"
+    test "ToolProgressMessage does not create an intermediate bubble", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = %ClaudeCode.Message.ToolProgressMessage{
+        type: :tool_progress,
+        tool_use_id: "tool_1",
+        tool_name: "Read",
+        elapsed_time_seconds: 1.0,
+        session_id: "test"
+      }
+
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      html = render(view)
+      refute html =~ "border-dashed"
+      assert has_element?(view, "[class*='animate-bounce']")
+    end
+
+    @tag feature: @feature,
+         scenario: "Tool messages do not create intermediate bubbles"
+    test "AssistantMessage with only tool use blocks does not create a bubble", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = %ClaudeCode.Message.AssistantMessage{
+        type: :assistant,
+        session_id: "test",
+        message: %{
+          content: [
+            %ClaudeCode.Content.ToolUseBlock{
+              type: "tool_use",
+              id: "tool_1",
+              name: "Read",
+              input: %{}
+            }
+          ]
+        }
+      }
+
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      html = render(view)
+      refute html =~ "border-dashed"
+    end
+
+    @tag feature: @feature,
+         scenario: "Intermediate bubbles replaced by final message on completion"
+    test "intermediate bubbles are cleared when processing completes", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = %ClaudeCode.Message.AssistantMessage{
+        type: :assistant,
+        session_id: "test",
+        message: %{
+          content: [%ClaudeCode.Content.TextBlock{type: "text", text: "Temporary text"}]
+        }
+      }
+
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+      assert render(view) =~ "border-dashed"
+
+      pe = Executions.get_phase_execution_by_number(ws.id, 1)
+      pe |> Ecto.Changeset.change(%{status: :awaiting_input}) |> Destila.Repo.update!()
+      send(view.pid, {:workflow_session_updated, ws})
+
+      html = render(view)
+      refute html =~ "border-dashed"
+      refute html =~ "Temporary text"
+    end
+
+    @tag feature: @feature,
+         scenario: "Intermediate text bubbles appear during AI processing"
+    test "multiple chunks each produce their own separate bubble", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      for text <- ["First chunk", "Second chunk"] do
+        chunk = %ClaudeCode.Message.AssistantMessage{
+          type: :assistant,
+          session_id: "test",
+          message: %{
+            content: [%ClaudeCode.Content.TextBlock{type: "text", text: text}]
+          }
+        }
+
+        Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+      end
+
+      html = render(view)
+      assert html =~ "First chunk"
+      assert html =~ "Second chunk"
     end
   end
 
