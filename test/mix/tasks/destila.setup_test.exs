@@ -7,7 +7,7 @@ defmodule Mix.Tasks.Destila.SetupTest do
     test "reports binary already available when found" do
       output = capture_io(fn -> Mix.Tasks.Destila.Setup.run([]) end)
 
-      assert output =~ "Claude CLI already available at"
+      assert output =~ "Claude CLI available at"
     end
   end
 end

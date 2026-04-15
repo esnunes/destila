@@ -7,9 +7,11 @@ defmodule Destila.AI.Tools do
 
   use ClaudeCode.MCP.Server, name: "destila"
 
-  tool :ask_user_question,
-       "Present one or more structured questions to the user with selectable options. " <>
-         "Use this when you want the user to choose from specific options. " do
+  tool :ask_user_question do
+    description(
+      "Present one or more structured questions to the user with selectable options. Use this when you want the user to choose from specific options."
+    )
+
     field(
       :questions,
       {:list,
@@ -55,9 +57,11 @@ defmodule Destila.AI.Tools do
   action in the same response.
   """
 
-  tool :session,
-       "Signal a phase transition or export metadata in the workflow session. " <>
-         "Call this tool to advance phases or store key-value outputs." do
+  tool :session do
+    description(
+      "Signal a phase transition or export metadata in the workflow session. Call this tool to advance phases or store key-value outputs."
+    )
+
     field(:action, :string,
       required: true,
       description:
@@ -117,9 +121,11 @@ defmodule Destila.AI.Tools do
   `markdown` (markdown content), or `video_file` (absolute path to a video file).
   """
 
-  tool :service,
-       "Manage the project's development service lifecycle. " <>
-         "Use this to start, stop, restart, or check the status of the project's service." do
+  tool :service do
+    description(
+      "Manage the project's development service lifecycle. Use this to start, stop, restart, or check the status of the project's service."
+    )
+
     field(:action, :string,
       required: true,
       description:

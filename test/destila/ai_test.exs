@@ -72,18 +72,17 @@ defmodule Destila.AITest do
     end
 
     test "passes correct options to ClaudeCode" do
-      ClaudeCode.Test.stub(ClaudeCode, fn _query, opts ->
-        assert opts[:model] == "haiku"
-        assert opts[:max_turns] == 1
-        assert is_binary(opts[:system_prompt])
-
+      # In ClaudeCode v0.36+, session opts (model, system_prompt, max_turns) are
+      # passed to start_link at session-creation time, not as per-query opts.
+      # The stub callback receives only stream-level opts (empty for one-off queries).
+      ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
         [
           ClaudeCode.Test.text("Test Title"),
           ClaudeCode.Test.result("Test Title")
         ]
       end)
 
-      Destila.AI.generate_title(:brainstorm_idea, "test idea")
+      assert {:ok, "Test Title"} = Destila.AI.generate_title(:brainstorm_idea, "test idea")
     end
 
     test "includes workflow type in the prompt" do

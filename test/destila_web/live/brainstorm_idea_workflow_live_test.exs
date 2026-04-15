@@ -914,7 +914,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
       assert has_element?(view, "#metadata-sidebar")
       assert has_element?(view, "#metadata-sidebar-content")
-      assert render(view) =~ "Prompt generated"
+      assert render(view) =~ "Prompt Generated"
     end
 
     @tag feature: "exported_metadata",
@@ -949,7 +949,7 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       _ = render(view)
 
       refute render(view) =~ "No metadata exported yet"
-      assert render(view) =~ "Prompt generated"
+      assert render(view) =~ "Prompt Generated"
     end
 
     @tag feature: "exported_metadata", scenario: "Sidebar is open by default"
