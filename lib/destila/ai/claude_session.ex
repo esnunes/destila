@@ -145,6 +145,7 @@ defmodule Destila.AI.ClaudeSession do
   def init(opts) do
     {timeout_ms, claude_opts} = Keyword.pop(opts, :timeout_ms, @default_timeout_ms)
     {workflow_session_id, claude_opts} = Keyword.pop(claude_opts, :workflow_session_id)
+    {ai_session_id, claude_opts} = Keyword.pop(claude_opts, :ai_session_id)
     claude_opts = Keyword.put_new(claude_opts, :allowed_tools, @default_allowed_tools)
 
     claude_opts =
@@ -193,7 +194,7 @@ defmodule Destila.AI.ClaudeSession do
             Phoenix.PubSub.broadcast(
               Destila.PubSub,
               Destila.PubSubHelper.claude_session_topic(),
-              {:claude_session_started, workflow_session_id}
+              {:claude_session_started, workflow_session_id, ai_session_id}
             )
           end
 
@@ -202,7 +203,8 @@ defmodule Destila.AI.ClaudeSession do
              claude_session: claude_session,
              timeout_ms: timeout_ms,
              timer_ref: timer_ref,
-             workflow_session_id: workflow_session_id
+             workflow_session_id: workflow_session_id,
+             ai_session_id: ai_session_id
            }}
 
         {:error, reason} ->

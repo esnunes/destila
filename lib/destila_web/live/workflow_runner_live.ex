@@ -17,6 +17,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   import DestilaWeb.ChatComponents
 
   alias Destila.AI
+  alias Destila.AI.AlivenessTracker
   alias Destila.AI.ResponseProcessor
   alias Destila.Sessions.SessionProcess
   alias Destila.Workflows
@@ -35,9 +36,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
           Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.ai_stream_topic(id))
-          Phoenix.PubSub.subscribe(Destila.PubSub, Destila.AI.AlivenessTracker.topic())
+          Phoenix.PubSub.subscribe(Destila.PubSub, AlivenessTracker.topic())
 
-          Destila.AI.AlivenessTracker.alive?(id)
+          AlivenessTracker.alive?(id)
         else
           false
         end
@@ -473,6 +474,16 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
+  def handle_info({:aliveness_changed_ai, ai_id, alive?}, socket) do
+    ai_sessions_alive = socket.assigns[:ai_sessions_alive] || %{}
+
+    if Map.has_key?(ai_sessions_alive, ai_id) do
+      {:noreply, assign(socket, :ai_sessions_alive, Map.put(ai_sessions_alive, ai_id, alive?))}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp extract_intermediate_text(%ClaudeCode.Message.AssistantMessage{message: message}) do
@@ -500,6 +511,18 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     socket
     |> assign(:messages, messages)
     |> assign(:current_step, current_step)
+    |> assign_ai_sessions_list(ws.id)
+  end
+
+  defp assign_ai_sessions_list(socket, ws_id) do
+    ai_sessions = AI.list_ai_sessions_for_workflow(ws_id)
+
+    ai_sessions_alive =
+      Map.new(ai_sessions, fn ai -> {ai.id, AlivenessTracker.alive_ai?(ai.id)} end)
+
+    socket
+    |> assign(:ai_sessions, ai_sessions)
+    |> assign(:ai_sessions_alive, ai_sessions_alive)
   end
 
   defp compute_current_step(ws, phase_status, messages) do
@@ -862,6 +885,47 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 <%!-- Divider between input and output --%>
                 <div class="border-t border-base-300/60 mx-3"></div>
 
+                <%!-- AI Sessions section — historical AI sessions for this workflow --%>
+                <div id="ai-sessions-section" class="px-3 pt-3 pb-3">
+                  <h3 class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5 px-2">
+                    AI Sessions
+                  </h3>
+
+                  <%= if @ai_sessions == [] do %>
+                    <p class="px-2 py-1.5 text-xs text-base-content/25">
+                      No AI sessions yet
+                    </p>
+                  <% else %>
+                    <div class="space-y-0.5">
+                      <.link
+                        :for={ai <- @ai_sessions}
+                        id={"ai-session-row-#{ai.id}"}
+                        navigate={~p"/sessions/#{@workflow_session.id}/ai/#{ai.id}"}
+                        class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                        aria-label={"Open AI session from #{format_ai_inserted_at(ai.inserted_at)}"}
+                      >
+                        <span class="size-5 rounded flex items-center justify-center shrink-0">
+                          <.aliveness_dot
+                            session={@workflow_session}
+                            alive?={Map.get(@ai_sessions_alive, ai.id, false)}
+                            phase_status={:idle}
+                          />
+                        </span>
+                        <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                          {format_ai_inserted_at(ai.inserted_at)}
+                        </span>
+                        <.icon
+                          name="hero-chevron-right-micro"
+                          class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                        />
+                      </.link>
+                    </div>
+                  <% end %>
+                </div>
+
+                <%!-- Divider between AI sessions and exported metadata --%>
+                <div class="border-t border-base-300/60 mx-3"></div>
+
                 <%!-- Exported metadata section — primary content --%>
                 <div class="px-3 pt-3 pb-6 flex-1">
                   <h3 class="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider mb-1.5 px-2">
@@ -1220,4 +1284,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     |> String.split("_")
     |> Enum.map_join(" ", &String.capitalize/1)
   end
+
+  defp format_ai_inserted_at(%DateTime{} = dt) do
+    Calendar.strftime(dt, "%b %-d, %H:%M")
+  end
+
+  defp format_ai_inserted_at(_), do: ""
 end

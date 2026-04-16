@@ -187,7 +187,7 @@ tool_index =
 
 ## Implementation Units
 
-- [ ] **Unit 1: Extend `AlivenessTracker` to dual-key (`workflow_session_id` + `ai_session_id`)**
+- [x] **Unit 1: Extend `AlivenessTracker` to dual-key (`workflow_session_id` + `ai_session_id`)**
 
 **Goal:** Track aliveness by both keys while preserving the existing `workflow_session_id` contract.
 
@@ -230,7 +230,7 @@ tool_index =
 
 ---
 
-- [ ] **Unit 2: Add `list_ai_sessions_for_workflow/1` to `Destila.AI`**
+- [x] **Unit 2: Add `list_ai_sessions_for_workflow/1` to `Destila.AI`**
 
 **Goal:** Provide a context function returning all AI sessions for a workflow session, ordered newest-first.
 
@@ -262,7 +262,7 @@ tool_index =
 
 ---
 
-- [ ] **Unit 3: Render "AI Sessions" section in the workflow runner right sidebar**
+- [x] **Unit 3: Render "AI Sessions" section in the workflow runner right sidebar**
 
 **Goal:** Show the AI sessions list between the "Workflow Session" and "Exported Metadata" sections, with live aliveness dots and navigation to the detail page.
 
@@ -306,7 +306,7 @@ tool_index =
 
 ---
 
-- [ ] **Unit 4: Add route + `DestilaWeb.AiSessionDetailLive` skeleton**
+- [x] **Unit 4: Add route + `DestilaWeb.AiSessionDetailLive` skeleton**
 
 **Goal:** Stand up the detail page with header, mount logic, subscription, empty states, and back-navigation — but without the content-block rendering (deferred to Unit 6).
 
@@ -357,7 +357,7 @@ tool_index =
 
 ---
 
-- [ ] **Unit 5: `Destila.AI.History` adapter for `ClaudeCode.History.get_messages/2`**
+- [x] **Unit 5: `Destila.AI.History` adapter for `ClaudeCode.History.get_messages/2`**
 
 **Goal:** Make the history read swappable in tests without stubbing a module we do not own.
 
@@ -394,7 +394,7 @@ tool_index =
 
 ---
 
-- [ ] **Unit 6: `DestilaWeb.AiSessionDebugComponents` + full renderer wired into the detail page**
+- [x] **Unit 6: `DestilaWeb.AiSessionDebugComponents` + full renderer wired into the detail page**
 
 **Goal:** Render every content block type, pair tool calls with tool results, gracefully handle unknown shapes.
 
@@ -459,7 +459,7 @@ tool_index =
 
 ---
 
-- [ ] **Unit 7: Gherkin features + test linkage**
+- [x] **Unit 7: Gherkin features + test linkage**
 
 **Goal:** Commit the two `.feature` files from the prompt and ensure every LiveView test carries the matching `@tag feature:/scenario:`.
 
@@ -492,7 +492,7 @@ tool_index =
 
 ---
 
-- [ ] **Unit 8: Precommit run and polish**
+- [x] **Unit 8: Precommit run and polish**
 
 **Goal:** Run `mix precommit`, fix any lint/type/test issues, and do one manual pass of the UI in the browser.
 

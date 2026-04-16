@@ -21,6 +21,19 @@ defmodule Destila.AI do
     )
   end
 
+  def list_ai_sessions_for_workflow(workflow_session_id) do
+    Repo.all(
+      from(s in Session,
+        where: s.workflow_session_id == ^workflow_session_id,
+        order_by: [desc: s.inserted_at]
+      )
+    )
+  end
+
+  def get_ai_session(id) do
+    Repo.get(Session, id)
+  end
+
   def get_ai_session_for_workflow!(workflow_session_id) do
     Repo.one!(
       from(s in Session,

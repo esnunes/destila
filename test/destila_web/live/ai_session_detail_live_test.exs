@@ -1,0 +1,514 @@
+defmodule DestilaWeb.AiSessionDetailLiveTest do
+  @moduledoc """
+  LiveView tests for the AI Session Debug Detail page.
+  Feature: features/ai_session_detail.feature
+  """
+  use DestilaWeb.ConnCase, async: false
+
+  import Phoenix.LiveViewTest
+
+  alias ClaudeCode.Content.{
+    CompactionBlock,
+    ImageBlock,
+    MCPToolUseBlock,
+    RedactedThinkingBlock,
+    ServerToolResultBlock,
+    ServerToolUseBlock,
+    TextBlock,
+    ThinkingBlock,
+    ToolResultBlock,
+    ToolUseBlock
+  }
+
+  alias ClaudeCode.History.SessionMessage
+  alias Destila.AI
+  alias Destila.AI.{AlivenessTracker, FakeHistory}
+
+  setup %{conn: conn} do
+    ClaudeCode.Test.set_mode_to_shared()
+
+    ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+      [
+        ClaudeCode.Test.text("AI response"),
+        ClaudeCode.Test.result("AI response")
+      ]
+    end)
+
+    FakeHistory.reset()
+
+    {:ok, conn: conn}
+  end
+
+  defp create_session do
+    {:ok, ws} =
+      Destila.Workflows.insert_workflow_session(%{
+        title: "Test Session",
+        workflow_type: :brainstorm_idea,
+        project_id: nil,
+        done_at: DateTime.utc_now(),
+        current_phase: 4,
+        total_phases: 4
+      })
+
+    ws
+  end
+
+  defp create_ai_session(ws, attrs \\ %{}) do
+    claude_session_id = Map.get(attrs, :claude_session_id, Ecto.UUID.generate())
+
+    {:ok, ai} =
+      AI.create_ai_session(
+        Map.merge(
+          %{
+            workflow_session_id: ws.id,
+            worktree_path: System.tmp_dir!(),
+            claude_session_id: claude_session_id
+          },
+          attrs
+        )
+      )
+
+    ai
+  end
+
+  defp assistant_message(content_blocks) do
+    %SessionMessage{
+      type: :assistant,
+      uuid: Ecto.UUID.generate(),
+      session_id: "test-session",
+      message: %{content: content_blocks},
+      parent_tool_use_id: nil
+    }
+  end
+
+  defp user_message(content) do
+    %SessionMessage{
+      type: :user,
+      uuid: Ecto.UUID.generate(),
+      session_id: "test-session",
+      message: %{content: content, role: :user},
+      parent_tool_use_id: nil
+    }
+  end
+
+  describe "mount + header" do
+    @tag feature: "ai_session_detail",
+         scenario: "Header shows creation date and Claude session id"
+    test "renders header with creation date and claude_session_id", %{conn: conn} do
+      ws = create_session()
+      claude_session_id = Ecto.UUID.generate()
+      ai = create_ai_session(ws, %{claude_session_id: claude_session_id})
+      FakeHistory.stub(claude_session_id, {:ok, []})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, "#ai-session-header")
+      assert has_element?(view, "#ai-session-claude-id", claude_session_id)
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Back link navigates to the parent workflow runner"
+    test "back link points to the parent workflow runner", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(
+               view,
+               ~s|#ai-session-back-link[href="/sessions/#{ws.id}"]|
+             )
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Unknown workflow session id redirects to the crafting board"
+    test "unknown workflow session id redirects to /crafting", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      assert {:error, {:live_redirect, %{to: "/crafting"}}} =
+               live(conn, ~p"/sessions/#{Ecto.UUID.generate()}/ai/#{ai.id}")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Unknown AI session id redirects to the workflow runner"
+    test "unknown ai_session_id redirects to /crafting", %{conn: conn} do
+      ws = create_session()
+
+      assert {:error, {:live_redirect, %{to: "/crafting"}}} =
+               live(conn, ~p"/sessions/#{ws.id}/ai/#{Ecto.UUID.generate()}")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "AI session belonging to another workflow is rejected"
+    test "ai_session from a different workflow redirects to the parent workflow", %{conn: conn} do
+      ws1 = create_session()
+      ws2 = create_session()
+      ai = create_ai_session(ws2)
+
+      assert {:error, {:live_redirect, %{to: path}}} =
+               live(conn, ~p"/sessions/#{ws1.id}/ai/#{ai.id}")
+
+      assert path == "/sessions/#{ws1.id}"
+    end
+  end
+
+  describe "empty states" do
+    @tag feature: "ai_session_detail", scenario: "Missing Claude session id shows empty state"
+    test "renders empty state when claude_session_id is nil", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws, %{claude_session_id: nil})
+
+      {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert html =~ "No conversation history available"
+    end
+
+    @tag feature: "ai_session_detail", scenario: "Empty history shows empty state"
+    test "renders empty state when history is empty", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert html =~ "No conversation history available"
+    end
+
+    @tag feature: "ai_session_detail", scenario: "History read failure shows empty state"
+    test "renders error empty state when history adapter returns an error", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:error, :enoent})
+
+      {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert html =~ "Unable to read conversation history"
+    end
+  end
+
+  describe "aliveness live updates" do
+    @tag feature: "ai_session_detail", scenario: "Aliveness dot toggles live on the detail page"
+    test "broadcasting an ai-aliveness change updates the detail page", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        AlivenessTracker.topic(),
+        {:aliveness_changed_ai, ai.id, true}
+      )
+
+      assert render(view) =~ "bg-success"
+    end
+  end
+
+  describe "content block rendering" do
+    @tag feature: "ai_session_detail", scenario: "Text blocks render in order"
+    test "renders user and assistant text blocks in order", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        user_message("hello there"),
+        assistant_message([%TextBlock{type: "text", text: "hi back"}])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, ~s|[data-message-role="user"]|)
+      assert has_element?(view, ~s|[data-message-role="assistant"]|)
+      assert render(view) =~ "hello there"
+      assert render(view) =~ "hi back"
+    end
+
+    @tag feature: "ai_session_detail", scenario: "Thinking block renders collapsed by default"
+    test "renders thinking block as collapsed <details>", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %ThinkingBlock{type: "thinking", thinking: "deep thoughts", signature: "sig"}
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, ~s|details[data-block-type="thinking"]|)
+
+      refute render(view) =~
+               ~s|<details data-block-type="thinking" class="rounded-md border border-base-300/60 bg-base-200/40" open|
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Redacted thinking block renders as a placeholder"
+    test "renders redacted thinking block placeholder", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %RedactedThinkingBlock{type: "redacted_thinking", data: "abcd"}
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, ~s|[data-block-type="redacted_thinking"]|)
+      assert render(view) =~ "Redacted thinking"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Tool use block renders tool name and pretty JSON input"
+    test "renders tool use block with name and pretty JSON input", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %ToolUseBlock{
+            type: "tool_use",
+            id: "toolu_1",
+            name: "Read",
+            input: %{"path" => "/tmp/foo.txt"}
+          }
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(
+               view,
+               ~s|[data-block-type="tool_use"][data-tool-use-id="toolu_1"]|
+             )
+
+      html = render(view)
+      assert html =~ "Read"
+      assert html =~ "/tmp/foo.txt"
+    end
+
+    @tag feature: "ai_session_detail", scenario: "Tool result block is paired with its tool use"
+    test "tool result block references the originating tool use id and carries the tool name",
+         %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %ToolUseBlock{
+            type: "tool_use",
+            id: "toolu_1",
+            name: "Read",
+            input: %{"path" => "/tmp/foo.txt"}
+          }
+        ]),
+        user_message([
+          %ToolResultBlock{
+            type: "tool_result",
+            tool_use_id: "toolu_1",
+            content: "file contents",
+            is_error: false
+          }
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(
+               view,
+               ~s|[data-block-type="tool_result"][data-tool-use-ref="toolu_1"][data-tool-name="Read"]|
+             )
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Tool result with is_error renders with an error style"
+    test "tool result block with is_error true renders with error styling", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        user_message([
+          %ToolResultBlock{
+            type: "tool_result",
+            tool_use_id: "toolu_1",
+            content: "boom",
+            is_error: true
+          }
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      html = render(view)
+      assert html =~ ~s|data-block-type="tool_result"|
+      assert html =~ "border-error"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Server tool use and result render with a server tool badge"
+    test "server tool blocks render with a server tool label", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %ServerToolUseBlock{
+            type: "server_tool_use",
+            id: "srv_1",
+            name: "web_search",
+            input: %{"q" => "elixir"}
+          }
+        ]),
+        user_message([
+          %ServerToolResultBlock{
+            type: "server_tool_result",
+            tool_use_id: "srv_1",
+            content: "[result]"
+          }
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      html = render(view)
+      assert html =~ ~s|data-block-type="server_tool_use"|
+      assert html =~ ~s|data-block-type="server_tool_result"|
+      assert html =~ "server tool"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "MCP tool blocks render with server_name and tool name"
+    test "MCP tool use block shows server name and tool name", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %MCPToolUseBlock{
+            type: "mcp_tool_use",
+            id: "mcp_1",
+            name: "list_files",
+            server_name: "my-server",
+            input: %{"path" => "/"}
+          }
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      html = render(view)
+      assert html =~ ~s|data-block-type="mcp_tool_use"|
+      assert html =~ "my-server"
+      assert html =~ "list_files"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Image block with URL source renders an img element"
+    test "image block with URL source renders an <img>", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %ImageBlock{
+            type: "image",
+            source: %{type: :url, url: "https://example.com/cat.png"}
+          }
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, ~s|img[src="https://example.com/cat.png"]|)
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Image block with base64 source renders a placeholder"
+    test "image block with base64 source renders a placeholder (no img element)", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %ImageBlock{
+            type: "image",
+            source: %{type: :base64, media_type: "image/png", data: "AAAA"}
+          }
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      html = render(view)
+      assert html =~ ~s|data-image-kind="base64"|
+      refute html =~ ~s|<img|
+    end
+
+    @tag feature: "ai_session_detail", scenario: "Compaction block renders a visible marker"
+    test "compaction block renders a compaction marker", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %CompactionBlock{type: "compaction", content: "summary"}
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      html = render(view)
+      assert html =~ ~s|data-block-type="compaction"|
+      assert html =~ "Conversation compacted"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Unknown block types render via an inspect fallback"
+    test "unknown block struct renders through the inspect fallback without crashing",
+         %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %{__struct__: NotARealBlock, foo: :bar}
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      html = render(view)
+      assert html =~ ~s|data-block-type="unknown"|
+      assert html =~ "NotARealBlock"
+    end
+  end
+end
