@@ -31,25 +31,28 @@ defmodule DestilaWeb.AiSessionDebugComponents do
 
   alias ClaudeCode.History.SessionMessage
 
-  attr :messages, :list, required: true
+  attr :items, :list, required: true
   attr :tool_index, :map, default: %{}
 
   def session_history(assigns) do
     ~H"""
     <div id="session-history" class="flex flex-col gap-4">
-      <%= for {msg, idx} <- Enum.with_index(@messages) do %>
-        <.session_message msg={msg} idx={idx} tool_index={@tool_index} />
+      <%= for {item, idx} <- Enum.with_index(@items) do %>
+        <.session_item item={item} idx={idx} tool_index={@tool_index} />
       <% end %>
     </div>
     """
   end
 
-  attr :msg, :any, required: true
+  attr :item, :any, required: true
   attr :idx, :integer, required: true
   attr :tool_index, :map, required: true
 
-  defp session_message(%{msg: %SessionMessage{type: :user} = msg} = assigns) do
-    assigns = assign(assigns, :content, extract_content(msg.message))
+  defp session_item(%{item: {:msg, %SessionMessage{type: :user} = msg}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:msg, msg)
+      |> assign(:content, extract_content(msg.message))
 
     ~H"""
     <div
@@ -64,8 +67,11 @@ defmodule DestilaWeb.AiSessionDebugComponents do
     """
   end
 
-  defp session_message(%{msg: %SessionMessage{type: :assistant} = msg} = assigns) do
-    assigns = assign(assigns, :content, extract_content(msg.message))
+  defp session_item(%{item: {:msg, %SessionMessage{type: :assistant} = msg}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:msg, msg)
+      |> assign(:content, extract_content(msg.message))
 
     ~H"""
     <div
@@ -80,16 +86,164 @@ defmodule DestilaWeb.AiSessionDebugComponents do
     """
   end
 
-  defp session_message(assigns) do
+  defp session_item(%{item: {:meta, entry}} = assigns) when is_map(entry) do
+    assigns = assign(assigns, :entry, entry)
+    meta_kind = meta_kind(entry)
+    assigns = assign(assigns, :meta_kind, meta_kind)
+
+    ~H"""
+    <.meta_entry kind={@meta_kind} entry={@entry} idx={@idx} />
+    """
+  end
+
+  defp session_item(assigns) do
     ~H"""
     <div
       id={"message-#{@idx}"}
       data-message-role="unknown"
       class="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3"
     >
-      <p class="text-xs text-base-content/50 mb-2">Unrecognized message</p>
-      <pre class="text-xs text-base-content/70 whitespace-pre-wrap break-words">{inspect(@msg, pretty: true, limit: 200, printable_limit: 4096)}</pre>
+      <p class="text-xs text-base-content/50 mb-2">Unrecognized entry</p>
+      <pre class="text-xs text-base-content/70 whitespace-pre-wrap break-words">{inspect(@item, pretty: true, limit: 200, printable_limit: 4096)}</pre>
     </div>
+    """
+  end
+
+  defp meta_kind(%{"type" => "system", "subtype" => "compact_boundary"}), do: :compact_boundary
+  defp meta_kind(%{"type" => "system"}), do: :system
+  defp meta_kind(%{"type" => "summary"}), do: :summary
+  defp meta_kind(%{"type" => "queue-operation"}), do: :queue_operation
+  defp meta_kind(%{"type" => "attachment"}), do: :attachment
+  defp meta_kind(%{"type" => type}) when is_binary(type), do: {:other, type}
+  defp meta_kind(_), do: :unknown
+
+  attr :kind, :any, required: true
+  attr :entry, :map, required: true
+  attr :idx, :integer, required: true
+
+  defp meta_entry(%{kind: :compact_boundary} = assigns) do
+    trigger = get_in(assigns.entry, ["compactMetadata", "trigger"]) || "compact"
+
+    assigns =
+      assigns
+      |> assign(:trigger, trigger)
+      |> assign(
+        :pre_tokens,
+        get_in(assigns.entry, ["compactMetadata", "preCompactionTokenCount"])
+      )
+
+    ~H"""
+    <div
+      id={"meta-#{@idx}"}
+      data-meta-kind="compact_boundary"
+      class="flex items-center gap-3 py-1"
+    >
+      <div class="flex-1 h-px bg-warning/40"></div>
+      <div class="flex items-center gap-2 rounded-full border border-warning/40 bg-warning/10 px-3 py-1">
+        <.icon name="hero-scissors-micro" class="size-3 text-warning" />
+        <span class="text-[10px] font-semibold uppercase tracking-wider text-warning">
+          Compaction · {@trigger}
+        </span>
+        <span :if={@pre_tokens} class="text-[10px] text-warning/80">
+          {@pre_tokens} tokens
+        </span>
+      </div>
+      <div class="flex-1 h-px bg-warning/40"></div>
+    </div>
+    """
+  end
+
+  defp meta_entry(%{kind: :summary} = assigns) do
+    summary_text = Map.get(assigns.entry, "summary") || ""
+    assigns = assign(assigns, :summary_text, summary_text)
+
+    ~H"""
+    <details
+      id={"meta-#{@idx}"}
+      data-meta-kind="summary"
+      class="rounded-lg border border-info/30 bg-info/5 px-4 py-3"
+    >
+      <summary class="cursor-pointer text-[10px] font-semibold uppercase tracking-wider text-info flex items-center gap-2">
+        <.icon name="hero-document-text-micro" class="size-3" /> Summary
+      </summary>
+      <p class="mt-2 text-sm text-base-content/80 whitespace-pre-wrap break-words">{@summary_text}</p>
+    </details>
+    """
+  end
+
+  defp meta_entry(%{kind: :queue_operation} = assigns) do
+    operation = Map.get(assigns.entry, "operation") || "operation"
+    timestamp = Map.get(assigns.entry, "timestamp") || ""
+    assigns = assigns |> assign(:operation, operation) |> assign(:timestamp, timestamp)
+
+    ~H"""
+    <details
+      id={"meta-#{@idx}"}
+      data-meta-kind="queue_operation"
+      class="rounded border border-base-300 bg-base-100/60 px-3 py-1.5"
+    >
+      <summary class="cursor-pointer text-[10px] font-mono text-base-content/50 flex items-center gap-2">
+        <.icon name="hero-queue-list-micro" class="size-3" /> queue-operation · {@operation}
+        <span class="ml-auto">{@timestamp}</span>
+      </summary>
+      <pre class="mt-2 text-[10px] text-base-content/60 whitespace-pre-wrap break-words">{inspect(@entry, pretty: true, limit: 100, printable_limit: 2048)}</pre>
+    </details>
+    """
+  end
+
+  defp meta_entry(%{kind: :attachment} = assigns) do
+    ~H"""
+    <div
+      id={"meta-#{@idx}"}
+      data-meta-kind="attachment"
+      class="rounded border border-base-300 bg-base-100/60 px-3 py-2"
+    >
+      <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-base-content/60">
+        <.icon name="hero-paper-clip-micro" class="size-3" /> Attachment
+      </div>
+      <pre class="mt-1 text-[10px] text-base-content/60 whitespace-pre-wrap break-words">{inspect(@entry, pretty: true, limit: 100, printable_limit: 2048)}</pre>
+    </div>
+    """
+  end
+
+  defp meta_entry(%{kind: :system} = assigns) do
+    subtype = Map.get(assigns.entry, "subtype") || "system"
+    assigns = assign(assigns, :subtype, subtype)
+
+    ~H"""
+    <details
+      id={"meta-#{@idx}"}
+      data-meta-kind="system"
+      class="rounded border border-base-300 bg-base-100/60 px-3 py-1.5"
+    >
+      <summary class="cursor-pointer text-[10px] font-mono text-base-content/50 flex items-center gap-2">
+        <.icon name="hero-cog-6-tooth-micro" class="size-3" /> system · {@subtype}
+      </summary>
+      <pre class="mt-2 text-[10px] text-base-content/60 whitespace-pre-wrap break-words">{inspect(@entry, pretty: true, limit: 100, printable_limit: 2048)}</pre>
+    </details>
+    """
+  end
+
+  defp meta_entry(assigns) do
+    type =
+      case assigns.kind do
+        {:other, t} -> t
+        other -> to_string(other)
+      end
+
+    assigns = assign(assigns, :type, type)
+
+    ~H"""
+    <details
+      id={"meta-#{@idx}"}
+      data-meta-kind={@type}
+      class="rounded border border-base-300 bg-base-100/60 px-3 py-1.5"
+    >
+      <summary class="cursor-pointer text-[10px] font-mono text-base-content/50 flex items-center gap-2">
+        <.icon name="hero-tag-micro" class="size-3" /> {@type}
+      </summary>
+      <pre class="mt-2 text-[10px] text-base-content/60 whitespace-pre-wrap break-words">{inspect(@entry, pretty: true, limit: 100, printable_limit: 2048)}</pre>
+    </details>
     """
   end
 

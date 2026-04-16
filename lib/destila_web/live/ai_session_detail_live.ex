@@ -6,6 +6,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
 
   require Logger
 
+  alias ClaudeCode.History.SessionMessage
   alias Destila.AI
   alias Destila.AI.AlivenessTracker
   alias Destila.AI.History
@@ -58,7 +59,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
       Phoenix.PubSub.subscribe(Destila.PubSub, PubSubHelper.ai_stream_topic(ws.id))
     end
 
-    history_state = load_history(ai_session)
+    {history_state, loaded_count} = load_history(ai_session)
 
     {:ok,
      socket
@@ -66,7 +67,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
      |> assign(:ai_session, ai_session)
      |> assign(:alive?, AlivenessTracker.alive_ai?(ai_session.id))
      |> assign(:history_state, history_state)
-     |> assign(:loaded_count, history_loaded_count(history_state))
+     |> assign(:loaded_count, loaded_count)
      |> assign(:reload_scheduled?, false)
      |> assign(:page_title, "AI Session — #{ws.title}")}
   end
@@ -107,18 +108,20 @@ defmodule DestilaWeb.AiSessionDetailLive do
   defp refresh_history(socket) do
     socket = assign(socket, :reload_scheduled?, false)
     claude_session_id = socket.assigns.ai_session.claude_session_id
-    offset = socket.assigns.loaded_count
+    loaded = socket.assigns.loaded_count
 
-    case History.get_messages(claude_session_id, offset: offset) do
-      {:ok, []} ->
-        socket
-
-      {:ok, new_messages} ->
-        history_state = append_messages(socket.assigns.history_state, new_messages)
+    case History.read_all(claude_session_id) do
+      {:ok, entries} when length(entries) > loaded ->
+        new_entries = Enum.drop(entries, loaded)
+        normalized = Enum.map(new_entries, &normalize_entry/1)
+        history_state = append_entries(socket.assigns.history_state, normalized)
 
         socket
         |> assign(:history_state, history_state)
-        |> assign(:loaded_count, offset + length(new_messages))
+        |> assign(:loaded_count, length(entries))
+
+      {:ok, _} ->
+        socket
 
       {:error, reason} ->
         Logger.warning("Failed to reload AI history for #{claude_session_id}: #{inspect(reason)}")
@@ -127,50 +130,68 @@ defmodule DestilaWeb.AiSessionDetailLive do
     end
   end
 
-  defp append_messages({:loaded, existing, tool_index}, new_messages) do
-    {:loaded, existing ++ new_messages, Map.merge(tool_index, build_tool_index(new_messages))}
+  defp append_entries({:loaded, existing, tool_index}, new_items) do
+    {:loaded, existing ++ new_items, Map.merge(tool_index, build_tool_index(new_items))}
   end
 
-  defp append_messages(_state, new_messages) do
-    {:loaded, new_messages, build_tool_index(new_messages)}
+  defp append_entries(_state, new_items) do
+    {:loaded, new_items, build_tool_index(new_items)}
   end
 
-  defp history_loaded_count({:loaded, messages, _tool_index}), do: length(messages)
-  defp history_loaded_count(_), do: 0
-
-  defp load_history(%AI.Session{claude_session_id: nil}), do: :missing
+  defp load_history(%AI.Session{claude_session_id: nil}), do: {:missing, 0}
 
   defp load_history(%AI.Session{claude_session_id: claude_session_id}) do
-    case History.get_messages(claude_session_id) do
+    case History.read_all(claude_session_id) do
       {:ok, []} ->
-        :empty
+        {:empty, 0}
 
-      {:ok, messages} ->
-        {:loaded, messages, build_tool_index(messages)}
+      {:ok, entries} ->
+        normalized = Enum.map(entries, &normalize_entry/1)
+        {{:loaded, normalized, build_tool_index(normalized)}, length(entries)}
 
       {:error, reason} ->
         Logger.warning("Failed to load AI history for #{claude_session_id}: #{inspect(reason)}")
-        :error
+        {:error, 0}
     end
   end
 
-  defp build_tool_index(messages) do
-    Enum.reduce(messages, %{}, fn msg, acc ->
-      content =
-        case Map.get(msg, :message) do
-          %{content: content} -> content
-          %{"content" => content} -> content
-          _ -> []
-        end
+  defp normalize_entry(%SessionMessage{} = msg), do: {:msg, msg}
 
-      content
-      |> List.wrap()
-      |> Enum.reduce(acc, fn
-        %ClaudeCode.Content.ToolUseBlock{id: id} = block, inner -> Map.put(inner, id, block)
-        %ClaudeCode.Content.ServerToolUseBlock{id: id} = block, inner -> Map.put(inner, id, block)
-        %ClaudeCode.Content.MCPToolUseBlock{id: id} = block, inner -> Map.put(inner, id, block)
-        _, inner -> inner
-      end)
+  defp normalize_entry(entry) when is_map(entry) do
+    case entry["type"] do
+      t when t in ["user", "assistant"] -> {:msg, SessionMessage.from_entry(entry)}
+      _ -> {:meta, entry}
+    end
+  end
+
+  defp build_tool_index(items) do
+    Enum.reduce(items, %{}, fn
+      {:msg, %SessionMessage{message: message}}, acc ->
+        content =
+          case message do
+            %{content: c} -> c
+            %{"content" => c} -> c
+            _ -> []
+          end
+
+        content
+        |> List.wrap()
+        |> Enum.reduce(acc, fn
+          %ClaudeCode.Content.ToolUseBlock{id: id} = block, inner ->
+            Map.put(inner, id, block)
+
+          %ClaudeCode.Content.ServerToolUseBlock{id: id} = block, inner ->
+            Map.put(inner, id, block)
+
+          %ClaudeCode.Content.MCPToolUseBlock{id: id} = block, inner ->
+            Map.put(inner, id, block)
+
+          _, inner ->
+            inner
+        end)
+
+      _, acc ->
+        acc
     end)
   end
 
@@ -234,8 +255,8 @@ defmodule DestilaWeb.AiSessionDetailLive do
                   title="Unable to read conversation history"
                   detail="See server logs for details."
                 />
-              <% {:loaded, messages, tool_index} -> %>
-                <.session_history messages={messages} tool_index={tool_index} />
+              <% {:loaded, items, tool_index} -> %>
+                <.session_history items={items} tool_index={tool_index} />
             <% end %>
           </div>
         </div>

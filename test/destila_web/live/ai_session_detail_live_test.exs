@@ -614,6 +614,62 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
     end
 
     @tag feature: "ai_session_detail",
+         scenario: "Pre-compaction and meta entries render as raw entries"
+    test "renders compact_boundary, summary, and queue-operation meta entries", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      entries = [
+        %{
+          "type" => "user",
+          "uuid" => "u1",
+          "sessionId" => "s1",
+          "message" => %{"role" => "user", "content" => "pre-compaction question"}
+        },
+        %{
+          "type" => "system",
+          "subtype" => "compact_boundary",
+          "uuid" => "sys1",
+          "compactMetadata" => %{"trigger" => "auto", "preCompactionTokenCount" => 12_345}
+        },
+        %{
+          "type" => "summary",
+          "uuid" => "sum1",
+          "summary" => "A concise summary of prior work."
+        },
+        %{
+          "type" => "queue-operation",
+          "uuid" => "q1",
+          "operation" => "enqueue",
+          "timestamp" => "2026-04-16T00:00:00Z"
+        },
+        %{
+          "type" => "assistant",
+          "uuid" => "a1",
+          "sessionId" => "s1",
+          "message" => %{
+            "role" => "assistant",
+            "content" => [%{"type" => "text", "text" => "post-compaction reply"}]
+          }
+        }
+      ]
+
+      FakeHistory.stub_raw(ai.claude_session_id, {:ok, entries})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      html = render(view)
+
+      assert html =~ "pre-compaction question"
+      assert html =~ "post-compaction reply"
+      assert has_element?(view, ~s|[data-meta-kind="compact_boundary"]|)
+      assert has_element?(view, ~s|[data-meta-kind="summary"]|)
+      assert has_element?(view, ~s|[data-meta-kind="queue_operation"]|)
+      assert html =~ "A concise summary of prior work."
+      assert html =~ "12345"
+    end
+
+    @tag feature: "ai_session_detail",
          scenario: "Unknown block types render via an inspect fallback"
     test "unknown block struct renders through the inspect fallback without crashing",
          %{conn: conn} do

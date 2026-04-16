@@ -1,11 +1,13 @@
 Feature: AI Session Debug Detail Page
   The AI Session Debug Detail page at /sessions/:workflow_session_id/ai/:ai_session_id
   shows the creation date and Claude session id in a header, then renders the
-  full conversation history read from Destila.AI.History.get_messages/2. Every
-  content block type emitted by ClaudeCode (text, thinking, tool usage, tool
-  results, server tool usage, MCP tool usage, images, documents, redacted
-  thinking, container uploads, compaction markers) renders without crashing the
-  page, with an inspect/2 fallback for unknown block shapes.
+  full conversation history read from Destila.AI.History.read_all/2, including
+  pre-compaction messages and meta entries (compact_boundary, summary,
+  queue-operation, attachment, etc.). Every content block type emitted by
+  ClaudeCode (text, thinking, tool usage, tool results, server tool usage, MCP
+  tool usage, images, documents, redacted thinking, container uploads,
+  compaction markers) renders without crashing the page, with an inspect/2
+  fallback for unknown block shapes.
 
   Scenario: Header shows creation date and Claude session id
     Given I open the AI Session Debug Detail page for a valid AI session
@@ -122,6 +124,14 @@ Feature: AI Session Debug Detail Page
     Given the history contains a compaction block
     When I open the AI Session Debug Detail page
     Then the page should render a compaction marker
+
+  Scenario: Pre-compaction and meta entries render as raw entries
+    Given the history contains pre-compaction user/assistant messages, a compact_boundary marker, a summary entry, and a queue-operation entry
+    When I open the AI Session Debug Detail page
+    Then all visible messages should render in order
+    And the compact_boundary marker should render as a visible divider with trigger metadata
+    And the summary entry should render as a collapsible summary block
+    And the queue-operation entry should render as a small debug chip
 
   Scenario: Unknown block types render via an inspect fallback
     Given the history contains a content block whose struct is not recognized

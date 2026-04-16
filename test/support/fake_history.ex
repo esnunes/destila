@@ -18,13 +18,22 @@ defmodule Destila.AI.FakeHistory do
   end
 
   @doc """
-  Registers a canned response for a session id.
+  Registers a canned response for `get_messages/2`.
 
-  `response` is returned verbatim from `get_messages/2`.
+  `response` is returned verbatim.
   """
   def stub(session_id, response) when is_binary(session_id) do
     ensure_started()
-    :ets.insert(@table, {session_id, response})
+    :ets.insert(@table, {{:messages, session_id}, response})
+    :ok
+  end
+
+  @doc """
+  Registers a canned response for `read_all/2`.
+  """
+  def stub_raw(session_id, response) when is_binary(session_id) do
+    ensure_started()
+    :ets.insert(@table, {{:raw, session_id}, response})
     :ok
   end
 
@@ -38,12 +47,28 @@ defmodule Destila.AI.FakeHistory do
     ensure_started()
 
     response =
-      case :ets.lookup(@table, session_id) do
-        [{^session_id, response}] -> response
+      case :ets.lookup(@table, {:messages, session_id}) do
+        [{_, response}] -> response
         [] -> {:ok, []}
       end
 
     apply_offset(response, Keyword.get(opts, :offset, 0))
+  end
+
+  def read_all(session_id, _opts \\ []) do
+    ensure_started()
+
+    case :ets.lookup(@table, {:raw, session_id}) do
+      [{_, response}] ->
+        response
+
+      [] ->
+        # Fall back to `stub/2` data so tests that only stub messages still work.
+        case :ets.lookup(@table, {:messages, session_id}) do
+          [{_, response}] -> response
+          [] -> {:ok, []}
+        end
+    end
   end
 
   defp apply_offset({:ok, messages}, offset) when is_integer(offset) and offset > 0,
