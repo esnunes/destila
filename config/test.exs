@@ -26,6 +26,9 @@ config :phoenix_live_view,
 # Use test adapter for ClaudeCode
 config :claude_code, adapter: {ClaudeCode.Test, ClaudeCode}
 
+# Stub the history reader in tests so we don't touch ~/.claude/projects.
+config :destila, :ai_history_module, Destila.AI.FakeHistory
+
 # Execute Oban jobs inline during tests for synchronous behavior
 config :destila, Oban, testing: :inline
 

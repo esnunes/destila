@@ -28,6 +28,13 @@ defmodule Destila.AI.SessionConfig do
     opts = base_opts
 
     opts =
+      if ai_session do
+        Keyword.put(opts, :ai_session_id, ai_session.id)
+      else
+        opts
+      end
+
+    opts =
       if ai_session && ai_session.claude_session_id do
         Keyword.put(opts, :resume, ai_session.claude_session_id)
       else
