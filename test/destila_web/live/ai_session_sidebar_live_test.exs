@@ -96,6 +96,54 @@ defmodule DestilaWeb.AiSessionSidebarLiveTest do
     end
   end
 
+  describe "initial aliveness state" do
+    @tag feature: "ai_session_sidebar",
+         scenario: "Running AI session shows a green aliveness dot"
+    test "row shows a green dot when AlivenessTracker reports the session as alive", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      :ets.insert(:ai_session_aliveness, {{:ai, ai.id}, true})
+
+      try do
+        {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+        assert has_element?(view, ~s|#ai-session-row-#{ai.id} .bg-success|)
+      after
+        :ets.delete(:ai_session_aliveness, {:ai, ai.id})
+      end
+    end
+
+    @tag feature: "ai_session_sidebar",
+         scenario: "Inactive AI session shows a muted aliveness dot"
+    test "row shows a muted dot when AlivenessTracker reports the session as inactive", %{
+      conn: conn
+    } do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      refute has_element?(view, ~s|#ai-session-row-#{ai.id} .bg-success|)
+    end
+  end
+
+  describe "row navigation" do
+    @tag feature: "ai_session_sidebar",
+         scenario: "Clicking a row opens the AI Session Debug Detail page"
+    test "row link navigates to the AI Session Debug Detail page for that session", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(
+               view,
+               ~s|#ai-session-row-#{ai.id}[href="/sessions/#{ws.id}/ai/#{ai.id}"]|
+             )
+    end
+  end
+
   describe "live aliveness updates" do
     @tag feature: "ai_session_sidebar",
          scenario: "Aliveness dot toggles to green in real time when a session starts"

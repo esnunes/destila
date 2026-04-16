@@ -88,7 +88,7 @@ defmodule DestilaWeb.AiSessionDebugComponents do
       class="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3"
     >
       <p class="text-xs text-base-content/50 mb-2">Unrecognized message</p>
-      <pre class="text-xs text-base-content/70 whitespace-pre-wrap break-words">{inspect(@msg, pretty: true, limit: :infinity)}</pre>
+      <pre class="text-xs text-base-content/70 whitespace-pre-wrap break-words">{inspect(@msg, pretty: true, limit: 200, printable_limit: 4096)}</pre>
     </div>
     """
   end
@@ -136,7 +136,7 @@ defmodule DestilaWeb.AiSessionDebugComponents do
 
   defp content_list(assigns) do
     ~H"""
-    <pre class="text-xs text-base-content/60 whitespace-pre-wrap break-words">{inspect(@content, pretty: true, limit: :infinity)}</pre>
+    <pre class="text-xs text-base-content/60 whitespace-pre-wrap break-words">{inspect(@content, pretty: true, limit: 200, printable_limit: 4096)}</pre>
     """
   end
 
@@ -363,13 +363,27 @@ defmodule DestilaWeb.AiSessionDebugComponents do
   end
 
   defp content_block(%{block: %ImageBlock{source: %{type: :url, url: url}}} = assigns) do
-    assigns = assign(assigns, :url, url)
+    if safe_image_url?(url) do
+      assigns = assign(assigns, :url, url)
 
-    ~H"""
-    <div id={@block_id} data-block-type="image" data-image-kind="url">
-      <img src={@url} alt="image" class="max-w-full rounded-md border border-base-300/60" />
-    </div>
-    """
+      ~H"""
+      <div id={@block_id} data-block-type="image" data-image-kind="url">
+        <img src={@url} alt="image" class="max-w-full rounded-md border border-base-300/60" />
+      </div>
+      """
+    else
+      ~H"""
+      <div
+        id={@block_id}
+        data-block-type="image"
+        data-image-kind="url"
+        class="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 flex items-center gap-2"
+      >
+        <.icon name="hero-photo-micro" class="size-3 text-warning/70" />
+        <span class="text-xs text-base-content/60">Image (unsafe URL omitted)</span>
+      </div>
+      """
+    end
   end
 
   defp content_block(%{block: %ImageBlock{source: %{type: :base64, data: data}}} = assigns) do
@@ -472,7 +486,7 @@ defmodule DestilaWeb.AiSessionDebugComponents do
       <p class="text-[10px] font-semibold uppercase tracking-wider text-warning mb-1">
         Unknown block
       </p>
-      <pre class="text-xs text-base-content/70 whitespace-pre-wrap break-words">{inspect(@block, pretty: true, limit: :infinity)}</pre>
+      <pre class="text-xs text-base-content/70 whitespace-pre-wrap break-words">{inspect(@block, pretty: true, limit: 200, printable_limit: 4096)}</pre>
     </div>
     """
   end
@@ -489,7 +503,8 @@ defmodule DestilaWeb.AiSessionDebugComponents do
     |> Enum.join("\n\n")
   end
 
-  defp render_tool_result_content(content), do: inspect(content, pretty: true, limit: :infinity)
+  defp render_tool_result_content(content),
+    do: inspect(content, pretty: true, limit: 200, printable_limit: 4096)
 
   defp render_tool_result_item(%TextBlock{text: text}), do: text
 
@@ -502,11 +517,21 @@ defmodule DestilaWeb.AiSessionDebugComponents do
   defp render_tool_result_item(%{"type" => "text", "text" => text}) when is_binary(text),
     do: text
 
-  defp render_tool_result_item(other), do: inspect(other, pretty: true, limit: :infinity)
+  defp render_tool_result_item(other),
+    do: inspect(other, pretty: true, limit: 200, printable_limit: 4096)
 
   defp pretty_json(value) do
     Jason.encode!(value, pretty: true)
   rescue
-    _ -> inspect(value, pretty: true, limit: :infinity)
+    _ -> inspect(value, pretty: true, limit: 200, printable_limit: 4096)
   end
+
+  defp safe_image_url?(url) when is_binary(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme} when scheme in ["http", "https", "data"] -> true
+      _ -> false
+    end
+  end
+
+  defp safe_image_url?(_), do: false
 end

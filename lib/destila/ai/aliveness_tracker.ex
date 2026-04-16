@@ -11,6 +11,8 @@ defmodule Destila.AI.AlivenessTracker do
 
   use GenServer
 
+  require Logger
+
   @ets_table :ai_session_aliveness
   @pubsub_topic "session_aliveness"
 
@@ -69,11 +71,16 @@ defmodule Destila.AI.AlivenessTracker do
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
-    {{workflow_session_id, ai_session_id}, refs} = Map.pop!(state.refs, ref)
-    delete_entries(workflow_session_id, ai_session_id)
-    broadcast_workflow(workflow_session_id, false)
-    if ai_session_id, do: broadcast_ai(ai_session_id, false)
-    {:noreply, %{state | refs: refs}}
+    case Map.pop(state.refs, ref) do
+      {nil, refs} ->
+        {:noreply, %{state | refs: refs}}
+
+      {{workflow_session_id, ai_session_id}, refs} ->
+        delete_entries(workflow_session_id, ai_session_id)
+        broadcast_workflow(workflow_session_id, false)
+        if ai_session_id, do: broadcast_ai(ai_session_id, false)
+        {:noreply, %{state | refs: refs}}
+    end
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
@@ -87,10 +94,11 @@ defmodule Destila.AI.AlivenessTracker do
 
       pid ->
         ref = Process.monitor(pid)
+        state = put_in(state, [:refs, ref], {workflow_session_id, ai_session_id})
         insert_entries(workflow_session_id, ai_session_id)
         broadcast_workflow(workflow_session_id, true)
         if ai_session_id, do: broadcast_ai(ai_session_id, true)
-        {:noreply, put_in(state, [:refs, ref], {workflow_session_id, ai_session_id})}
+        {:noreply, state}
     end
   end
 
@@ -126,6 +134,11 @@ defmodule Destila.AI.AlivenessTracker do
       ai_session -> ai_session.id
     end
   rescue
-    _ -> nil
+    error ->
+      Logger.debug(
+        "AlivenessTracker: lookup_ai_session_id/1 failed for #{inspect(workflow_session_id)}: #{Exception.message(error)}"
+      )
+
+      nil
   end
 end

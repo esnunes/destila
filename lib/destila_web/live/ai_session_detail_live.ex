@@ -17,35 +17,52 @@ defmodule DestilaWeb.AiSessionDetailLive do
         _session,
         socket
       ) do
-    with %Workflows.Session{} = ws <- Workflows.get_workflow_session(ws_id),
-         %AI.Session{} = ai_session <- AI.get_ai_session(ai_id),
-         true <- ai_session.workflow_session_id == ws.id do
-      if connected?(socket) do
-        Phoenix.PubSub.subscribe(Destila.PubSub, AlivenessTracker.topic())
-      end
-
-      history_state = load_history(ai_session)
-
-      {:ok,
-       socket
-       |> assign(:workflow_session, ws)
-       |> assign(:ai_session, ai_session)
-       |> assign(:alive?, AlivenessTracker.alive_ai?(ai_session.id))
-       |> assign(:history_state, history_state)
-       |> assign(:page_title, "AI Session — #{ws.title}")}
-    else
+    case Workflows.get_workflow_session(ws_id) do
       nil ->
         {:ok,
          socket
          |> put_flash(:error, "Session not found")
          |> push_navigate(to: ~p"/crafting")}
 
-      false ->
+      %Workflows.Session{} = ws ->
+        mount_with_workflow(ws, ai_id, socket)
+    end
+  end
+
+  defp mount_with_workflow(%Workflows.Session{} = ws, ai_id, socket) do
+    case AI.get_ai_session(ai_id) do
+      nil ->
         {:ok,
          socket
-         |> put_flash(:error, "AI session does not belong to this workflow")
-         |> push_navigate(to: ~p"/sessions/#{ws_id}")}
+         |> put_flash(:error, "AI session not found")
+         |> push_navigate(to: ~p"/sessions/#{ws.id}")}
+
+      %AI.Session{} = ai_session ->
+        if ai_session.workflow_session_id == ws.id do
+          mount_with_session(ws, ai_session, socket)
+        else
+          {:ok,
+           socket
+           |> put_flash(:error, "AI session does not belong to this workflow")
+           |> push_navigate(to: ~p"/sessions/#{ws.id}")}
+        end
     end
+  end
+
+  defp mount_with_session(%Workflows.Session{} = ws, %AI.Session{} = ai_session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Destila.PubSub, AlivenessTracker.topic())
+    end
+
+    history_state = load_history(ai_session)
+
+    {:ok,
+     socket
+     |> assign(:workflow_session, ws)
+     |> assign(:ai_session, ai_session)
+     |> assign(:alive?, AlivenessTracker.alive_ai?(ai_session.id))
+     |> assign(:history_state, history_state)
+     |> assign(:page_title, "AI Session — #{ws.title}")}
   end
 
   @impl true

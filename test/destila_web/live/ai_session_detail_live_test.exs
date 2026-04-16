@@ -10,6 +10,7 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
   alias ClaudeCode.Content.{
     CompactionBlock,
     ImageBlock,
+    MCPToolResultBlock,
     MCPToolUseBlock,
     RedactedThinkingBlock,
     ServerToolResultBlock,
@@ -133,11 +134,13 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
 
     @tag feature: "ai_session_detail",
          scenario: "Unknown AI session id redirects to the workflow runner"
-    test "unknown ai_session_id redirects to /crafting", %{conn: conn} do
+    test "unknown ai_session_id redirects to the workflow runner page", %{conn: conn} do
       ws = create_session()
 
-      assert {:error, {:live_redirect, %{to: "/crafting"}}} =
+      assert {:error, {:live_redirect, %{to: path}}} =
                live(conn, ~p"/sessions/#{ws.id}/ai/#{Ecto.UUID.generate()}")
+
+      assert path == "/sessions/#{ws.id}"
     end
 
     @tag feature: "ai_session_detail",
@@ -393,6 +396,32 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
       assert html =~ ~s|data-block-type="server_tool_use"|
       assert html =~ ~s|data-block-type="server_tool_result"|
       assert html =~ "server tool"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "MCP tool blocks render with server_name and tool name"
+    test "MCP tool result block with is_error true renders with error styling", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        user_message([
+          %MCPToolResultBlock{
+            type: "mcp_tool_result",
+            tool_use_id: "mcp_1",
+            content: "boom",
+            is_error: true
+          }
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      html = render(view)
+      assert html =~ ~s|data-block-type="mcp_tool_result"|
+      assert html =~ "border-error"
     end
 
     @tag feature: "ai_session_detail",
