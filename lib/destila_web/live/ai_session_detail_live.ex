@@ -9,7 +9,10 @@ defmodule DestilaWeb.AiSessionDetailLive do
   alias Destila.AI
   alias Destila.AI.AlivenessTracker
   alias Destila.AI.History
+  alias Destila.PubSubHelper
   alias Destila.Workflows
+
+  @reload_debounce_ms 500
 
   @impl true
   def mount(
@@ -52,6 +55,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
   defp mount_with_session(%Workflows.Session{} = ws, %AI.Session{} = ai_session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Destila.PubSub, AlivenessTracker.topic())
+      Phoenix.PubSub.subscribe(Destila.PubSub, PubSubHelper.ai_stream_topic(ws.id))
     end
 
     history_state = load_history(ai_session)
@@ -62,6 +66,8 @@ defmodule DestilaWeb.AiSessionDetailLive do
      |> assign(:ai_session, ai_session)
      |> assign(:alive?, AlivenessTracker.alive_ai?(ai_session.id))
      |> assign(:history_state, history_state)
+     |> assign(:loaded_count, history_loaded_count(history_state))
+     |> assign(:reload_scheduled?, false)
      |> assign(:page_title, "AI Session — #{ws.title}")}
   end
 
@@ -74,7 +80,63 @@ defmodule DestilaWeb.AiSessionDetailLive do
     end
   end
 
+  def handle_info({:ai_stream_chunk, _item}, socket) do
+    {:noreply, maybe_schedule_reload(socket)}
+  end
+
+  def handle_info(:reload_history, socket) do
+    {:noreply, refresh_history(socket)}
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  defp maybe_schedule_reload(socket) do
+    cond do
+      socket.assigns.reload_scheduled? ->
+        socket
+
+      is_nil(socket.assigns.ai_session.claude_session_id) ->
+        socket
+
+      true ->
+        Process.send_after(self(), :reload_history, @reload_debounce_ms)
+        assign(socket, :reload_scheduled?, true)
+    end
+  end
+
+  defp refresh_history(socket) do
+    socket = assign(socket, :reload_scheduled?, false)
+    claude_session_id = socket.assigns.ai_session.claude_session_id
+    offset = socket.assigns.loaded_count
+
+    case History.get_messages(claude_session_id, offset: offset) do
+      {:ok, []} ->
+        socket
+
+      {:ok, new_messages} ->
+        history_state = append_messages(socket.assigns.history_state, new_messages)
+
+        socket
+        |> assign(:history_state, history_state)
+        |> assign(:loaded_count, offset + length(new_messages))
+
+      {:error, reason} ->
+        Logger.warning("Failed to reload AI history for #{claude_session_id}: #{inspect(reason)}")
+
+        socket
+    end
+  end
+
+  defp append_messages({:loaded, existing, tool_index}, new_messages) do
+    {:loaded, existing ++ new_messages, Map.merge(tool_index, build_tool_index(new_messages))}
+  end
+
+  defp append_messages(_state, new_messages) do
+    {:loaded, new_messages, build_tool_index(new_messages)}
+  end
+
+  defp history_loaded_count({:loaded, messages, _tool_index}), do: length(messages)
+  defp history_loaded_count(_), do: 0
 
   defp load_history(%AI.Session{claude_session_id: nil}), do: :missing
 

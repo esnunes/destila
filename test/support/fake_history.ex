@@ -34,12 +34,20 @@ defmodule Destila.AI.FakeHistory do
     :ok
   end
 
-  def get_messages(session_id, _opts \\ []) do
+  def get_messages(session_id, opts \\ []) do
     ensure_started()
 
-    case :ets.lookup(@table, session_id) do
-      [{^session_id, response}] -> response
-      [] -> {:ok, []}
-    end
+    response =
+      case :ets.lookup(@table, session_id) do
+        [{^session_id, response}] -> response
+        [] -> {:ok, []}
+      end
+
+    apply_offset(response, Keyword.get(opts, :offset, 0))
   end
+
+  defp apply_offset({:ok, messages}, offset) when is_integer(offset) and offset > 0,
+    do: {:ok, Enum.drop(messages, offset)}
+
+  defp apply_offset(response, _offset), do: response
 end

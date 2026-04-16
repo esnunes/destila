@@ -50,6 +50,24 @@ Feature: AI Session Debug Detail Page
     When the AlivenessTracker broadcasts an AI-specific aliveness change for this session
     Then the detail page aliveness dot should update without a reload
 
+  Scenario: Stream chunk triggers debounced history reload
+    Given I am on the AI Session Debug Detail page with one message already rendered
+    When a Claude stream chunk is broadcast for this workflow session
+    And the debounced reload timer fires
+    Then newly appended messages should render without a page reload
+
+  Scenario: Stream chunk transitions empty history to loaded
+    Given I am on the AI Session Debug Detail page showing the empty state
+    When a Claude stream chunk is broadcast and new messages have been written
+    And the debounced reload timer fires
+    Then the empty state should be replaced with the rendered messages
+
+  Scenario: Debounced reload does not duplicate messages
+    Given I am on the AI Session Debug Detail page with one message already rendered
+    When multiple Claude stream chunks are broadcast before the reload timer fires
+    And the debounced reload timer fires
+    Then the rendered message should not be duplicated
+
   Scenario: Text blocks render in order
     Given the history contains a user text block followed by an assistant text block
     When I open the AI Session Debug Detail page

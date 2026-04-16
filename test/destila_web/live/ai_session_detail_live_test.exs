@@ -210,6 +210,101 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
     end
   end
 
+  describe "history live updates" do
+    @tag feature: "ai_session_detail",
+         scenario: "Stream chunk triggers debounced history reload"
+    test "appends new messages after a chunk broadcast followed by reload fire", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      initial = [user_message("first")]
+      FakeHistory.stub(ai.claude_session_id, {:ok, initial})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+      assert render(view) =~ "first"
+
+      appended =
+        initial ++
+          [assistant_message([%TextBlock{type: "text", text: "second"}])]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, appended})
+
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        Destila.PubSubHelper.ai_stream_topic(ws.id),
+        {:ai_stream_chunk, :any}
+      )
+
+      send(view.pid, :reload_history)
+
+      html = render(view)
+      assert html =~ "first"
+      assert html =~ "second"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Stream chunk transitions empty history to loaded"
+    test "promotes :empty state to :loaded when new messages arrive", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      {:ok, view, html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+      assert html =~ "No conversation history available"
+
+      FakeHistory.stub(
+        ai.claude_session_id,
+        {:ok, [assistant_message([%TextBlock{type: "text", text: "arrived"}])]}
+      )
+
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        Destila.PubSubHelper.ai_stream_topic(ws.id),
+        {:ai_stream_chunk, :any}
+      )
+
+      send(view.pid, :reload_history)
+
+      html = render(view)
+      assert html =~ "arrived"
+      refute html =~ "No conversation history available"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Debounced reload does not duplicate messages"
+    test "multiple chunk broadcasts before reload do not duplicate messages", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        user_message("hello"),
+        assistant_message([%TextBlock{type: "text", text: "world"}])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      for _ <- 1..5 do
+        Phoenix.PubSub.broadcast(
+          Destila.PubSub,
+          Destila.PubSubHelper.ai_stream_topic(ws.id),
+          {:ai_stream_chunk, :any}
+        )
+      end
+
+      send(view.pid, :reload_history)
+
+      html = render(view)
+      first_hello = :binary.match(html, "hello")
+      assert first_hello != :nomatch
+      {start, len} = first_hello
+      rest = binary_part(html, start + len, byte_size(html) - start - len)
+      refute rest =~ "hello"
+    end
+  end
+
   describe "content block rendering" do
     @tag feature: "ai_session_detail", scenario: "Text blocks render in order"
     test "renders user and assistant text blocks in order", %{conn: conn} do
