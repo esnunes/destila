@@ -1,7 +1,7 @@
 ---
 title: "refactor: Dim dark theme primary color"
 type: refactor
-status: active
+status: completed
 date: 2026-04-16
 ---
 
@@ -72,7 +72,7 @@ None directly applicable — this is a cosmetic token tweak with no historical p
 
 ## Implementation Units
 
-- [ ] **Unit 1: Dim `--color-primary` in the dark theme block**
+- [x] **Unit 1: Dim `--color-primary` in the dark theme block**
 
 **Goal:** Reduce glare of primary-tinted dark-theme surfaces by lowering lightness and chroma of the primary token.
 
