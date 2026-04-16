@@ -186,6 +186,7 @@ defmodule Destila.AI.ClaudeSession do
 
       case ClaudeCode.start_link(claude_opts) do
         {:ok, claude_session} ->
+          ClaudeCode.Session.set_model(claude_session, "claude-opus-4-6")
           timer_ref = schedule_timeout(timeout_ms)
 
           if workflow_session_id do
