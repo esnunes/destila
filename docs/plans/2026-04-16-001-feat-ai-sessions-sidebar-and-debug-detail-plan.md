@@ -3,6 +3,7 @@ title: Add AI Sessions List to Workflow Runner Right Sidebar + AI Session Debug 
 type: feat
 status: active
 date: 2026-04-16
+deepened: 2026-04-16
 ---
 
 # Add AI Sessions List to Workflow Runner Right Sidebar + AI Session Debug Detail Page
@@ -13,7 +14,7 @@ Add two debugging-oriented features to the Destila workflow runner:
 
 1. An **"AI Sessions" section** in the workflow runner right sidebar that lists every AI session belonging to the current workflow session. Each row shows the creation date and a live aliveness dot (green when the Claude Code GenServer is running, muted/gray when not). Clicking a row navigates to a new detail page.
 
-2. A new **AI Session Debug Detail page** at `/sessions/:workflow_session_id/ai/:ai_session_id`. This page is designed for debugging what happened inside a specific AI session: it shows the session's creation date and `claude_session_id` in a header, then renders the full conversation history read exclusively via `ClaudeCode.Session.get_messages/1`, rendering every content block type (text, thinking, tool calls, tool results, server tool usage, MCP tool usage, images, documents, redacted thinking, container uploads, compaction markers).
+2. A new **AI Session Debug Detail page** at `/sessions/:workflow_session_id/ai/:ai_session_id`. This page is designed for debugging what happened inside a specific AI session: it shows the session's creation date and `claude_session_id` in a header, then renders the full conversation history read exclusively via `ClaudeCode.History.get_messages/2` (the string-keyed variant — see "Verified History API" in Key Technical Decisions), rendering every content block type (text, thinking, tool calls, tool results, server tool usage, MCP tool usage, images, documents, redacted thinking, container uploads, compaction markers).
 
 ## Problem Frame
 
@@ -26,13 +27,13 @@ Today, the only way to inspect a past AI session's raw conversation is to open a
 - **R3.** Show an empty state in the sidebar when the workflow has no AI sessions.
 - **R4.** Add route `live "/sessions/:workflow_session_id/ai/:ai_session_id", AiSessionDetailLive` inside the existing `scope "/", DestilaWeb` block.
 - **R5.** The detail page header displays the session's creation date and `claude_session_id`.
-- **R6.** The detail page renders the full conversation history exclusively via `ClaudeCode.Session.get_messages(claude_session_id)`.
+- **R6.** The detail page renders the full conversation history exclusively via `ClaudeCode.History.get_messages(claude_session_id, opts \\ [])` (the string-session-id variant; `ClaudeCode.Session.get_messages/2` takes a live session PID and is **not** what we want here).
 - **R7.** The renderer handles every content block struct type listed in the prompt (`TextBlock`, `ThinkingBlock`, `RedactedThinkingBlock`, `ToolUseBlock`, `ToolResultBlock`, `ServerToolUseBlock`, `ServerToolResultBlock`, `MCPToolUseBlock`, `MCPToolResultBlock`, `ImageBlock`, `DocumentBlock`, `ContainerUploadBlock`, `CompactionBlock`).
 - **R8.** Tool calls are visually paired with their matching tool results via `tool_use_id`.
 - **R9.** Thinking blocks render collapsed by default and can be expanded.
 - **R10.** Tool input/output render as pretty JSON; tool-result blocks render with an error style when `:is_error` is `true`.
 - **R11.** Unknown/future content block types use a generic fallback (e.g. `inspect/2`) and never crash the page.
-- **R12.** The detail page renders an empty state when `claude_session_id` is nil or `get_messages/1` returns `{:error, _}` or `{:ok, []}`.
+- **R12.** The detail page renders an empty state when `claude_session_id` is nil or `History.get_messages/2` returns `{:error, _}` or `{:ok, []}`.
 - **R13.** Extending the aliveness tracker must not break the existing `workflow_session_id`-based aliveness used by the Crafting Board and the workflow runner header.
 - **R14.** The new sidebar section must render correctly whether the sidebar is expanded or collapsed (it lives inside `#metadata-sidebar-content`, which is hidden as a unit).
 - **R15.** Every Gherkin scenario in `features/ai_session_sidebar.feature` and `features/ai_session_detail.feature` has at least one linked LiveView test via `@tag feature:/scenario:`.
@@ -41,8 +42,8 @@ Today, the only way to inspect a past AI session's raw conversation is to open a
 
 - Not building an editing/rerun UI for past AI sessions. Detail page is read-only.
 - Not changing how AI sessions are created or associated with Claude Code processes.
-- Not persisting conversation history to our DB — reads stay on-disk via `ClaudeCode.Session.get_messages/1`.
-- Not adding pagination for large histories in the MVP. `ClaudeCode.Session.get_messages/2` accepts `limit:`/`offset:` and can be wired up later.
+- Not persisting conversation history to our DB — reads stay on-disk via `ClaudeCode.History.get_messages/2`.
+- Not adding pagination for large histories in the MVP. `ClaudeCode.History.get_messages/2` accepts `limit:`/`offset:` opts and can be wired up later.
 - Not adding the ability to resume/clone a past session from the detail page.
 - Not redesigning the existing header aliveness dot in `WorkflowRunnerLive` — it keeps its current per-workflow semantics.
 
@@ -55,6 +56,8 @@ Today, the only way to inspect a past AI session's raw conversation is to open a
 - **`lib/destila/ai/session.ex`** — AI session schema with `claude_session_id`, `worktree_path`, `workflow_session_id`, `inserted_at`. Primary key is `binary_id`.
 - **`lib/destila/ai/claude_session.ex`** — Wrapper around `ClaudeCode.start_link`. On init (line 192–198) it broadcasts `{:claude_session_started, workflow_session_id}` to `PubSubHelper.claude_session_topic()`. `workflow_session_id` is already in state; `ai_session_id` is not currently passed in.
 - **`lib/destila/ai/conversation.ex:117`** — `AI.update_ai_session(ai_session, %{claude_session_id: result[:session_id]})` is where the AI session record captures its `claude_session_id` after the first stream completes. This is the only place where the ai_session ↔ claude_session_id link is established.
+- **`lib/destila/workers/ai_query_worker.ex:25`** — **Verified call site for `ClaudeSession.for_workflow_session/2`.** The worker calls `AI.SessionConfig.session_opts_for_workflow(ws, phase)` to build the opts keyword list, then passes those opts through unchanged to `AI.ClaudeSession.for_workflow_session(workflow_session_id, session_opts)`. There is no direct `ClaudeSession.for_workflow_session/2` call in `Conversation.ex` — `Conversation.phase_start/*` calls `AI.get_or_create_ai_session/2` and enqueues the Oban worker, which in turn starts the ClaudeSession. **This is where `ai_session_id` must be injected.**
+- **`lib/destila/ai/session_config.ex:17-55`** — **Verified insertion point for `ai_session_id` opt.** `session_opts_for_workflow/3` already fetches `ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)` (line 26) and uses it to populate `:resume` (from `ai_session.claude_session_id`) and `:cwd` (from `ai_session.worktree_path`). The natural seam is one more `Keyword.put(opts, :ai_session_id, ai_session.id)` in the same block, guarded by the existing `ai_session != nil` branch. No change needed in `AiQueryWorker` — it forwards the full opts keyword list.
 - **`lib/destila_web/live/workflow_runner_live.ex`** — Right sidebar lives at lines 695–900+. Key anchor points: `<div id="user-prompt-section">` at ~line 724 (header "Workflow Session"), divider at ~line 863, Exported Metadata section at ~line 866 (header "Exported Metadata"). Mount already subscribes to `AlivenessTracker.topic()` and handles `{:aliveness_changed, ws_id, alive?}` at ~line 468. The `.MetadataSidebar` colocated JS hook at line 1079+ toggles the whole `#metadata-sidebar-content` div visibility — the new section nests inside this div and needs no extra hook logic.
 - **`lib/destila_web/components/board_components.ex:42`** — `aliveness_dot/1` is the existing visual primitive: green `bg-success`, muted `bg-base-content/20`, red pulsing `bg-error animate-pulse`. Reuse by passing `phase_status` explicitly so the muted-vs-red branching still works for historical sessions without a live workflow phase.
 - **`lib/destila_web/live/terminal_live.ex`** — Single-purpose detail LiveView pattern to mirror: mount validates by looking up the workflow session, redirects with `put_flash` on missing, renders a `Layouts.app` header with a back-link icon (`hero-arrow-left-micro`) pointing to `~p"/sessions/#{ws.id}"`, and uses `page_title` like `"Terminal — #{ws.title}"`.
@@ -69,14 +72,18 @@ No matching entries found in `docs/solutions/` for this specific work. The close
 
 ### External References
 
-- `ClaudeCode.Session.get_messages/1` reads `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` and returns `{:ok, [%ClaudeCode.History.SessionMessage{}]}`. See https://github.com/guess/claude_code/blob/main/docs/guides/sessions.md and https://github.com/guess/claude_code/blob/main/lib/claude_code/history/session_message.ex.
-- Content block structs live under `ClaudeCode.Content.*` — see https://github.com/guess/claude_code/tree/main/lib/claude_code/content/ for the canonical field names used below.
+- **Verified in `deps/claude_code/` (installed).** Two distinct `get_messages` functions exist in the installed version:
+  - `ClaudeCode.History.get_messages(session_id, opts \\ [])` — `@spec get_messages(session_id(), keyword()) :: {:ok, [SessionMessage.t()]} | {:error, term()}` (`deps/claude_code/lib/claude_code/history.ex:124`). **This is the one we want** — it takes the `claude_session_id` string and reads the JSONL file directly.
+  - `ClaudeCode.Session.get_messages(session, opts \\ [])` — `@spec get_messages(session(), keyword()) :: ...` (`deps/claude_code/lib/claude_code/session.ex:351`). Takes a **live session PID** and calls `GenServer.call(session, {:history_call, :get_messages, opts})`. Not applicable here — the detail page reads *past* sessions whose PIDs are gone.
+- `ClaudeCode.History.SessionMessage` struct fields (verified at `deps/claude_code/lib/claude_code/history/session_message.ex`): `:type` (`:user | :assistant`), `:uuid`, `:session_id`, `:message`, `:parent_tool_use_id`. For `:user` type, `:message` is a plain map `%{content: parsed_content, role: :user}`. For `:assistant`, `:message` is a parsed `%ClaudeCode.Message.AssistantMessage{}` when parsing succeeds, else a normalized raw map (fallback is built into `parse_inner_message/3`, so we inherit the tolerance for free).
+- Content block structs live under `ClaudeCode.Content.*` — see `deps/claude_code/lib/claude_code/content/` (already installed locally) and https://github.com/guess/claude_code/tree/main/lib/claude_code/content/ for the canonical field names used below.
 
 ## Key Technical Decisions
 
 - **Extend `AlivenessTracker` to store both keys, not replace the workflow_session_id key.** The existing header aliveness dot, the Crafting Board cards, and the WorkflowRunnerLive header already depend on `alive?(workflow_session_id)` and `{:aliveness_changed, workflow_session_id, alive?}`. We keep that contract, and add parallel storage/broadcast keyed by `ai_session_id`. The ETS table can either grow into a tagged key (`{:workflow, ws_id}` / `{:ai, ai_id}`) or we can split into two tables — we go with tagged keys in a single table to preserve atomic lookup patterns.
 - **Plumb `ai_session_id` through `ClaudeSession` init, not through a DB lookup inside the tracker.** The caller (`Destila.AI.Conversation`) already knows which ai_session is about to own this ClaudeSession; passing it through opts avoids a DB query in the hot path and a race where the ai_session row exists but has no `claude_session_id` yet. The broadcast message becomes `{:claude_session_started, workflow_session_id, ai_session_id}` (a 3-tuple), and the `AlivenessTracker` handles both the old 2-tuple and the new 3-tuple for compatibility during rollout. The tracker broadcasts two separate `{:aliveness_changed, ...}` messages — one for the workflow key, one for the ai key — so existing subscribers need no change.
-- **Introduce a thin `Destila.AI.History` adapter module** that delegates to `ClaudeCode.Session.get_messages/1`. The LiveView calls `History.get_messages/1`; tests override it via `Application.put_env` to return fixture messages. This avoids trying to stub a function we do not own and keeps `ClaudeCode.Test.stub` usage focused on live streaming.
+- **Verified History API.** Use `ClaudeCode.History.get_messages/2` (takes the `claude_session_id` string). The Session-module variant (`ClaudeCode.Session.get_messages/2`) takes a live GenServer PID and is the wrong surface — by the time the detail page loads, the originating ClaudeSession GenServer is usually gone. Confirmed by reading `deps/claude_code/lib/claude_code/history.ex` and `deps/claude_code/lib/claude_code/session.ex`.
+- **Introduce a thin `Destila.AI.History` adapter module** that delegates to `ClaudeCode.History.get_messages/2`. The LiveView calls `Destila.AI.History.get_messages/1` (or `/2`); tests override the delegate target via `Application.put_env(:destila, :ai_history_module, ...)` to return fixture messages. This avoids trying to stub a function we do not own and keeps `ClaudeCode.Test.stub` usage focused on live streaming.
 - **Render `SessionMessage`s with a dedicated function component module `DestilaWeb.AiSessionDebugComponents`**, not by reusing `ChatComponents`. The chat components expect our `%Destila.AI.Message{}` schema with `role`/`content`/`raw_response`; the history structs are a different shape (`%ClaudeCode.History.SessionMessage{}` wrapping `%ClaudeCode.Content.*{}` blocks). Mixing them would pollute chat components with debug-only branches.
 - **Build a `%{tool_use_id => tool_use_block}` index up-front** by walking all messages once before rendering, then use the index to find the originating tool-use struct when rendering a `ToolResultBlock`/`ServerToolResultBlock`/`MCPToolResultBlock`. This is cheaper than re-scanning the list for every result block and produces stable visual pairing even when the tool_use and tool_result span different messages.
 - **Fallback on `inspect/2` for unrecognized content blocks.** Future claude_code releases will add new block types; a catch-all `_ -> inspect(block, pretty: true, limit: :infinity)` inside a `<pre>` renders the raw struct without crashing the LiveView.
@@ -89,7 +96,7 @@ No matching entries found in `docs/solutions/` for this specific work. The close
 
 - **Does the tracker need to track ai_session_id independently of workflow_session_id, given there's only one ClaudeSession per workflow_session at a time?** Resolved: yes, because the user-facing surface is a list of historical AI sessions, and we want the *currently-bound* AI session to show green while older ones show muted. Binding `ai_session_id` at ClaudeSession init gives us that per-session granularity without changing the Registry key.
 - **Where to pass `ai_session_id` into `ClaudeSession`?** Resolved via opts in `init/1`, mirroring how `workflow_session_id` is already plumbed.
-- **How to test `ClaudeCode.Session.get_messages/1` without touching the real `~/.claude/projects` tree?** Resolved via a `Destila.AI.History` adapter configured through `Application.get_env`, defaulting to the real `ClaudeCode.Session`. See Unit 5.
+- **How to test `ClaudeCode.History.get_messages/2` without touching the real `~/.claude/projects` tree?** Resolved via a `Destila.AI.History` adapter configured through `Application.get_env`, defaulting to the real `ClaudeCode.History`. See Unit 5.
 - **Reuse `ChatComponents` for rendering?** Resolved: no — different input struct shape. See Key Technical Decisions.
 - **Route shape.** Resolved: `/sessions/:workflow_session_id/ai/:ai_session_id` maps to `DestilaWeb.AiSessionDetailLive` inside the existing `scope "/", DestilaWeb`.
 
@@ -191,16 +198,18 @@ tool_index =
 **Files:**
 - Modify: `lib/destila/ai/aliveness_tracker.ex`
 - Modify: `lib/destila/ai/claude_session.ex` (broadcast 3-tuple; accept `ai_session_id` opt)
-- Modify: `lib/destila/ai/conversation.ex` (pass `ai_session_id` into `ClaudeSession.for_workflow_session/2`)
+- Modify: `lib/destila/ai/session_config.ex` (**verified insertion point** — inject `ai_session_id: ai_session.id` into the opts keyword returned by `session_opts_for_workflow/3`, adjacent to the existing `:resume`/`:cwd` puts on the `ai_session != nil` branch)
 - Modify: `lib/destila/pub_sub_helper.ex` (optional: add a helper to form the 3-tuple if we want a named constructor)
 - Test: `test/destila/ai/aliveness_tracker_test.exs` (create if missing)
+
+**Not modified (verified via deps read):** `lib/destila/ai/conversation.ex` does *not* call `ClaudeSession.for_workflow_session/2` directly. `lib/destila/workers/ai_query_worker.ex` forwards `session_opts` unchanged to the ClaudeSession starter, so updating `SessionConfig` is sufficient and avoids threading `ai_session_id` through the worker's args.
 
 **Approach:**
 - Store ETS entries under tagged keys: `{{:workflow, ws_id}, true}` and `{{:ai, ai_id}, true}`. Update the existing `alive?/1` implementation to continue looking up `{:workflow, ws_id}` so external callers see no change.
 - Add `alive_ai?/1` (or `alive_ai_session?/1`) that looks up `{:ai, ai_id}`.
 - Track two independent monitor-ref maps or one map keyed by ref with a `{:workflow_and_ai, ws_id, ai_id}` value so that a single `:DOWN` cleans up both keys atomically.
 - In `ClaudeSession.init/1`, pop `:ai_session_id` from opts and include it in the `{:claude_session_started, ws_id, ai_id}` broadcast. Keep the old 2-tuple broadcast path alive as a fallback for safety (the tracker handles both) — or remove it cleanly since we control both producer and consumer. Decision: remove the 2-tuple on the producer side since both ends ship together; the tracker retains a `handle_info/2` clause for the 2-tuple with `ai_id: nil` only to avoid breakage from any in-flight messages during deploy.
-- In `Conversation.ensure_session/*` or wherever `ClaudeSession.for_workflow_session/2` is called, pass `ai_session_id: ai_session.id` via opts. Confirm the call site by following the code path from `Destila.AI.Conversation` during implementation.
+- In `lib/destila/ai/session_config.ex` `session_opts_for_workflow/3`, on the `ai_session != nil` branch (where `:resume` and `:cwd` are already injected from `ai_session`), add `Keyword.put(opts, :ai_session_id, ai_session.id)`. The `AiQueryWorker` passes the full opts keyword through to `ClaudeSession.for_workflow_session/2` unchanged, so `ClaudeSession.init/1` receives `ai_session_id` for free.
 - Scan on `init/1` is extended: `Registry.select` already yields `{ws_id, pid}`; to recover `ai_session_id` after a tracker restart, fall back to a DB lookup via `AI.get_ai_session_for_workflow/1` (best-effort). If no ai_session exists yet, skip the `{:ai, ai_id}` entry — the next claude_session_started broadcast will fill it in.
 
 **Patterns to follow:**
@@ -348,7 +357,7 @@ tool_index =
 
 ---
 
-- [ ] **Unit 5: `Destila.AI.History` adapter for `ClaudeCode.Session.get_messages/1`**
+- [ ] **Unit 5: `Destila.AI.History` adapter for `ClaudeCode.History.get_messages/2`**
 
 **Goal:** Make the history read swappable in tests without stubbing a module we do not own.
 
@@ -363,23 +372,24 @@ tool_index =
 - Create: `test/support/fake_history.ex` (test helper storing canned responses via `Application.put_env` or an `Agent`/ETS store)
 
 **Approach:**
-- `Destila.AI.History` exposes `get_messages/1` and (optionally) `get_messages/2`. Delegate to the real implementation by default:
-  - `Application.get_env(:destila, :ai_history_module, ClaudeCode.Session).get_messages(session_id)` (or keyword form for `/2`).
+- `Destila.AI.History` exposes `get_messages/1` and `get_messages/2`. Delegate to the real implementation by default:
+  - `Application.get_env(:destila, :ai_history_module, ClaudeCode.History).get_messages(session_id, opts)`. **Default target is `ClaudeCode.History`** — verified string-session-id API. Not `ClaudeCode.Session`, which expects a live PID.
+- Return contract: `{:ok, [%ClaudeCode.History.SessionMessage{}]} | {:error, term()}`, matching the upstream `@spec`.
 - The module doubles as a safety wrapper: it rescues any exception from the underlying call and returns `{:error, {:exception, ...}}` so the LiveView's `{:error, _}` branch covers unexpected shapes/crashes from disk/parse failures.
 - In `config/test.exs`, set `config :destila, :ai_history_module, Destila.AI.FakeHistory`.
 - The fake history module stores `{session_id => {:ok, messages} | {:error, reason}}` in an `Agent` (or process dictionary or ETS keyed by test pid via `nimble_ownership`-style if we want async). Tests call `FakeHistory.stub(session_id, {:ok, messages})` in their `setup`.
-- Build convenience fixtures: `Destila.AI.HistoryFixtures` with tiny builders like `text_message/1`, `thinking_message/1`, `tool_use_pair/3`, etc., so rendering tests stay readable.
+- Build convenience fixtures: `Destila.AI.HistoryFixtures` with tiny builders like `text_message/1`, `thinking_message/1`, `tool_use_pair/3`, etc., so rendering tests stay readable. Each builder returns a fully-formed `%ClaudeCode.History.SessionMessage{}` so the renderer tests exercise the real struct, not a loose map.
 
 **Patterns to follow:**
 - `ClaudeCode.Test.stub/2` in the existing tests as conceptual inspiration, but we own this adapter so we can expose whatever API reads cleanly.
 
 **Test scenarios:**
-- Happy path: delegates to the configured module; default config calls `ClaudeCode.Session.get_messages/1` (verified via a stand-in module that records the call).
+- Happy path: delegates to the configured module; default config calls `ClaudeCode.History.get_messages/2` (verified via a stand-in module that records the call).
 - Edge case: when the underlying call raises, the adapter returns `{:error, {:exception, ...}}` instead of propagating.
 - Integration: in test env, `Destila.AI.History.get_messages(id)` returns exactly what `FakeHistory.stub/2` provided.
 
 **Verification:**
-- The LiveView never imports `ClaudeCode.Session` directly; it only calls `History.get_messages/1`.
+- The LiveView never imports `ClaudeCode.History` or `ClaudeCode.Session` directly; it only calls `Destila.AI.History.get_messages/1`.
 - Tests can drive arbitrary history shapes (including `{:ok, []}`, `{:error, :enoent}`, and rich content-block fixtures) without touching disk.
 
 ---
@@ -517,6 +527,8 @@ tool_index =
 ## System-Wide Impact
 
 - **Interaction graph:** The AlivenessTracker is the hub. `ClaudeSession` broadcasts to it; it broadcasts to all LiveViews subscribed on `"session_aliveness"` (currently the workflow runner and the Crafting Board; now also the AI Session Detail page). Adding a second broadcast message type (`:aliveness_changed_ai`) on the same topic means every existing subscriber receives an extra message per AI state change — cost is trivial (a pattern match that falls through) but worth naming.
+- **Crafting Board compatibility verified.** `DestilaWeb.CraftingBoardLive` (`lib/destila_web/live/crafting_board_live.ex:77`) already has a `def handle_info(_msg, socket), do: {:noreply, socket}` catch-all after its existing `{:aliveness_changed, ws_id, alive?}` clause, so the new `:aliveness_changed_ai` broadcast is dropped silently there with no code change required. The existing `{:aliveness_changed, ws_id, alive?}` handler continues to update `:alive_sessions` as before.
+- **Workflow runner compatibility verified.** `DestilaWeb.WorkflowRunnerLive.handle_info({:aliveness_changed, ws_id, alive?}, socket)` (~line 468) matches only the 3-tuple workflow form. A new `{:aliveness_changed_ai, ai_id, alive?}` clause is added for the sidebar (Unit 3); neither handler disturbs the other.
 - **Error propagation:** `History.get_messages/1` is the only new disk-touching call. It is wrapped in a rescue at the adapter level, and the LiveView treats `{:error, _}` as the empty-state branch. No error path crashes the LiveView.
 - **State lifecycle risks:** The ETS table in `AlivenessTracker` grows by one entry per running AI session. Entries are removed on `:DOWN`, and because ClaudeSession processes have an inactivity timer (5 min default), stale `{:ai, id}` entries clear naturally. The only lingering concern is a restart of the tracker itself — its init now walks the Registry and (optionally) the DB to rehydrate `{:ai, id}` entries; if the DB lookup fails, `{:workflow, ws_id}` is still correct, preserving existing behavior.
 - **API surface parity:** `alive?/1` semantics are explicitly preserved for the Crafting Board and the workflow runner header. The new `alive_ai?/1` function is purely additive. No public function is renamed or removed.
@@ -527,7 +539,7 @@ tool_index =
 
 | Risk | Mitigation |
 |------|------------|
-| `ClaudeCode.Session.get_messages/1` path, signature, or return shape differs from what the prompt describes | Wrap the call in `Destila.AI.History` with a rescue. Verify the real signature during Unit 5 implementation by `iex -S mix` + a known session id before relying on the empirical shape. If the real API takes a PID instead of a session id string, the adapter absorbs that change — only the adapter's body needs fixing. |
+| claude_code history API shape drift on package upgrade | Verified at plan time against installed deps: use `ClaudeCode.History.get_messages/2` (`@spec get_messages(session_id(), keyword()) :: {:ok, [SessionMessage.t()]} | {:error, term()}`). Still wrap the call in `Destila.AI.History` with a rescue so future shape/parse changes fall into the `{:error, _}` empty-state branch. The `limit:`/`offset:` opts are already accepted upstream, so pagination is a future one-line change. |
 | Tracker dual-key rehydrate misses an ai_session_id after a crash/restart | The detail page and sidebar both call `alive_ai?/1`; worst case is a muted dot on a currently-running session until the next `{:claude_session_started, ...}` broadcast. Acceptable. Next broadcast (idle timer end or next user turn) will correct it. A `Logger.debug/1` line when rehydrate can't find an ai_session for a running ws_id makes this observable without noise. |
 | Large JSONL files (long conversations) block the LiveView mount | MVP reads the whole file synchronously. Acceptable for current session sizes. Add `limit:`/`offset:` via `get_messages/2` if users complain; the adapter already takes a keyword list. |
 | Broadcast storm when an AI session turns over quickly | Two broadcasts per state transition instead of one. At the current workload this is not a concern; noted for future scaling. |
@@ -550,11 +562,18 @@ tool_index =
   - `lib/destila/ai/session.ex`
   - `lib/destila/ai/claude_session.ex`
   - `lib/destila/ai/conversation.ex`
+  - `lib/destila/ai/session_config.ex` (verified insertion point for `ai_session_id` opt)
+  - `lib/destila/workers/ai_query_worker.ex` (verified `ClaudeSession.for_workflow_session/2` call site)
   - `lib/destila_web/live/workflow_runner_live.ex` (right sidebar at ~lines 695–900)
+  - `lib/destila_web/live/crafting_board_live.ex` (existing aliveness subscriber with catch-all `handle_info/2`)
   - `lib/destila_web/live/terminal_live.ex` (detail-page shape reference)
   - `lib/destila_web/router.ex`
   - `lib/destila_web/components/board_components.ex` (`aliveness_dot/1`)
   - `lib/destila_web/components/chat_components.ex` (componentization reference)
+- Installed deps (read directly):
+  - `deps/claude_code/lib/claude_code/history.ex` — `get_messages/2` spec and body
+  - `deps/claude_code/lib/claude_code/session.ex` — PID-based `get_messages/2` (not used here)
+  - `deps/claude_code/lib/claude_code/history/session_message.ex` — struct shape and parser fallback behavior
 - External docs:
   - `ClaudeCode.Session` and history: https://github.com/guess/claude_code/blob/main/docs/guides/sessions.md
   - `%ClaudeCode.History.SessionMessage{}`: https://github.com/guess/claude_code/blob/main/lib/claude_code/history/session_message.ex
