@@ -9,6 +9,7 @@ defmodule Destila.Projects.Project do
     field(:git_repo_url, :string)
     field(:local_folder, :string)
     field(:run_command, :string)
+    field(:setup_command, :string)
     field(:port_definitions, {:array, :string}, default: [])
     field(:archived_at, :utc_datetime)
 
@@ -24,6 +25,7 @@ defmodule Destila.Projects.Project do
       :git_repo_url,
       :local_folder,
       :run_command,
+      :setup_command,
       :port_definitions,
       :archived_at
     ])

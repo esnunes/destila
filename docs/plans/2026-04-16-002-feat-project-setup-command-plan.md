@@ -1,7 +1,7 @@
 ---
 title: "feat: Project setup_command for pre-run installation/build"
 type: feat
-status: active
+status: completed
 date: 2026-04-16
 ---
 

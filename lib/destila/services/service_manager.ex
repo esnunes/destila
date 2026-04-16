@@ -59,12 +59,17 @@ defmodule Destila.Services.ServiceManager do
         Tmux.ensure_session(session, worktree_path)
         Tmux.kill_window(target)
         Tmux.new_window(target, cwd: worktree_path)
-        Tmux.send_keys(target, build_service_command(project.run_command, ports))
+
+        Tmux.send_keys(
+          target,
+          build_service_command(project.setup_command, project.run_command, ports)
+        )
 
         service_state = %{
           "status" => "running",
           "ports" => ports,
-          "run_command" => project.run_command
+          "run_command" => project.run_command,
+          "setup_command" => project.setup_command
         }
 
         Workflows.update_workflow_session(ws, %{service_state: service_state})
@@ -116,20 +121,29 @@ defmodule Destila.Services.ServiceManager do
 
   defp service_target(ws), do: "#{Tmux.session_name(ws)}:#{@service_window}"
 
-  defp build_service_command(run_command, ports) do
+  @doc false
+  def build_service_command(setup_command, run_command, ports) do
     env_exports =
       ports
       |> Enum.map(fn {name, port} -> "export #{name}=#{port}" end)
       |> Enum.join(" && ")
 
+    body =
+      if blank?(setup_command) do
+        run_command
+      else
+        "#{setup_command}; #{run_command}"
+      end
+
     if env_exports != "" do
-      "#{env_exports} && #{run_command}"
+      "#{env_exports} && #{body}"
     else
-      run_command
+      body
     end
   end
 
-  defp reserve_ports(port_definitions) do
+  @doc false
+  def reserve_ports(port_definitions) do
     Map.new(port_definitions, fn name ->
       {:ok, socket} = :gen_tcp.listen(0, reuseaddr: true)
       {:ok, port} = :inet.port(socket)
@@ -137,4 +151,8 @@ defmodule Destila.Services.ServiceManager do
       {name, port}
     end)
   end
+
+  defp blank?(nil), do: true
+  defp blank?(str) when is_binary(str), do: String.trim(str) == ""
+  defp blank?(_), do: false
 end

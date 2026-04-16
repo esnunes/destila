@@ -96,4 +96,60 @@ defmodule Destila.Projects.ProjectTest do
       assert changeset.errors[:git_repo_url]
     end
   end
+
+  describe "changeset/2 with setup_command" do
+    test "accepts a valid setup_command alongside other attrs" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{
+            setup_command: "mix deps.get",
+            run_command: "mix phx.server"
+          })
+        )
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :setup_command) == "mix deps.get"
+    end
+
+    test "accepts nil setup_command" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{setup_command: nil})
+        )
+
+      assert changeset.valid?
+    end
+
+    test "accepts empty-string setup_command" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{setup_command: ""})
+        )
+
+      assert changeset.valid?
+    end
+
+    test "accepts attrs without setup_command key" do
+      changeset = Project.changeset(%Project{}, @valid_attrs)
+      assert changeset.valid?
+      refute Map.has_key?(changeset.changes, :setup_command)
+    end
+
+    test "round-trips setup_command through create_project and get_project" do
+      {:ok, created} =
+        Destila.Projects.create_project(
+          Map.merge(@valid_attrs, %{
+            name: "Setup Round Trip",
+            setup_command: "mix deps.get"
+          })
+        )
+
+      loaded = Destila.Projects.get_project(created.id)
+
+      assert loaded.setup_command == "mix deps.get"
+    end
+  end
 end
