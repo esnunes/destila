@@ -1,6 +1,7 @@
 defmodule Destila.Projects.Project do
   use Ecto.Schema
   import Ecto.Changeset
+  import Destila.StringHelper, only: [blank?: 1]
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -114,8 +115,4 @@ defmodule Destila.Projects.Project do
       end
     end
   end
-
-  defp blank?(nil), do: true
-  defp blank?(str) when is_binary(str), do: String.trim(str) == ""
-  defp blank?(_), do: false
 end

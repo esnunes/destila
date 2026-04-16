@@ -6,6 +6,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
   alias Destila.{AI, Git, Workflows}
   alias Destila.Services.ServiceManager
   alias Destila.Sessions.SessionProcess
+  import Destila.StringHelper, only: [blank?: 1]
 
   @service_window 9
 
@@ -48,7 +49,16 @@ defmodule Destila.Workers.PrepareWorkflowSession do
       rescue
         e ->
           Logger.warning(
-            "Post-worktree setup failed for session #{ws.id}: #{Exception.message(e)}"
+            "Post-worktree setup failed for session #{ws.id}: " <>
+              Exception.format(:error, e, __STACKTRACE__)
+          )
+
+          :ok
+      catch
+        kind, reason ->
+          Logger.warning(
+            "Post-worktree setup failed for session #{ws.id}: " <>
+              Exception.format(kind, reason, __STACKTRACE__)
           )
 
           :ok
@@ -70,10 +80,6 @@ defmodule Destila.Workers.PrepareWorkflowSession do
   end
 
   defp tmux_impl, do: Application.get_env(:destila, :tmux, Destila.Terminal.Tmux)
-
-  defp blank?(nil), do: true
-  defp blank?(str) when is_binary(str), do: String.trim(str) == ""
-  defp blank?(_), do: false
 
   defp sync_repo(nil), do: :ok
 

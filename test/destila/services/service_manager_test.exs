@@ -10,13 +10,15 @@ defmodule Destila.Services.ServiceManagerTest do
   @feature "service_setup_command"
 
   describe "build_service_command/3 without setup_command" do
-    @tag feature: @feature, scenario: "Run command without setup runs unchanged"
+    @tag feature: @feature,
+         scenario: "A project without a setup command keeps its current behavior"
     test "returns run_command unchanged when no setup and no ports" do
       assert ServiceManager.build_service_command(nil, "mix phx.server", %{}) ==
                "mix phx.server"
     end
 
-    @tag feature: @feature, scenario: "Run command without setup runs unchanged"
+    @tag feature: @feature,
+         scenario: "A project without a setup command keeps its current behavior"
     test "prepends port exports with && when no setup" do
       result =
         ServiceManager.build_service_command(

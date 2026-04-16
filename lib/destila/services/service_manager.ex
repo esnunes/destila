@@ -10,6 +10,7 @@ defmodule Destila.Services.ServiceManager do
 
   alias Destila.{Projects, Workflows}
   alias Destila.Terminal.Tmux
+  import Destila.StringHelper, only: [blank?: 1]
 
   @service_window 9
 
@@ -144,15 +145,21 @@ defmodule Destila.Services.ServiceManager do
 
   @doc false
   def reserve_ports(port_definitions) do
-    Map.new(port_definitions, fn name ->
-      {:ok, socket} = :gen_tcp.listen(0, reuseaddr: true)
-      {:ok, port} = :inet.port(socket)
-      :gen_tcp.close(socket)
-      {name, port}
+    Map.new(port_definitions || [], fn name ->
+      case :gen_tcp.listen(0, reuseaddr: true) do
+        {:ok, socket} ->
+          port =
+            case :inet.port(socket) do
+              {:ok, p} -> p
+              {:error, _} -> 0
+            end
+
+          :gen_tcp.close(socket)
+          {name, port}
+
+        {:error, _reason} ->
+          {name, 0}
+      end
     end)
   end
-
-  defp blank?(nil), do: true
-  defp blank?(str) when is_binary(str), do: String.trim(str) == ""
-  defp blank?(_), do: false
 end
