@@ -276,9 +276,7 @@ defmodule Destila.Sessions.SessionProcess do
   end
 
   defp handle_retry(from, data) do
-    phase = data.ws.current_phase
     AI.ClaudeSession.stop_for_workflow_session(data.session_id)
-    AI.Conversation.handle_session_strategy(data.ws, phase)
 
     # Transition PE to processing BEFORE starting the phase,
     # so the PE is in the right state when the worker runs inline (Oban :inline in tests).

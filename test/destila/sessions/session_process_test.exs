@@ -420,6 +420,24 @@ defmodule Destila.Sessions.SessionProcessTest do
 
       assert {:error, :invalid_event} = SessionProcess.retry(ws.id)
     end
+
+    test "creates exactly one new AI session on retry of :new strategy phase" do
+      ws =
+        create_session_with_ai(%{
+          workflow_type: :implement_general_prompt,
+          current_phase: 3,
+          total_phases: 7,
+          pe_status: :awaiting_input
+        })
+
+      assert length(AI.list_ai_sessions_for_workflow(ws.id)) == 1
+
+      start_process(ws.id)
+
+      {:ok, _ws} = SessionProcess.retry(ws.id)
+
+      assert length(AI.list_ai_sessions_for_workflow(ws.id)) == 2
+    end
   end
 
   describe "decline_advance" do

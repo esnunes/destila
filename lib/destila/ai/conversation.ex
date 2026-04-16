@@ -228,8 +228,7 @@ defmodule Destila.AI.Conversation do
   For `:new` -- stops the existing ClaudeSession and creates a fresh AI session.
   For `:resume` -- no-op.
 
-  This is also used by `SessionProcess` retry to apply the phase's strategy
-  before restarting.
+  Called by `phase_start/1` before starting the phase.
   """
   def handle_session_strategy(ws, phase_number) do
     case get_phase(ws, phase_number) do
