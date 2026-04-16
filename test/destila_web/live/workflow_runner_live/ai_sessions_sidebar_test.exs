@@ -171,8 +171,8 @@ defmodule DestilaWeb.WorkflowRunnerLive.AiSessionsSidebarTest do
 
       :sys.get_state(view.pid)
 
-      # The count badge should now show 1
-      assert render(view) =~ "1"
+      # The count badge should now show 1 within the session item
+      assert has_element?(view, "#ai-session-item-#{ai_session.id}", "1")
     end
   end
 end

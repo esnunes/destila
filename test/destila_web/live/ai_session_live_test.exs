@@ -66,8 +66,8 @@ defmodule DestilaWeb.AiSessionLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai_session.id}")
 
-      assert has_element?(view, "#ai-session-created-at")
-      assert has_element?(view, "#ai-session-claude-id")
+      assert has_element?(view, "#ai-session-created-at", "UTC")
+      assert has_element?(view, "#ai-session-claude-id", "test-claude-session-id")
     end
 
     @tag feature: "ai_sessions",
