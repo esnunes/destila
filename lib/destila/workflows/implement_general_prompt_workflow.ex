@@ -125,16 +125,20 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     """
   end
 
-  defp deepen_plan_prompt(_workflow_session) do
+  defp deepen_plan_prompt(workflow_session) do
+    plan_path =
+      Destila.Workflows.get_metadata(workflow_session.id)
+      |> get_in(["plan", "text_file"]) || "unknown"
+
     """
-    Find the plan file in `docs/plans/` (it will be the most recently added \
-    `*-plan.md` file). Review it and evaluate whether a more detailed plan \
-    would be beneficial for the implementation.
+    The plan generated in the previous phase is at `#{plan_path}`. Review it \
+    and evaluate whether a more detailed plan would be beneficial for the \
+    implementation.
 
     If the plan needs more detail:
-    1. You MUST use the compound engineering skill `deepen-pla` to deepen the plan
+    1. You MUST use the compound engineering skill `deepen-plan` to deepen the plan
     2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
-    `key: "plan"`, `type: "text_file", and `value` set to the path to the plan file.
+    `key: "plan"`, `type: "text_file"`, and `value` set to the path to the plan file.
     3. Commit your changes
     4. Push to the remote
     5. Call `mcp__destila__session` with `action: "phase_complete"`
