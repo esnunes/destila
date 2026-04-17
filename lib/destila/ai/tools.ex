@@ -157,7 +157,10 @@ defmodule Destila.AI.Tools do
   The tool accepts an `action` parameter:
 
   - `start` — Start the service using the project's configured run command. \
-  Returns the assigned port mappings (e.g., `{"PORT": 54321}`).
+  Returns the assigned port mappings (e.g., `{"PORT": 54321}`). \
+  Blocks until all reserved ports accept TCP connections or a 1-minute timeout \
+  elapses; the returned state includes `"ready": true` when the service is \
+  responding and `"ready": false` on timeout.
   - `stop` — Stop the running service gracefully.
   - `restart` — Stop and restart the service with fresh port assignments.
   - `status` — Check the current service status and port mappings.

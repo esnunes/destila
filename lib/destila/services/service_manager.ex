@@ -13,6 +13,9 @@ defmodule Destila.Services.ServiceManager do
   import Destila.StringHelper, only: [blank?: 1]
 
   @service_window 9
+  @startup_timeout_ms 60_000
+  @port_probe_interval_ms 500
+  @port_probe_timeout_ms 500
 
   @doc """
   Executes a service action for the given workflow session.
@@ -66,8 +69,11 @@ defmodule Destila.Services.ServiceManager do
           build_service_command(project.setup_command, project.run_command, ports)
         )
 
+        ready? = wait_for_ports(Map.values(ports), @startup_timeout_ms)
+
         service_state = %{
           "status" => "running",
+          "ready" => ready?,
           "ports" => ports,
           "run_command" => project.run_command,
           "setup_command" => project.setup_command
@@ -140,6 +146,39 @@ defmodule Destila.Services.ServiceManager do
       "#{env_exports} && #{body}"
     else
       body
+    end
+  end
+
+  @doc false
+  def wait_for_ports([], _timeout_ms), do: true
+
+  def wait_for_ports(ports, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_wait_for_ports(ports, deadline)
+  end
+
+  defp do_wait_for_ports(ports, deadline) do
+    cond do
+      Enum.all?(ports, &port_open?/1) ->
+        true
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        false
+
+      true ->
+        Process.sleep(@port_probe_interval_ms)
+        do_wait_for_ports(ports, deadline)
+    end
+  end
+
+  defp port_open?(port) do
+    case :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false], @port_probe_timeout_ms) do
+      {:ok, socket} ->
+        :gen_tcp.close(socket)
+        true
+
+      {:error, _} ->
+        false
     end
   end
 
