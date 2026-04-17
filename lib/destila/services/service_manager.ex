@@ -11,8 +11,12 @@ defmodule Destila.Services.ServiceManager do
   alias Destila.{Projects, Workflows}
   alias Destila.Terminal.Tmux
   import Destila.StringHelper, only: [blank?: 1]
+  require Logger
 
   @service_window 9
+  @startup_timeout_ms 60_000
+  @port_probe_interval_ms 500
+  @port_probe_timeout_ms 500
 
   @doc """
   Executes a service action for the given workflow session.
@@ -66,16 +70,31 @@ defmodule Destila.Services.ServiceManager do
           build_service_command(project.setup_command, project.run_command, ports)
         )
 
-        service_state = %{
-          "status" => "running",
+        starting_state = %{
+          "status" => "starting",
           "ports" => ports,
           "run_command" => project.run_command,
           "setup_command" => project.setup_command
         }
 
-        Workflows.update_workflow_session(ws, %{service_state: service_state})
+        Workflows.update_workflow_session(ws, %{service_state: starting_state})
+        Logger.info("ServiceManager: #{ws.id} starting; waiting for ports #{inspect(ports)}")
 
-        {:ok, service_state}
+        if wait_for_ports(Map.values(ports), @startup_timeout_ms) do
+          Logger.info("ServiceManager: #{ws.id} ports responded; marking running")
+          running_state = %{starting_state | "status" => "running"}
+          Workflows.update_workflow_session(ws, %{service_state: running_state})
+          {:ok, running_state}
+        else
+          Logger.warning(
+            "ServiceManager: #{ws.id} ports did not respond within #{@startup_timeout_ms}ms; stopping"
+          )
+
+          do_stop(ws)
+
+          {:error,
+           "Service did not become ready within #{div(@startup_timeout_ms, 1000)}s; stopped to avoid leaving an unreachable process running"}
+        end
     end
   end
 
@@ -83,6 +102,8 @@ defmodule Destila.Services.ServiceManager do
     target = service_target(ws)
     Tmux.term_panes(target)
     Tmux.kill_window(target)
+
+    ws = Workflows.get_workflow_session!(ws.id)
 
     service_state = %{
       "status" => "stopped",
@@ -140,6 +161,36 @@ defmodule Destila.Services.ServiceManager do
       "#{env_exports} && #{body}"
     else
       body
+    end
+  end
+
+  defp wait_for_ports(ports, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_wait_for_ports(ports, deadline)
+  end
+
+  defp do_wait_for_ports(ports, deadline) do
+    cond do
+      Enum.all?(ports, &port_open?/1) ->
+        true
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        false
+
+      true ->
+        Process.sleep(@port_probe_interval_ms)
+        do_wait_for_ports(ports, deadline)
+    end
+  end
+
+  defp port_open?(port) do
+    case :gen_tcp.connect(~c"127.0.0.1", port, [], @port_probe_timeout_ms) do
+      {:ok, socket} ->
+        :gen_tcp.close(socket)
+        true
+
+      {:error, _} ->
+        false
     end
   end
 
