@@ -149,10 +149,7 @@ defmodule Destila.Services.ServiceManager do
     end
   end
 
-  @doc false
-  def wait_for_ports([], _timeout_ms), do: true
-
-  def wait_for_ports(ports, timeout_ms) do
+  defp wait_for_ports(ports, timeout_ms) do
     deadline = System.monotonic_time(:millisecond) + timeout_ms
     do_wait_for_ports(ports, deadline)
   end
@@ -172,7 +169,7 @@ defmodule Destila.Services.ServiceManager do
   end
 
   defp port_open?(port) do
-    case :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false], @port_probe_timeout_ms) do
+    case :gen_tcp.connect(~c"127.0.0.1", port, [], @port_probe_timeout_ms) do
       {:ok, socket} ->
         :gen_tcp.close(socket)
         true
