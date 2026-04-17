@@ -4,13 +4,11 @@ defmodule Destila.Terminal.Tmux do
   """
 
   @doc """
-  Returns the tmux session name for a workflow session, derived from its title.
-  Strips everything except alphanumerics, hyphens, and underscores.
+  Returns the tmux session name for a workflow session, derived from its id.
+  The id is stable across title edits, so the tmux session never drifts
+  out of sync with the workflow session.
   """
-  def session_name(ws) do
-    ws.title
-    |> String.replace(~r/[^0-9a-zA-Z_-]/, "-")
-  end
+  def session_name(ws), do: "ws-#{ws.id}"
 
   @doc """
   Checks whether a tmux session exists.

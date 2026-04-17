@@ -100,7 +100,8 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert has_element?(view, "#service-status-link .text-green-500")
+      assert has_element?(view, "#service-status-link")
+      assert has_element?(view, "#service-status-item .text-green-500")
     end
 
     @tag feature: "service_status_sidebar",

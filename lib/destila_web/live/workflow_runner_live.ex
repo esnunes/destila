@@ -847,14 +847,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                               id="service-status-link"
                               href={url}
                               target="_blank"
-                              class="text-sm text-base-content/80 truncate flex-1 text-left hover:text-primary transition-colors inline-flex items-center gap-1"
+                              class="text-sm text-base-content/80 truncate flex-1 text-left hover:text-primary transition-colors"
                               aria-label="Open service"
                             >
                               Service
-                              <.icon
-                                name="hero-arrow-top-right-on-square-micro"
-                                class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
-                              />
                             </a>
                           <% else %>
                             <span class={[
