@@ -23,7 +23,7 @@ defmodule Destila.Terminal.FakeTmux do
 
   def session_name(ws) do
     send_call(:session_name, [ws])
-    ws.title |> String.replace(~r/[^0-9a-zA-Z_-]/, "-")
+    "ws-#{ws.id}"
   end
 
   def ensure_session(name, cwd) do
