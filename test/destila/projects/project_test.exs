@@ -135,11 +135,6 @@ defmodule Destila.Projects.ProjectTest do
       refute Project.webservice?(%Project{run_command: "run", service_env_var: nil})
       refute Project.webservice?(%Project{run_command: "run", service_env_var: ""})
     end
-
-    test "false for non-project values" do
-      refute Project.webservice?(nil)
-      refute Project.webservice?(%{})
-    end
   end
 
   describe "changeset/2 with setup_command" do

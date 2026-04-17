@@ -44,8 +44,6 @@ defmodule Destila.Projects.Project do
     not blank?(run_command) and not blank?(env_var)
   end
 
-  def webservice?(_), do: false
-
   defp validate_at_least_one_location(changeset) do
     git_repo_url = get_field(changeset, :git_repo_url)
     local_folder = get_field(changeset, :local_folder)

@@ -119,18 +119,10 @@ defmodule Destila.Services.ServiceManager do
       prior_state
       |> Map.take(["port", "run_command", "setup_command"])
       |> Map.put("status", "stopped")
-      |> drop_non_integer_port()
 
     Workflows.update_workflow_session(ws, %{service_state: service_state})
 
     {:ok, service_state}
-  end
-
-  defp drop_non_integer_port(state) do
-    case state["port"] do
-      port when is_integer(port) -> state
-      _ -> Map.delete(state, "port")
-    end
   end
 
   defp do_restart(ws, opts) do
