@@ -145,21 +145,11 @@ defmodule Destila.Services.ServiceManager do
 
   @doc false
   def reserve_ports(port_definitions) do
-    Map.new(port_definitions || [], fn name ->
-      case :gen_tcp.listen(0, reuseaddr: true) do
-        {:ok, socket} ->
-          port =
-            case :inet.port(socket) do
-              {:ok, p} -> p
-              {:error, _} -> 0
-            end
-
-          :gen_tcp.close(socket)
-          {name, port}
-
-        {:error, _reason} ->
-          {name, 0}
-      end
+    Map.new(port_definitions, fn name ->
+      {:ok, socket} = :gen_tcp.listen(0, reuseaddr: true)
+      {:ok, port} = :inet.port(socket)
+      :gen_tcp.close(socket)
+      {name, port}
     end)
   end
 end

@@ -92,16 +92,6 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
       refute_received {:tmux, :send_keys, _}
     end
 
-    test "does nothing when worktree_path is nil" do
-      project = %Destila.Projects.Project{setup_command: "mix deps.get", port_definitions: []}
-      ws = make_ws("no-worktree")
-
-      assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, nil, ws)
-
-      refute_received {:tmux, :new_window, _}
-      refute_received {:tmux, :send_keys, _}
-    end
-
     @tag feature: @feature,
          scenario: "Setup failures do not block worktree readiness"
     test "returns :ok when tmux raises so perform/1 still calls worktree_ready/1" do
@@ -109,32 +99,6 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
 
       project = %Destila.Projects.Project{setup_command: "mix deps.get", port_definitions: []}
       ws = make_ws("raising-session")
-
-      assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
-
-      assert_received {:tmux, :send_keys, _}
-    end
-
-    @tag feature: @feature,
-         scenario: "Setup failures do not block worktree readiness"
-    test "returns :ok when tmux exits" do
-      FakeTmux.stub_send_keys(fn _target, _cmd -> exit(:boom) end)
-
-      project = %Destila.Projects.Project{setup_command: "mix deps.get", port_definitions: []}
-      ws = make_ws("exiting-session")
-
-      assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
-
-      assert_received {:tmux, :send_keys, _}
-    end
-
-    @tag feature: @feature,
-         scenario: "Setup failures do not block worktree readiness"
-    test "returns :ok when tmux throws" do
-      FakeTmux.stub_send_keys(fn _target, _cmd -> throw(:boom) end)
-
-      project = %Destila.Projects.Project{setup_command: "mix deps.get", port_definitions: []}
-      ws = make_ws("throwing-session")
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
 

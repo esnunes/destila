@@ -29,7 +29,6 @@ defmodule Destila.Workers.PrepareWorkflowSession do
 
   @doc false
   def run_post_worktree_setup(nil, _worktree_path, _ws), do: :ok
-  def run_post_worktree_setup(_project, nil, _ws), do: :ok
 
   def run_post_worktree_setup(project, worktree_path, ws) do
     if blank?(project.setup_command) do
@@ -39,7 +38,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
         tmux = tmux_impl()
         session = tmux.session_name(ws)
         target = "#{session}:#{@service_window}"
-        ports = ServiceManager.reserve_ports(project.port_definitions || [])
+        ports = ServiceManager.reserve_ports(project.port_definitions)
 
         tmux.ensure_session(session, worktree_path)
         tmux.kill_window(target)
@@ -51,14 +50,6 @@ defmodule Destila.Workers.PrepareWorkflowSession do
           Logger.warning(
             "Post-worktree setup failed for session #{ws.id}: " <>
               Exception.format(:error, e, __STACKTRACE__)
-          )
-
-          :ok
-      catch
-        kind, reason ->
-          Logger.warning(
-            "Post-worktree setup failed for session #{ws.id}: " <>
-              Exception.format(kind, reason, __STACKTRACE__)
           )
 
           :ok
