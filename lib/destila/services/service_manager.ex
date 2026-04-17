@@ -69,19 +69,25 @@ defmodule Destila.Services.ServiceManager do
           build_service_command(project.setup_command, project.run_command, ports)
         )
 
-        ready? = wait_for_ports(Map.values(ports), @startup_timeout_ms)
-
-        service_state = %{
-          "status" => "running",
-          "ready" => ready?,
+        starting_state = %{
+          "status" => "starting",
           "ports" => ports,
           "run_command" => project.run_command,
           "setup_command" => project.setup_command
         }
 
-        Workflows.update_workflow_session(ws, %{service_state: service_state})
+        Workflows.update_workflow_session(ws, %{service_state: starting_state})
 
-        {:ok, service_state}
+        if wait_for_ports(Map.values(ports), @startup_timeout_ms) do
+          running_state = %{starting_state | "status" => "running"}
+          Workflows.update_workflow_session(ws, %{service_state: running_state})
+          {:ok, running_state}
+        else
+          do_stop(ws)
+
+          {:error,
+           "Service did not become ready within #{div(@startup_timeout_ms, 1000)}s; stopped to avoid leaving an unreachable process running"}
+        end
     end
   end
 
