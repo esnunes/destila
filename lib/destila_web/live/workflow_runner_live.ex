@@ -854,27 +854,29 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                               Service
                             </a>
                           <% else %>
-                            <span class={[
-                              "text-sm truncate flex-1 text-left transition-colors duration-300",
-                              if(service_active?,
-                                do: "text-base-content/80",
-                                else: "text-base-content/60"
-                              )
-                            ]}>
-                              Service
-                            </span>
-                            <span
-                              :if={service_running?}
-                              class="text-[10px] font-medium text-green-600 dark:text-green-400 uppercase tracking-wide"
-                            >
-                              Live
-                            </span>
-                            <span
-                              :if={service_starting?}
-                              class="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide"
-                            >
-                              Starting…
-                            </span>
+                            <div class="flex-1 min-w-0 flex items-center gap-1.5">
+                              <span class={[
+                                "text-sm truncate min-w-0 text-left transition-colors duration-300",
+                                if(service_active?,
+                                  do: "text-base-content/80",
+                                  else: "text-base-content/60"
+                                )
+                              ]}>
+                                Service
+                              </span>
+                              <span
+                                :if={service_running?}
+                                class="shrink-0 text-[10px] font-medium text-green-600 dark:text-green-400 uppercase tracking-wide"
+                              >
+                                Live
+                              </span>
+                              <span
+                                :if={service_starting?}
+                                class="shrink-0 text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide"
+                              >
+                                Starting…
+                              </span>
+                            </div>
                           <% end %>
                           <button
                             type="button"
