@@ -19,6 +19,7 @@ defmodule DestilaWeb.ProjectFormLive do
          "name" => project.name || "",
          "git_repo_url" => project.git_repo_url || "",
          "local_folder" => project.local_folder || "",
+         "setup_command" => project.setup_command || "",
          "run_command" => project.run_command || ""
        })
      end)
@@ -50,6 +51,7 @@ defmodule DestilaWeb.ProjectFormLive do
       name: String.trim(params["name"] || ""),
       git_repo_url: non_blank(params["git_repo_url"]),
       local_folder: non_blank(params["local_folder"]),
+      setup_command: non_blank(params["setup_command"]),
       run_command: non_blank(params["run_command"]),
       port_definitions: port_defs
     }
@@ -200,6 +202,20 @@ defmodule DestilaWeb.ProjectFormLive do
         </div>
 
         <fieldset class="fieldset">
+          <label class="fieldset-label text-xs font-medium" for={"#{@id}-setup-command"}>
+            Setup command
+          </label>
+          <input
+            type="text"
+            id={"#{@id}-setup-command"}
+            name="setup_command"
+            value={@form["setup_command"].value}
+            placeholder="mix deps.get && mix assets.build"
+            class="input input-bordered w-full input-sm"
+          />
+        </fieldset>
+
+        <fieldset class="fieldset">
           <label class="fieldset-label text-xs font-medium" for={"#{@id}-run-command"}>
             Run command
           </label>
@@ -208,7 +224,7 @@ defmodule DestilaWeb.ProjectFormLive do
             id={"#{@id}-run-command"}
             name="run_command"
             value={@form["run_command"].value}
-            placeholder="mix setup && mix phx.server"
+            placeholder="mix phx.server"
             class="input input-bordered w-full input-sm"
           />
         </fieldset>

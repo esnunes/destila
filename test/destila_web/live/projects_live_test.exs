@@ -215,6 +215,92 @@ defmodule DestilaWeb.ProjectsLiveTest do
       assert html =~ "mix phx.server"
     end
 
+    @tag feature: @feature, scenario: "Create a project with a setup command"
+    test "creates a project with setup and run commands", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      view
+      |> form("#project-form-create-form", %{
+        "name" => "Setup Project",
+        "git_repo_url" => "https://github.com/test/setup",
+        "setup_command" => "mix deps.get",
+        "run_command" => "mix phx.server"
+      })
+      |> render_submit()
+
+      html = render(view)
+      assert html =~ "Setup Project"
+      assert html =~ "mix deps.get"
+      assert html =~ "mix phx.server"
+    end
+
+    @tag feature: @feature, scenario: "Edit a project's setup command"
+    test "edits a project's setup command", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Setup Edit Project",
+          git_repo_url: "https://github.com/test/repo",
+          setup_command: "bundle install",
+          run_command: "bin/rails server"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      assert render(view) =~ "bundle install"
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      assert has_element?(view, "#project-form-#{project.id}-setup-command")
+
+      view
+      |> form("#project-form-#{project.id}-form", %{"setup_command" => "bundle install --jobs=4"})
+      |> render_submit()
+
+      assert render(view) =~ "bundle install --jobs=4"
+    end
+
+    @tag feature: @feature,
+         scenario: "A project without a setup command keeps its current behavior"
+    test "card omits setup row when setup_command is blank", %{conn: conn} do
+      {:ok, _project} =
+        Destila.Projects.create_project(%{
+          name: "No Setup Project",
+          git_repo_url: "https://github.com/test/repo",
+          run_command: "mix phx.server"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      html = render(view)
+      assert html =~ "mix phx.server"
+      refute html =~ "hero-wrench"
+    end
+
+    @tag feature: @feature, scenario: "Edit a project's setup command"
+    test "clearing setup_command removes it from the card", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Clearable Setup",
+          git_repo_url: "https://github.com/test/repo",
+          setup_command: "mix deps.get"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      view
+      |> form("#project-form-#{project.id}-form", %{"setup_command" => ""})
+      |> render_submit()
+
+      refute render(view) =~ "mix deps.get"
+
+      reloaded = Destila.Projects.get_project(project.id)
+      assert is_nil(reloaded.setup_command)
+    end
+
     @tag feature: @feature,
          scenario: "Port definitions require a valid environment variable name"
     test "shows error for invalid port definition name", %{conn: conn} do

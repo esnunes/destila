@@ -1,6 +1,7 @@
 defmodule Destila.Projects.Project do
   use Ecto.Schema
   import Ecto.Changeset
+  import Destila.StringHelper, only: [blank?: 1]
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -9,6 +10,7 @@ defmodule Destila.Projects.Project do
     field(:git_repo_url, :string)
     field(:local_folder, :string)
     field(:run_command, :string)
+    field(:setup_command, :string)
     field(:port_definitions, {:array, :string}, default: [])
     field(:archived_at, :utc_datetime)
 
@@ -24,6 +26,7 @@ defmodule Destila.Projects.Project do
       :git_repo_url,
       :local_folder,
       :run_command,
+      :setup_command,
       :port_definitions,
       :archived_at
     ])
@@ -112,8 +115,4 @@ defmodule Destila.Projects.Project do
       end
     end
   end
-
-  defp blank?(nil), do: true
-  defp blank?(str) when is_binary(str), do: String.trim(str) == ""
-  defp blank?(_), do: false
 end

@@ -1,8 +1,14 @@
 defmodule Destila.Workers.PrepareWorkflowSession do
   use Oban.Worker, queue: :setup, max_attempts: 3
 
+  require Logger
+
   alias Destila.{AI, Git, Workflows}
+  alias Destila.Services.ServiceManager
   alias Destila.Sessions.SessionProcess
+  import Destila.StringHelper, only: [blank?: 1]
+
+  @service_window 9
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"workflow_session_id" => workflow_session_id}}) do
@@ -13,11 +19,58 @@ defmodule Destila.Workers.PrepareWorkflowSession do
          {:ok, worktree_path} <- create_worktree(workflow_session, project) do
       AI.get_or_create_ai_session(workflow_session.id, %{worktree_path: worktree_path})
 
+      run_post_worktree_setup(project, worktree_path, workflow_session)
+
       SessionProcess.worktree_ready(workflow_session.id)
 
       :ok
     end
   end
+
+  @doc false
+  def run_post_worktree_setup(nil, _worktree_path, _ws), do: :ok
+
+  def run_post_worktree_setup(project, worktree_path, ws) do
+    if blank?(project.setup_command) do
+      :ok
+    else
+      try do
+        tmux = tmux_impl()
+        session = tmux.session_name(ws)
+        target = "#{session}:#{@service_window}"
+        ports = ServiceManager.reserve_ports(project.port_definitions)
+
+        tmux.ensure_session(session, worktree_path)
+        tmux.kill_window(target)
+        tmux.new_window(target, cwd: worktree_path)
+        tmux.send_keys(target, build_setup_command(project.setup_command, ports))
+        :ok
+      rescue
+        e ->
+          Logger.warning(
+            "Post-worktree setup failed for session #{ws.id}: " <>
+              Exception.format(:error, e, __STACKTRACE__)
+          )
+
+          :ok
+      end
+    end
+  end
+
+  defp build_setup_command(setup_command, ports) do
+    env_exports =
+      ports
+      |> Enum.map(fn {name, port} -> "export #{name}=#{port}" end)
+      |> Enum.join(" && ")
+
+    if env_exports != "" do
+      "#{env_exports} && #{setup_command}"
+    else
+      setup_command
+    end
+  end
+
+  defp tmux_impl, do: Application.get_env(:destila, :tmux, Destila.Terminal.Tmux)
 
   defp sync_repo(nil), do: :ok
 

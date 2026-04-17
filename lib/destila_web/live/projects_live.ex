@@ -291,6 +291,13 @@ defmodule DestilaWeb.ProjectsLive do
                       {project.local_folder}
                     </span>
                     <span
+                      :if={project.setup_command}
+                      class="text-xs text-base-content/40 truncate"
+                    >
+                      <.icon name="hero-wrench-micro" class="size-3.5 inline" />
+                      {project.setup_command}
+                    </span>
+                    <span
                       :if={project.run_command}
                       class="text-xs text-base-content/40 truncate"
                     >
