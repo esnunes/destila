@@ -103,6 +103,8 @@ defmodule Destila.Services.ServiceManager do
     Tmux.term_panes(target)
     Tmux.kill_window(target)
 
+    ws = Workflows.get_workflow_session!(ws.id)
+
     service_state = %{
       "status" => "stopped",
       "ports" => (ws.service_state || %{})["ports"]
