@@ -198,9 +198,12 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     Record a feature video walkthrough of the implemented changes.
 
     Steps:
-    1. You MUST use the compound engineering skill `feature-video` to record a walkthrough \
+    1. Start the development service by calling `mcp__destila__service` with \
+    `action: "start"`. Use the returned port mappings when accessing the service \
+    in the walkthrough.
+    2. You MUST use the compound engineering skill `feature-video` to record a walkthrough \
     demonstrating the changes
-    2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
+    3. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
     `key` set to the name of the file without extension, and `value` set to the path \
     to the video. This ensures each video has a distinct, descriptive key.
     """
