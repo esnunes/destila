@@ -19,6 +19,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   alias Destila.AI
   alias Destila.AI.AlivenessTracker
   alias Destila.AI.ResponseProcessor
+  alias Destila.Services.ServiceManager
   alias Destila.Sessions.SessionProcess
   alias Destila.Workflows
   alias Destila.Workflows.Session
@@ -181,6 +182,29 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
       {:error, _} ->
         {:noreply, socket}
+    end
+  end
+
+  def handle_event("start_service", _params, socket) do
+    ws = socket.assigns.workflow_session
+    opts = [worktree_path: socket.assigns[:worktree_path]]
+
+    case ServiceManager.execute(ws, "start", opts) do
+      {:ok, _state} ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to start service: #{reason}")}
+    end
+  end
+
+  def handle_event("stop_service", _params, socket) do
+    case ServiceManager.execute(socket.assigns.workflow_session, "stop") do
+      {:ok, _state} ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to stop service: #{reason}")}
     end
   end
 
@@ -796,53 +820,43 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                       <% service_running? = @workflow_session.service_state["status"] == "running" %>
                       <% url = service_url(@project, @workflow_session.service_state) %>
                       <%= if @project.run_command do %>
-                        <%= if url do %>
-                          <a
-                            id="service-status-link"
-                            href={url}
-                            target="_blank"
-                            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
-                            aria-label="Open service"
-                          >
-                            <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
-                              <.icon
-                                name="hero-server-micro"
-                                class="size-3.5 text-green-500 transition-colors duration-300"
-                              />
-                              <span class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-green-500 ring-2 ring-base-100 animate-pulse">
-                              </span>
-                            </span>
-                            <span class="text-sm text-base-content/80 truncate flex-1 text-left">
-                              Service
-                            </span>
+                        <div
+                          id="service-status-item"
+                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                          aria-label="Service status"
+                        >
+                          <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
                             <.icon
-                              name="hero-arrow-top-right-on-square-micro"
-                              class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                              name="hero-server-micro"
+                              class={[
+                                "size-3.5 transition-colors duration-300",
+                                if(service_running?,
+                                  do: "text-green-500",
+                                  else: "text-base-content/30"
+                                )
+                              ]}
                             />
-                          </a>
-                        <% else %>
-                          <div
-                            id="service-status-item"
-                            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150"
-                            aria-label="Service status"
-                          >
-                            <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
-                              <.icon
-                                name="hero-server-micro"
-                                class={[
-                                  "size-3.5 transition-colors duration-300",
-                                  if(service_running?,
-                                    do: "text-green-500",
-                                    else: "text-base-content/30"
-                                  )
-                                ]}
-                              />
-                              <span
-                                :if={service_running?}
-                                class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-green-500 ring-2 ring-base-100 animate-pulse"
-                              >
-                              </span>
+                            <span
+                              :if={service_running?}
+                              class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-green-500 ring-2 ring-base-100 animate-pulse"
+                            >
                             </span>
+                          </span>
+                          <%= if url do %>
+                            <a
+                              id="service-status-link"
+                              href={url}
+                              target="_blank"
+                              class="text-sm text-base-content/80 truncate flex-1 text-left hover:text-primary transition-colors inline-flex items-center gap-1"
+                              aria-label="Open service"
+                            >
+                              Service
+                              <.icon
+                                name="hero-arrow-top-right-on-square-micro"
+                                class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                              />
+                            </a>
+                          <% else %>
                             <span class={[
                               "text-sm truncate flex-1 text-left transition-colors duration-300",
                               if(service_running?,
@@ -858,8 +872,31 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                             >
                               Live
                             </span>
-                          </div>
-                        <% end %>
+                          <% end %>
+                          <button
+                            type="button"
+                            id={"service-#{if service_running?, do: "stop", else: "start"}-button"}
+                            phx-click={if service_running?, do: "stop_service", else: "start_service"}
+                            class={[
+                              "size-5 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors",
+                              if(service_running?,
+                                do: "text-red-500 hover:bg-red-500/10",
+                                else: "text-base-content/50 hover:bg-base-200 hover:text-primary"
+                              )
+                            ]}
+                            aria-label={
+                              if(service_running?, do: "Stop service", else: "Start service")
+                            }
+                            title={if(service_running?, do: "Stop service", else: "Start service")}
+                          >
+                            <.icon
+                              name={
+                                if service_running?, do: "hero-stop-micro", else: "hero-play-micro"
+                              }
+                              class="size-3.5"
+                            />
+                          </button>
+                        </div>
                       <% else %>
                         <div
                           id="service-status-item"
