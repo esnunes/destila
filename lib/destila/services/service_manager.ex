@@ -11,6 +11,7 @@ defmodule Destila.Services.ServiceManager do
   alias Destila.{Projects, Workflows}
   alias Destila.Terminal.Tmux
   import Destila.StringHelper, only: [blank?: 1]
+  require Logger
 
   @service_window 9
   @startup_timeout_ms 60_000
@@ -77,12 +78,18 @@ defmodule Destila.Services.ServiceManager do
         }
 
         Workflows.update_workflow_session(ws, %{service_state: starting_state})
+        Logger.info("ServiceManager: #{ws.id} starting; waiting for ports #{inspect(ports)}")
 
         if wait_for_ports(Map.values(ports), @startup_timeout_ms) do
+          Logger.info("ServiceManager: #{ws.id} ports responded; marking running")
           running_state = %{starting_state | "status" => "running"}
           Workflows.update_workflow_session(ws, %{service_state: running_state})
           {:ok, running_state}
         else
+          Logger.warning(
+            "ServiceManager: #{ws.id} ports did not respond within #{@startup_timeout_ms}ms; stopping"
+          )
+
           do_stop(ws)
 
           {:error,

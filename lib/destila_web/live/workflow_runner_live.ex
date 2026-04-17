@@ -189,7 +189,19 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     ws = socket.assigns.workflow_session
     opts = [worktree_path: socket.assigns[:worktree_path]]
 
-    Task.start(fn -> ServiceManager.execute(ws, "start", opts) end)
+    Task.start(fn ->
+      try do
+        ServiceManager.execute(ws, "start", opts)
+      rescue
+        e ->
+          require Logger
+
+          Logger.error(
+            "start_service task crashed for #{ws.id}: " <>
+              Exception.format(:error, e, __STACKTRACE__)
+          )
+      end
+    end)
 
     {:noreply, socket}
   end
