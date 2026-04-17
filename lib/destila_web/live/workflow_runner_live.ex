@@ -189,13 +189,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     ws = socket.assigns.workflow_session
     opts = [worktree_path: socket.assigns[:worktree_path]]
 
-    case ServiceManager.execute(ws, "start", opts) do
-      {:ok, _state} ->
-        {:noreply, socket}
+    Task.start(fn -> ServiceManager.execute(ws, "start", opts) end)
 
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to start service: #{reason}")}
-    end
+    {:noreply, socket}
   end
 
   def handle_event("stop_service", _params, socket) do
