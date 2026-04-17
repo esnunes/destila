@@ -20,40 +20,26 @@ defmodule DestilaWeb.ProjectFormLive do
          "git_repo_url" => project.git_repo_url || "",
          "local_folder" => project.local_folder || "",
          "setup_command" => project.setup_command || "",
-         "run_command" => project.run_command || ""
+         "run_command" => project.run_command || "",
+         "service_env_var" => project.service_env_var || ""
        })
      end)
-     |> assign_new(:port_definitions, fn -> project.port_definitions || [] end)
      |> assign_new(:errors, fn -> %{} end)
      |> assign_new(:inner_block, fn -> [] end)}
   end
 
   def handle_event("validate", params, socket) do
-    port_definitions =
-      params
-      |> Enum.filter(fn {k, _} -> String.starts_with?(k, "port_def_") end)
-      |> Enum.sort_by(fn {k, _} -> k end)
-      |> Enum.map(fn {_, v} -> v end)
-
-    port_definitions =
-      if port_definitions == [], do: socket.assigns.port_definitions, else: port_definitions
-
-    {:noreply,
-     socket
-     |> assign(:form, to_form(params))
-     |> assign(:port_definitions, port_definitions)}
+    {:noreply, assign(socket, :form, to_form(params))}
   end
 
   def handle_event("save", params, socket) do
-    port_defs = Enum.reject(socket.assigns.port_definitions, &(&1 == ""))
-
     attrs = %{
       name: String.trim(params["name"] || ""),
       git_repo_url: non_blank(params["git_repo_url"]),
       local_folder: non_blank(params["local_folder"]),
       setup_command: non_blank(params["setup_command"]),
       run_command: non_blank(params["run_command"]),
-      port_definitions: port_defs
+      service_env_var: non_blank(params["service_env_var"])
     }
 
     result =
@@ -75,29 +61,6 @@ defmodule DestilaWeb.ProjectFormLive do
     end
   end
 
-  def handle_event("add_port", _params, socket) do
-    {:noreply, assign(socket, :port_definitions, socket.assigns.port_definitions ++ [""])}
-  end
-
-  def handle_event("remove_port", %{"index" => index}, socket) do
-    index = String.to_integer(index)
-
-    {:noreply,
-     assign(socket, :port_definitions, List.delete_at(socket.assigns.port_definitions, index))}
-  end
-
-  def handle_event("update_port", params, socket) do
-    index = String.to_integer(params["index"])
-    value = params["value"] || ""
-
-    {:noreply,
-     assign(
-       socket,
-       :port_definitions,
-       List.replace_at(socket.assigns.port_definitions, index, value)
-     )}
-  end
-
   defp non_blank(nil), do: nil
   defp non_blank(""), do: nil
   defp non_blank(str), do: str
@@ -106,7 +69,7 @@ defmodule DestilaWeb.ProjectFormLive do
     Enum.reduce(changeset.errors, %{}, fn
       {:name, {msg, _}}, acc -> Map.put(acc, :name, msg)
       {:git_repo_url, {msg, _}}, acc -> Map.put(acc, :location, msg)
-      {:port_definitions, {msg, _}}, acc -> Map.put(acc, :port_definitions, msg)
+      {:service_env_var, {msg, _}}, acc -> Map.put(acc, :service_env_var, msg)
       _, acc -> acc
     end)
   end
@@ -229,57 +192,26 @@ defmodule DestilaWeb.ProjectFormLive do
           />
         </fieldset>
 
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-xs font-medium text-base-content/70">Port definitions</label>
-            <button
-              type="button"
-              phx-click="add_port"
-              phx-target={@myself}
-              class="btn btn-ghost btn-xs"
-              id={"#{@id}-add-port-btn"}
-            >
-              <.icon name="hero-plus-micro" class="size-3" /> Add port
-            </button>
-          </div>
-
-          <div :if={@port_definitions != []} class="space-y-2">
-            <div
-              :for={{pd, idx} <- Enum.with_index(@port_definitions)}
-              class="flex items-center gap-2"
-              id={"#{@id}-port-def-#{idx}"}
-            >
-              <input
-                type="text"
-                name={"port_def_#{idx}"}
-                value={pd}
-                placeholder="PORT"
-                phx-blur="update_port"
-                phx-target={@myself}
-                phx-value-index={idx}
-                class={[
-                  "input input-bordered w-full input-sm font-mono uppercase",
-                  @errors[:port_definitions] && "input-error"
-                ]}
-                id={"#{@id}-port-input-#{idx}"}
-              />
-              <button
-                type="button"
-                phx-click="remove_port"
-                phx-target={@myself}
-                phx-value-index={idx}
-                class="btn btn-ghost btn-xs text-error/60 hover:text-error"
-                id={"#{@id}-remove-port-#{idx}"}
-              >
-                <.icon name="hero-x-mark-micro" class="size-4" />
-              </button>
-            </div>
-          </div>
-
-          <p :if={@errors[:port_definitions]} class="text-xs text-error mt-1">
-            {@errors[:port_definitions]}
+        <fieldset class="fieldset">
+          <label class="fieldset-label text-xs font-medium" for={"#{@id}-service-env-var"}>
+            Service env var name
+          </label>
+          <input
+            type="text"
+            id={"#{@id}-service-env-var"}
+            name="service_env_var"
+            value={@form["service_env_var"].value}
+            placeholder="PORT"
+            aria-invalid={@errors[:service_env_var] && "true"}
+            class={[
+              "input input-bordered w-full input-sm font-mono uppercase",
+              @errors[:service_env_var] && "input-error"
+            ]}
+          />
+          <p :if={@errors[:service_env_var]} class="text-xs text-error mt-1">
+            {@errors[:service_env_var]}
           </p>
-        </div>
+        </fieldset>
       </div>
 
       <div class="flex gap-2">

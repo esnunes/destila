@@ -166,27 +166,52 @@ defmodule DestilaWeb.ProjectsLiveTest do
   end
 
   describe "run configuration" do
-    @tag feature: @feature, scenario: "Create a project with run command and port definitions"
-    test "creates a project with run command and port definitions", %{conn: conn} do
+    @tag feature: @feature,
+         scenario: "Create a project with run command and a service env var"
+    test "creates a project with run command and a service env var", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/projects")
 
       view |> element("#new-project-btn") |> render_click()
-
-      # Add a port definition
-      view |> element("#project-form-create-add-port-btn") |> render_click()
-      assert has_element?(view, "#project-form-create-port-input-0")
+      assert has_element?(view, "#project-form-create-service-env-var")
 
       view
       |> form("#project-form-create-form", %{
         "name" => "Service Project",
         "git_repo_url" => "https://github.com/test/service",
-        "run_command" => "mix phx.server"
+        "run_command" => "mix phx.server",
+        "service_env_var" => "PORT"
       })
       |> render_submit()
 
       html = render(view)
       assert html =~ "Service Project"
       assert html =~ "mix phx.server"
+
+      [project] = Destila.Projects.list_projects()
+      assert project.service_env_var == "PORT"
+    end
+
+    @tag feature: @feature,
+         scenario: "Create a project without a service env var name"
+    test "creates a project without a service env var name", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      view
+      |> form("#project-form-create-form", %{
+        "name" => "No Env Project",
+        "git_repo_url" => "https://github.com/test/no-env",
+        "run_command" => "mix phx.server",
+        "service_env_var" => ""
+      })
+      |> render_submit()
+
+      html = render(view)
+      assert html =~ "No Env Project"
+
+      [project] = Destila.Projects.list_projects()
+      assert is_nil(project.service_env_var)
     end
 
     @tag feature: @feature, scenario: "Edit a project's run configuration"
@@ -302,27 +327,50 @@ defmodule DestilaWeb.ProjectsLiveTest do
     end
 
     @tag feature: @feature,
-         scenario: "Port definitions require a valid environment variable name"
-    test "shows error for invalid port definition name", %{conn: conn} do
+         scenario: "Service env var requires a valid environment variable name"
+    test "shows error for invalid service env var name", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/projects")
 
       view |> element("#new-project-btn") |> render_click()
 
-      # Add a port and set an invalid value
-      view |> element("#project-form-create-add-port-btn") |> render_click()
-
-      view
-      |> element("#project-form-create-port-input-0")
-      |> render_blur(%{"index" => "0", "value" => "invalid-port"})
-
       view
       |> form("#project-form-create-form", %{
-        "name" => "Bad Port Project",
-        "git_repo_url" => "https://github.com/test/repo"
+        "name" => "Bad Env Project",
+        "git_repo_url" => "https://github.com/test/repo",
+        "service_env_var" => "invalid-name"
       })
       |> render_submit()
 
       assert render(view) =~ "must start with A-Z"
+    end
+
+    @tag feature: @feature,
+         scenario: "Service env var requires a valid environment variable name"
+    test "shows error for reserved service env var name", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      view
+      |> form("#project-form-create-form", %{
+        "name" => "Reserved Env Project",
+        "git_repo_url" => "https://github.com/test/repo",
+        "service_env_var" => "PATH"
+      })
+      |> render_submit()
+
+      assert render(view) =~ "reserved system environment variable"
+    end
+
+    test "form has no port definitions UI", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      html = render(view)
+      refute html =~ "Port definitions"
+      refute html =~ "add-port"
+      refute html =~ "port-input-"
     end
   end
 

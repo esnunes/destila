@@ -4,7 +4,6 @@ defmodule Destila.Workers.PrepareWorkflowSession do
   require Logger
 
   alias Destila.{AI, Git, Workflows}
-  alias Destila.Services.ServiceManager
   alias Destila.Sessions.SessionProcess
   import Destila.StringHelper, only: [blank?: 1]
 
@@ -38,12 +37,11 @@ defmodule Destila.Workers.PrepareWorkflowSession do
         tmux = tmux_impl()
         session = tmux.session_name(ws)
         target = "#{session}:#{@service_window}"
-        ports = ServiceManager.reserve_ports(project.port_definitions)
 
         tmux.ensure_session(session, worktree_path)
         tmux.kill_window(target)
         tmux.new_window(target, cwd: worktree_path)
-        tmux.send_keys(target, build_setup_command(project.setup_command, ports))
+        tmux.send_keys(target, project.setup_command)
         :ok
       rescue
         e ->
@@ -54,19 +52,6 @@ defmodule Destila.Workers.PrepareWorkflowSession do
 
           :ok
       end
-    end
-  end
-
-  defp build_setup_command(setup_command, ports) do
-    env_exports =
-      ports
-      |> Enum.map(fn {name, port} -> "export #{name}=#{port}" end)
-      |> Enum.join(" && ")
-
-    if env_exports != "" do
-      "#{env_exports} && #{setup_command}"
-    else
-      setup_command
     end
   end
 

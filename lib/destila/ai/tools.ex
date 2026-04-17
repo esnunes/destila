@@ -123,7 +123,7 @@ defmodule Destila.AI.Tools do
 
   tool :service do
     description(
-      "Manage the project's development service lifecycle. Use this to start, stop, restart, or check the status of the project's service."
+      "Manage the project's development service lifecycle (start/stop/restart/status). Requires the project to be configured as a webservice (a run command and a service env var name)."
     )
 
     field(:action, :string,
@@ -141,12 +141,26 @@ defmodule Destila.AI.Tools do
         worktree_path = ai_session && ai_session.worktree_path
 
         case Destila.Services.ServiceManager.execute(ws, action, worktree_path: worktree_path) do
-          {:ok, state} -> {:ok, Jason.encode!(state)}
+          {:ok, state} -> {:ok, Jason.encode!(Destila.AI.Tools.service_state_to_output(state))}
           {:error, reason} -> {:ok, "Service error: #{reason}"}
         end
       rescue
         e -> {:ok, "Service error: #{Exception.message(e)}"}
       end
+    end
+  end
+
+  @doc false
+  def service_state_to_output(state) do
+    base = %{
+      "status" => state["status"],
+      "run_command" => state["run_command"],
+      "setup_command" => state["setup_command"]
+    }
+
+    case state["port"] do
+      port when is_integer(port) -> Map.put(base, "url", "http://localhost:#{port}")
+      _ -> base
     end
   end
 
@@ -158,15 +172,15 @@ defmodule Destila.AI.Tools do
 
   - `start` — Start the service using the project's configured run command. \
   Blocks until all reserved ports accept TCP connections (returns state with \
-  `"status": "running"` and the port mappings), or fails with an error after \
+  `"status": "running"` and the service URL when running), or fails with an error after \
   a 1-minute timeout — on timeout the service is stopped automatically to \
   avoid leaving an unreachable process running.
   - `stop` — Stop the running service gracefully.
-  - `restart` — Stop and restart the service with fresh port assignments.
-  - `status` — Check the current service status and port mappings.
+  - `restart` — Stop and restart the service with a fresh port assignment.
+  - `status` — Check the current service status and service URL when running.
 
   The tool result contains the service state as JSON, including status and \
-  port mappings. Use these ports when configuring or accessing the service.
+  service URL when running. Use the URL when accessing the service.
   """
 
   @tool_descriptions %{

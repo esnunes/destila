@@ -5,95 +5,130 @@ defmodule Destila.Projects.ProjectTest do
 
   @valid_attrs %{name: "Test Project", git_repo_url: "https://github.com/test/repo"}
 
-  describe "changeset/2 with run_command and port_definitions" do
-    test "accepts valid run_command and port_definitions" do
+  describe "changeset/2 with run_command and service_env_var" do
+    @tag feature: "project_management",
+         scenario: "Create a project with run command and a service env var"
+    test "accepts valid run_command and service_env_var" do
       changeset =
         Project.changeset(
           %Project{},
           Map.merge(@valid_attrs, %{
             run_command: "mix phx.server",
-            port_definitions: ["PORT", "API_PORT"]
+            service_env_var: "PORT"
           })
         )
 
       assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :service_env_var) == "PORT"
     end
 
-    test "accepts nil run_command and empty port_definitions" do
+    @tag feature: "project_management",
+         scenario: "Create a project without a service env var name"
+    test "accepts nil run_command and nil service_env_var" do
       changeset = Project.changeset(%Project{}, @valid_attrs)
       assert changeset.valid?
     end
 
-    test "rejects port definition with lowercase letters" do
+    test "accepts empty-string service_env_var" do
       changeset =
         Project.changeset(
           %Project{},
-          Map.merge(@valid_attrs, %{
-            port_definitions: ["my_port"]
-          })
-        )
-
-      refute changeset.valid?
-
-      assert {"my_port must start with A-Z and contain only uppercase letters, digits, and underscores",
-              _} = changeset.errors[:port_definitions]
-    end
-
-    test "rejects port definition starting with digit" do
-      changeset =
-        Project.changeset(
-          %Project{},
-          Map.merge(@valid_attrs, %{
-            port_definitions: ["123"]
-          })
-        )
-
-      refute changeset.valid?
-    end
-
-    test "rejects port definition with special characters" do
-      changeset =
-        Project.changeset(
-          %Project{},
-          Map.merge(@valid_attrs, %{
-            port_definitions: ["MY-PORT"]
-          })
-        )
-
-      refute changeset.valid?
-    end
-
-    test "accepts valid underscore names" do
-      changeset =
-        Project.changeset(
-          %Project{},
-          Map.merge(@valid_attrs, %{
-            port_definitions: ["DB_PORT", "PORT_3000", "A"]
-          })
+          Map.merge(@valid_attrs, %{service_env_var: ""})
         )
 
       assert changeset.valid?
+      refute changeset.errors[:service_env_var]
     end
 
-    test "rejects reserved system env var names" do
+    @tag feature: "project_management",
+         scenario: "Service env var requires a valid environment variable name"
+    test "rejects service_env_var with lowercase letters" do
       changeset =
         Project.changeset(
           %Project{},
-          Map.merge(@valid_attrs, %{
-            port_definitions: ["PATH"]
-          })
+          Map.merge(@valid_attrs, %{service_env_var: "port"})
         )
 
       refute changeset.valid?
 
-      assert {"PATH is a reserved system environment variable", _} =
-               changeset.errors[:port_definitions]
+      assert {"port must start with A-Z and contain only uppercase letters, digits, and underscores",
+              _} = changeset.errors[:service_env_var]
+    end
+
+    test "rejects service_env_var starting with digit" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{service_env_var: "1PORT"})
+        )
+
+      refute changeset.valid?
+      assert changeset.errors[:service_env_var]
+    end
+
+    test "rejects service_env_var with special characters" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{service_env_var: "PORT-1"})
+        )
+
+      refute changeset.valid?
+      assert changeset.errors[:service_env_var]
+    end
+
+    test "accepts valid underscore names and multi-digit suffixes" do
+      for name <- ~w(PORT API_PORT SERVICE_PORT_2 DB_PORT A PORT_3000) do
+        changeset =
+          Project.changeset(
+            %Project{},
+            Map.merge(@valid_attrs, %{service_env_var: name})
+          )
+
+        assert changeset.valid?, "expected #{name} to be valid"
+      end
+    end
+
+    test "rejects reserved system env var names" do
+      for reserved <- ~w(PATH HOME SHELL USER TERM LANG LD_PRELOAD LD_LIBRARY_PATH) do
+        changeset =
+          Project.changeset(
+            %Project{},
+            Map.merge(@valid_attrs, %{service_env_var: reserved})
+          )
+
+        refute changeset.valid?, "expected #{reserved} to be rejected"
+
+        {message, _} = changeset.errors[:service_env_var]
+        assert message == "#{reserved} is a reserved system environment variable"
+      end
     end
 
     test "existing validations still pass unchanged" do
       changeset = Project.changeset(%Project{}, %{name: "Test"})
       refute changeset.valid?
       assert changeset.errors[:git_repo_url]
+    end
+  end
+
+  describe "webservice?/1" do
+    test "true when project has run_command and service_env_var" do
+      assert Project.webservice?(%Project{run_command: "run", service_env_var: "PORT"})
+    end
+
+    test "false when run_command is missing" do
+      refute Project.webservice?(%Project{run_command: nil, service_env_var: "PORT"})
+      refute Project.webservice?(%Project{run_command: "", service_env_var: "PORT"})
+    end
+
+    test "false when service_env_var is missing" do
+      refute Project.webservice?(%Project{run_command: "run", service_env_var: nil})
+      refute Project.webservice?(%Project{run_command: "run", service_env_var: ""})
+    end
+
+    test "false for non-project values" do
+      refute Project.webservice?(nil)
+      refute Project.webservice?(%{})
     end
   end
 

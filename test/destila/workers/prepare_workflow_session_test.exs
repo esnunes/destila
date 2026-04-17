@@ -26,11 +26,11 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
 
   describe "run_post_worktree_setup/3" do
     @tag feature: @feature,
-         scenario: "Worktree creation triggers setup command in the tmux service window"
-    test "sends the setup command to window 9 when project has setup_command and no ports" do
+         scenario: "Post-worktree setup runs without allocating a port"
+    test "sends the setup command plain, without any env exports" do
       project = %Destila.Projects.Project{
         setup_command: "mix deps.get",
-        port_definitions: []
+        service_env_var: nil
       }
 
       ws = make_ws("my-session")
@@ -44,25 +44,27 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
     end
 
     @tag feature: @feature,
-         scenario: "Setup sees the same port environment variables as the run command"
-    test "prefixes port exports before the setup command" do
+         scenario: "Post-worktree setup runs without allocating a port"
+    test "does not export the service_env_var even when configured" do
       project = %Destila.Projects.Project{
         setup_command: "mix deps.get",
-        port_definitions: ["PORT"]
+        service_env_var: "PORT",
+        run_command: "mix phx.server"
       }
 
-      ws = make_ws("session-with-ports")
+      ws = make_ws("session-with-env-var")
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
 
-      assert_received {:tmux, :send_keys, ["ws-session-with-ports:9", command]}
-      assert command =~ ~r/^export PORT=\d+ && mix deps\.get$/
+      assert_received {:tmux, :send_keys, ["ws-session-with-env-var:9", command]}
+      assert command == "mix deps.get"
+      refute command =~ "export"
     end
 
     @tag feature: @feature,
          scenario: "A project without a setup command keeps its current behavior"
     test "does nothing when setup_command is nil" do
-      project = %Destila.Projects.Project{setup_command: nil, port_definitions: []}
+      project = %Destila.Projects.Project{setup_command: nil}
       ws = make_ws("no-setup")
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
@@ -74,7 +76,7 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
     @tag feature: @feature,
          scenario: "A project without a setup command keeps its current behavior"
     test "does nothing when setup_command is an empty string" do
-      project = %Destila.Projects.Project{setup_command: "", port_definitions: []}
+      project = %Destila.Projects.Project{setup_command: ""}
       ws = make_ws("empty-setup")
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
@@ -97,7 +99,7 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
     test "returns :ok when tmux raises so perform/1 still calls worktree_ready/1" do
       FakeTmux.stub_send_keys(fn _target, _cmd -> raise "boom" end)
 
-      project = %Destila.Projects.Project{setup_command: "mix deps.get", port_definitions: []}
+      project = %Destila.Projects.Project{setup_command: "mix deps.get"}
       ws = make_ws("raising-session")
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)

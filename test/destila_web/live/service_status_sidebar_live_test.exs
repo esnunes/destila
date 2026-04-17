@@ -7,6 +7,8 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
   import Phoenix.LiveViewTest
 
+  @feature "service_status_sidebar"
+
   setup %{conn: conn} do
     ClaudeCode.Test.set_mode_to_shared()
 
@@ -52,30 +54,39 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
   end
 
   describe "service item visibility" do
-    @tag feature: "service_status_sidebar",
-         scenario: "Service item visible when project has run_command"
-    test "shows service item when project has run_command", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
-      ws = create_session(%{project_id: project.id})
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+    @tag feature: @feature,
+         scenario: "Service item visible when project is a webservice"
+    test "shows service item when project has run_command and service_env_var", %{conn: conn} do
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
-      assert has_element?(view, "#service-status-item") or
-               has_element?(view, "#service-status-link")
-    end
-
-    @tag feature: "service_status_sidebar",
-         scenario: "Service item disabled when no run_command configured"
-    test "shows disabled service item when project has no run_command", %{conn: conn} do
-      project = create_project(%{run_command: nil})
       ws = create_session(%{project_id: project.id})
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "#service-status-item")
-      refute has_element?(view, "#service-status-link")
-      assert has_element?(view, "#service-status-item .text-base-content\\/15")
     end
 
-    @tag feature: "service_status_sidebar",
+    @tag feature: @feature,
+         scenario: "Service item hidden when project has no run_command"
+    test "hides service item when project has no run_command", %{conn: conn} do
+      project = create_project(%{run_command: nil, service_env_var: "PORT"})
+      ws = create_session(%{project_id: project.id})
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      refute has_element?(view, "#service-status-item")
+    end
+
+    @tag feature: @feature,
+         scenario: "Service item hidden when project has no service_env_var"
+    test "hides service item when project has no service_env_var", %{conn: conn} do
+      project = create_project(%{run_command: "mix phx.server", service_env_var: nil})
+      ws = create_session(%{project_id: project.id})
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      refute has_element?(view, "#service-status-item")
+    end
+
+    @tag feature: @feature,
          scenario: "Service item hidden when session has no project"
     test "does not show service item when session has no project", %{conn: conn} do
       ws = create_session(%{project_id: nil})
@@ -87,15 +98,16 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
   end
 
   describe "service icon color" do
-    @tag feature: "service_status_sidebar",
+    @tag feature: @feature,
          scenario: "Service icon is green when service is running"
     test "icon is green when service is running", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
       ws =
         create_session(%{
           project_id: project.id,
-          service_state: %{"status" => "running", "ports" => %{"PORT" => 4000}}
+          service_state: %{"status" => "running", "port" => 4000}
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -104,10 +116,11 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       assert has_element?(view, "#service-status-item .text-green-500")
     end
 
-    @tag feature: "service_status_sidebar",
+    @tag feature: @feature,
          scenario: "Service icon is muted when service is stopped"
     test "icon is muted when service is stopped", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
       ws =
         create_session(%{
@@ -120,10 +133,12 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       assert has_element?(view, "#service-status-item .text-base-content\\/30")
     end
 
-    @tag feature: "service_status_sidebar",
+    @tag feature: @feature,
          scenario: "Nil service_state treated as stopped"
     test "icon is muted when service_state is nil", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
+
       ws = create_session(%{project_id: project.id, service_state: nil})
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -132,15 +147,16 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
   end
 
   describe "service link behavior" do
-    @tag feature: "service_status_sidebar",
+    @tag feature: @feature,
          scenario: "Running service with port is a clickable link"
     test "renders link with correct href when running with port", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
       ws =
         create_session(%{
           project_id: project.id,
-          service_state: %{"status" => "running", "ports" => %{"PORT" => 4000}}
+          service_state: %{"status" => "running", "port" => 4000}
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -149,10 +165,11 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       assert has_element?(view, ~s|#service-status-link[target="_blank"]|)
     end
 
-    @tag feature: "service_status_sidebar",
+    @tag feature: @feature,
          scenario: "Stopped service is not clickable"
     test "renders static element when stopped", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
       ws =
         create_session(%{
@@ -166,33 +183,27 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       refute has_element?(view, "#service-status-link")
     end
 
-    @tag feature: "service_status_sidebar",
-         scenario: "Running service without available port shows green icon"
-    test "renders static element when running but port_definitions is empty", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: []})
+    @tag feature: @feature,
+         scenario: "Nil service_state treated as stopped"
+    test "not a link when service_state is nil", %{conn: conn} do
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
-      ws =
-        create_session(%{
-          project_id: project.id,
-          service_state: %{"status" => "running", "ports" => %{}}
-        })
-
+      ws = create_session(%{project_id: project.id, service_state: nil})
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "#service-status-item")
       refute has_element?(view, "#service-status-link")
-      assert has_element?(view, "#service-status-item .text-green-500")
     end
 
-    @tag feature: "service_status_sidebar",
-         scenario: "Running service without available port shows green icon"
-    test "renders static element when running but first port not in ports map", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
+    test "legacy service_state with ports map renders running icon but no link", %{conn: conn} do
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
       ws =
         create_session(%{
           project_id: project.id,
-          service_state: %{"status" => "running", "ports" => %{"OTHER" => 5000}}
+          service_state: %{"status" => "running", "ports" => %{"PORT" => 4712}}
         })
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -204,10 +215,12 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
   end
 
   describe "real-time updates" do
-    @tag feature: "service_status_sidebar",
+    @tag feature: @feature,
          scenario: "Service status updates in real-time"
     test "updates when service state changes via PubSub", %{conn: conn} do
-      project = create_project(%{run_command: "mix phx.server", port_definitions: ["PORT"]})
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
+
       ws = create_session(%{project_id: project.id, service_state: nil})
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -216,7 +229,7 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       {:ok, updated_ws} =
         Destila.Workflows.update_workflow_session(ws, %{
-          service_state: %{"status" => "running", "ports" => %{"PORT" => 4000}}
+          service_state: %{"status" => "running", "port" => 4000}
         })
 
       send(view.pid, {:workflow_session_updated, updated_ws})

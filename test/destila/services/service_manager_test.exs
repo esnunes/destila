@@ -9,74 +9,53 @@ defmodule Destila.Services.ServiceManagerTest do
 
   @feature "service_setup_command"
 
-  describe "build_service_command/3 without setup_command" do
+  describe "build_service_command/4 without setup_command" do
     @tag feature: @feature,
          scenario: "A project without a setup command keeps its current behavior"
-    test "returns run_command unchanged when no setup and no ports" do
-      assert ServiceManager.build_service_command(nil, "mix phx.server", %{}) ==
-               "mix phx.server"
-    end
-
-    @tag feature: @feature,
-         scenario: "A project without a setup command keeps its current behavior"
-    test "prepends port exports with && when no setup" do
-      result =
-        ServiceManager.build_service_command(
-          nil,
-          "mix phx.server",
-          %{"PORT" => 4000, "API_PORT" => 4001}
-        )
-
-      assert result =~ "export PORT=4000"
-      assert result =~ "export API_PORT=4001"
-      assert result =~ " && mix phx.server"
-      refute result =~ ";"
+    test "returns run_command prefixed with env export when no setup" do
+      assert ServiceManager.build_service_command(nil, "mix phx.server", "PORT", 4712) ==
+               "export PORT=4712 && mix phx.server"
     end
   end
 
-  describe "build_service_command/3 with setup_command" do
+  describe "build_service_command/4 with setup_command" do
     @tag feature: @feature,
          scenario: "Setup and run are chained with ; so setup failure does not block run"
-    test "chains setup and run with ; when no ports" do
-      assert ServiceManager.build_service_command(
-               "mix deps.get",
-               "mix phx.server",
-               %{}
-             ) == "mix deps.get; mix phx.server"
+    test "chains setup and run with ; and prefixes the env export" do
+      assert ServiceManager.build_service_command("setup", "run", "PORT", 4712) ==
+               "export PORT=4712 && setup; run"
     end
 
     @tag feature: @feature,
-         scenario: "Setup and run are chained with ; so setup failure does not block run"
-    test "exports ports with &&, then chains setup and run with ;" do
+         scenario:
+           "Start/restart allocates a port and exports the service env var for both setup and run"
+    test "exposes the env var to both setup and run commands" do
       result =
-        ServiceManager.build_service_command(
-          "mix deps.get",
-          "mix phx.server",
-          %{"PORT" => 4000, "API_PORT" => 4001}
-        )
+        ServiceManager.build_service_command("mix deps.get", "mix phx.server", "API_PORT", 4001)
 
-      assert result =~ "export PORT=4000"
-      assert result =~ "export API_PORT=4001"
-      assert result =~ " && mix deps.get; mix phx.server"
+      assert result == "export API_PORT=4001 && mix deps.get; mix phx.server"
     end
   end
 
-  describe "build_service_command/3 edge cases" do
+  describe "build_service_command/4 edge cases" do
     @tag feature: @feature, scenario: "Empty setup_command behaves like nil"
     test "treats empty-string setup_command like nil" do
-      assert ServiceManager.build_service_command("", "mix phx.server", %{}) ==
-               "mix phx.server"
+      assert ServiceManager.build_service_command("", "run", "PORT", 4712) ==
+               "export PORT=4712 && run"
     end
 
     @tag feature: @feature, scenario: "Empty setup_command behaves like nil"
     test "treats whitespace-only setup_command like nil" do
-      assert ServiceManager.build_service_command("   ", "mix phx.server", %{}) ==
-               "mix phx.server"
+      assert ServiceManager.build_service_command("   ", "run", "PORT", 4712) ==
+               "export PORT=4712 && run"
     end
+  end
 
-    test "empty ports map behaves like no ports" do
-      assert ServiceManager.build_service_command(nil, "run", %{}) == "run"
-      assert ServiceManager.build_service_command("setup", "run", %{}) == "setup; run"
+  describe "reserve_port/0" do
+    test "returns an integer port" do
+      port = ServiceManager.reserve_port()
+      assert is_integer(port)
+      assert port > 0
     end
   end
 end

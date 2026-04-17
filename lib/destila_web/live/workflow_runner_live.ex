@@ -824,114 +824,92 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                         class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
                       />
                     </.link>
-                    <%= if @project do %>
+                    <%= if @project && Destila.Projects.Project.webservice?(@project) do %>
                       <% service_status = @workflow_session.service_state["status"] || "stopped" %>
                       <% service_running? = service_status == "running" %>
                       <% service_starting? = service_status == "starting" %>
                       <% service_active? = service_running? or service_starting? %>
                       <% url = service_url(@project, @workflow_session.service_state) %>
-                      <%= if @project.run_command do %>
-                        <div
-                          id="service-status-item"
-                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
-                          aria-label="Service status"
-                        >
-                          <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
-                            <.icon
-                              name="hero-server-micro"
-                              class={[
-                                "size-3.5 transition-colors duration-300",
-                                service_running? && "text-green-500",
-                                service_starting? && "text-amber-500",
-                                !service_active? && "text-base-content/30"
-                              ]}
-                            />
-                            <span
-                              :if={service_active?}
-                              class={[
-                                "absolute -top-0.5 -right-0.5 size-2 rounded-full ring-2 ring-base-100 animate-pulse",
-                                if(service_running?, do: "bg-green-500", else: "bg-amber-500")
-                              ]}
-                            >
-                            </span>
-                          </span>
-                          <%= if url do %>
-                            <a
-                              id="service-status-link"
-                              href={url}
-                              target="_blank"
-                              class="text-sm text-base-content/80 truncate flex-1 text-left hover:text-primary transition-colors"
-                              aria-label="Open service"
-                            >
-                              Service
-                            </a>
-                          <% else %>
-                            <div class="flex-1 min-w-0 flex items-baseline gap-1.5">
-                              <span class={[
-                                "text-sm truncate min-w-0 text-left transition-colors duration-300",
-                                if(service_active?,
-                                  do: "text-base-content/80",
-                                  else: "text-base-content/60"
-                                )
-                              ]}>
-                                Service
-                              </span>
-                              <span
-                                :if={service_running?}
-                                class="shrink-0 text-xs text-green-600 dark:text-green-400"
-                              >
-                                Live
-                              </span>
-                              <span
-                                :if={service_starting?}
-                                class="shrink-0 text-xs text-amber-600 dark:text-amber-400"
-                              >
-                                Starting…
-                              </span>
-                            </div>
-                          <% end %>
-                          <button
-                            type="button"
-                            id={"service-#{if service_active?, do: "stop", else: "start"}-button"}
-                            phx-click={if service_active?, do: "stop_service", else: "start_service"}
+                      <div
+                        id="service-status-item"
+                        class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                        aria-label="Service status"
+                      >
+                        <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
+                          <.icon
+                            name="hero-server-micro"
                             class={[
-                              "size-5 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors",
-                              if(service_active?,
-                                do: "text-red-500 hover:bg-red-500/10",
-                                else: "text-base-content/50 hover:bg-base-200 hover:text-primary"
-                              )
+                              "size-3.5 transition-colors duration-300",
+                              service_running? && "text-green-500",
+                              service_starting? && "text-amber-500",
+                              !service_active? && "text-base-content/30"
                             ]}
-                            aria-label={
-                              if(service_active?, do: "Stop service", else: "Start service")
-                            }
-                            title={if(service_active?, do: "Stop service", else: "Start service")}
+                          />
+                          <span
+                            :if={service_active?}
+                            class={[
+                              "absolute -top-0.5 -right-0.5 size-2 rounded-full ring-2 ring-base-100 animate-pulse",
+                              if(service_running?, do: "bg-green-500", else: "bg-amber-500")
+                            ]}
                           >
-                            <.icon
-                              name={
-                                if service_active?, do: "hero-stop-micro", else: "hero-play-micro"
-                              }
-                              class="size-3.5"
-                            />
-                          </button>
-                        </div>
-                      <% else %>
-                        <div
-                          id="service-status-item"
-                          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-default"
-                          aria-label="Service not configured"
-                          title="No run command configured"
-                        >
-                          <span class="size-5 rounded flex items-center justify-center shrink-0">
-                            <.icon
-                              name="hero-server-micro"
-                              class="size-3.5 text-base-content/15"
-                            />
                           </span>
-                          <span class="text-sm text-base-content/30 truncate flex-1 text-left">
+                        </span>
+                        <%= if url do %>
+                          <a
+                            id="service-status-link"
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-sm text-base-content/80 truncate flex-1 text-left hover:text-primary transition-colors"
+                            aria-label="Open service"
+                          >
                             Service
-                          </span>
-                        </div>
-                      <% end %>
+                          </a>
+                        <% else %>
+                          <div class="flex-1 min-w-0 flex items-baseline gap-1.5">
+                            <span class={[
+                              "text-sm truncate min-w-0 text-left transition-colors duration-300",
+                              if(service_active?,
+                                do: "text-base-content/80",
+                                else: "text-base-content/60"
+                              )
+                            ]}>
+                              Service
+                            </span>
+                            <span
+                              :if={service_running?}
+                              class="shrink-0 text-xs text-green-600 dark:text-green-400"
+                            >
+                              Live
+                            </span>
+                            <span
+                              :if={service_starting?}
+                              class="shrink-0 text-xs text-amber-600 dark:text-amber-400"
+                            >
+                              Starting…
+                            </span>
+                          </div>
+                        <% end %>
+                        <button
+                          type="button"
+                          id={"service-#{if service_active?, do: "stop", else: "start"}-button"}
+                          phx-click={if service_active?, do: "stop_service", else: "start_service"}
+                          class={[
+                            "size-5 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors",
+                            if(service_active?,
+                              do: "text-red-500 hover:bg-red-500/10",
+                              else: "text-base-content/50 hover:bg-base-200 hover:text-primary"
+                            )
+                          ]}
+                          aria-label={if(service_active?, do: "Stop service", else: "Start service")}
+                          title={if(service_active?, do: "Stop service", else: "Start service")}
+                        >
+                          <.icon
+                            name={if service_active?, do: "hero-stop-micro", else: "hero-play-micro"}
+                            class="size-3.5"
+                          />
+                        </button>
+                      </div>
                     <% end %>
                   </div>
                 </div>
@@ -1285,16 +1263,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     |> assign(:exported_metadata, Enum.filter(all, & &1.exported))
   end
 
-  defp service_url(%{port_definitions: [first_port | _]}, %{
-         "status" => "running",
-         "ports" => ports
-       })
-       when is_map(ports) do
-    case Map.get(ports, first_port) do
-      nil -> nil
-      port -> "http://localhost:#{port}"
-    end
-  end
+  defp service_url(_project, %{"status" => "running", "port" => port}) when is_integer(port),
+    do: "http://localhost:#{port}"
 
   defp service_url(_project, _service_state), do: nil
 
