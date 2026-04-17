@@ -25,6 +25,7 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/destila"
 import topbar from "../vendor/topbar"
 import TerminalPanel from "./hooks/terminal_panel"
+import LocalTime from "./hooks/local_time"
 
 const ScrollBottomHook = {
   mounted() { this.el.scrollTop = this.el.scrollHeight },
@@ -60,6 +61,7 @@ const Hooks = {
   FocusFirstError: FocusFirstErrorHook,
   AutoDismiss: AutoDismissHook,
   TerminalPanel: TerminalPanel,
+  LocalTime: LocalTime,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
