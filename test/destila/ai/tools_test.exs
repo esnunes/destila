@@ -76,12 +76,18 @@ defmodule Destila.AI.ToolsTest do
       assert output["url"] == "http://localhost:4712"
     end
 
-    test "stopped state without port omits url" do
-      state = %{"status" => "stopped", "run_command" => "run", "setup_command" => nil}
+    test "stopped state without port omits url and preserves commands" do
+      state = %{
+        "status" => "stopped",
+        "run_command" => "mix phx.server",
+        "setup_command" => "mix deps.get"
+      }
 
       output = Tools.service_state_to_output(state)
 
       assert output["status"] == "stopped"
+      assert output["run_command"] == "mix phx.server"
+      assert output["setup_command"] == "mix deps.get"
       refute Map.has_key?(output, "url")
     end
 

@@ -29,6 +29,8 @@ defmodule Destila.Projects.ProjectTest do
       assert changeset.valid?
     end
 
+    @tag feature: "project_management",
+         scenario: "Create a project without a service env var name"
     test "accepts empty-string service_env_var" do
       changeset =
         Project.changeset(
@@ -55,6 +57,8 @@ defmodule Destila.Projects.ProjectTest do
               _} = changeset.errors[:service_env_var]
     end
 
+    @tag feature: "project_management",
+         scenario: "Service env var requires a valid environment variable name"
     test "rejects service_env_var starting with digit" do
       changeset =
         Project.changeset(
@@ -66,6 +70,8 @@ defmodule Destila.Projects.ProjectTest do
       assert changeset.errors[:service_env_var]
     end
 
+    @tag feature: "project_management",
+         scenario: "Service env var requires a valid environment variable name"
     test "rejects service_env_var with special characters" do
       changeset =
         Project.changeset(
@@ -77,6 +83,8 @@ defmodule Destila.Projects.ProjectTest do
       assert changeset.errors[:service_env_var]
     end
 
+    @tag feature: "project_management",
+         scenario: "Service env var requires a valid environment variable name"
     test "accepts valid underscore names and multi-digit suffixes" do
       for name <- ~w(PORT API_PORT SERVICE_PORT_2 DB_PORT A PORT_3000) do
         changeset =
@@ -89,6 +97,8 @@ defmodule Destila.Projects.ProjectTest do
       end
     end
 
+    @tag feature: "project_management",
+         scenario: "Service env var requires a valid environment variable name"
     test "rejects reserved system env var names" do
       for reserved <- ~w(PATH HOME SHELL USER TERM LANG LD_PRELOAD LD_LIBRARY_PATH) do
         changeset =

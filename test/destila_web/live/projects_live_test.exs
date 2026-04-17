@@ -362,6 +362,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
       assert render(view) =~ "reserved system environment variable"
     end
 
+    @tag feature: @feature, scenario: "Create a project with run command and a service env var"
     test "form has no port definitions UI", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/projects")
 
