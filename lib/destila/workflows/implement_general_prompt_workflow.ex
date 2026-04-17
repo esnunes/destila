@@ -193,7 +193,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
     Steps:
     1. Start the development service by calling `mcp__destila__service` with \
-    `action: "start"`. Use the returned port mappings when accessing the service \
+    `action: "start"`. Use the returned service URL when accessing the service \
     in the walkthrough.
     2. You MUST use the compound engineering skill `feature-video` to record a walkthrough \
     demonstrating the changes

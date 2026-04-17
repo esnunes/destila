@@ -9,6 +9,7 @@ defmodule Destila.Services.ServiceManager do
   """
 
   alias Destila.{Projects, Workflows}
+  alias Destila.Projects.Project
   alias Destila.Terminal.Tmux
   import Destila.StringHelper, only: [blank?: 1]
   require Logger
@@ -17,6 +18,8 @@ defmodule Destila.Services.ServiceManager do
   @startup_timeout_ms 60_000
   @port_probe_interval_ms 500
   @port_probe_timeout_ms 500
+
+  @webservice_precondition_error "Project is not configured as a webservice (requires run_command and service_env_var)"
 
   @doc """
   Executes a service action for the given workflow session.
@@ -52,11 +55,11 @@ defmodule Destila.Services.ServiceManager do
       is_nil(project) ->
         {:error, "No project linked to this session"}
 
-      is_nil(project.run_command) or project.run_command == "" ->
-        {:error, "Project has no run command configured"}
+      not Project.webservice?(project) ->
+        {:error, @webservice_precondition_error}
 
       true ->
-        ports = reserve_ports(project.port_definitions)
+        port = reserve_port()
         worktree_path = Keyword.get(opts, :worktree_path)
         session = Tmux.session_name(ws)
         target = service_target(ws)
@@ -67,27 +70,32 @@ defmodule Destila.Services.ServiceManager do
 
         Tmux.send_keys(
           target,
-          build_service_command(project.setup_command, project.run_command, ports)
+          build_service_command(
+            project.setup_command,
+            project.run_command,
+            project.service_env_var,
+            port
+          )
         )
 
         starting_state = %{
           "status" => "starting",
-          "ports" => ports,
+          "port" => port,
           "run_command" => project.run_command,
           "setup_command" => project.setup_command
         }
 
         Workflows.update_workflow_session(ws, %{service_state: starting_state})
-        Logger.info("ServiceManager: #{ws.id} starting; waiting for ports #{inspect(ports)}")
+        Logger.info("ServiceManager: #{ws.id} starting; waiting for port #{port}")
 
-        if wait_for_ports(Map.values(ports), @startup_timeout_ms) do
-          Logger.info("ServiceManager: #{ws.id} ports responded; marking running")
+        if wait_for_port(port, @startup_timeout_ms) do
+          Logger.info("ServiceManager: #{ws.id} port responded; marking running")
           running_state = %{starting_state | "status" => "running"}
           Workflows.update_workflow_session(ws, %{service_state: running_state})
           {:ok, running_state}
         else
           Logger.warning(
-            "ServiceManager: #{ws.id} ports did not respond within #{@startup_timeout_ms}ms; stopping"
+            "ServiceManager: #{ws.id} port did not respond within #{@startup_timeout_ms}ms; stopping"
           )
 
           do_stop(ws)
@@ -105,10 +113,12 @@ defmodule Destila.Services.ServiceManager do
 
     ws = Workflows.get_workflow_session!(ws.id)
 
-    service_state = %{
-      "status" => "stopped",
-      "ports" => (ws.service_state || %{})["ports"]
-    }
+    prior_state = ws.service_state || %{}
+
+    service_state =
+      prior_state
+      |> Map.take(["port", "run_command", "setup_command"])
+      |> Map.put("status", "stopped")
 
     Workflows.update_workflow_session(ws, %{service_state: service_state})
 
@@ -144,11 +154,8 @@ defmodule Destila.Services.ServiceManager do
   defp service_target(ws), do: "#{Tmux.session_name(ws)}:#{@service_window}"
 
   @doc false
-  def build_service_command(setup_command, run_command, ports) do
-    env_exports =
-      ports
-      |> Enum.map(fn {name, port} -> "export #{name}=#{port}" end)
-      |> Enum.join(" && ")
+  def build_service_command(setup_command, run_command, env_var, port) do
+    env_export = "export #{env_var}=#{port}"
 
     body =
       if blank?(setup_command) do
@@ -157,21 +164,17 @@ defmodule Destila.Services.ServiceManager do
         "#{setup_command}; #{run_command}"
       end
 
-    if env_exports != "" do
-      "#{env_exports} && #{body}"
-    else
-      body
-    end
+    "#{env_export} && #{body}"
   end
 
-  defp wait_for_ports(ports, timeout_ms) do
+  defp wait_for_port(port, timeout_ms) do
     deadline = System.monotonic_time(:millisecond) + timeout_ms
-    do_wait_for_ports(ports, deadline)
+    do_wait_for_port(port, deadline)
   end
 
-  defp do_wait_for_ports(ports, deadline) do
+  defp do_wait_for_port(port, deadline) do
     cond do
-      Enum.all?(ports, &port_open?/1) ->
+      port_open?(port) ->
         true
 
       System.monotonic_time(:millisecond) >= deadline ->
@@ -179,7 +182,7 @@ defmodule Destila.Services.ServiceManager do
 
       true ->
         Process.sleep(@port_probe_interval_ms)
-        do_wait_for_ports(ports, deadline)
+        do_wait_for_port(port, deadline)
     end
   end
 
@@ -195,12 +198,10 @@ defmodule Destila.Services.ServiceManager do
   end
 
   @doc false
-  def reserve_ports(port_definitions) do
-    Map.new(port_definitions, fn name ->
-      {:ok, socket} = :gen_tcp.listen(0, reuseaddr: true)
-      {:ok, port} = :inet.port(socket)
-      :gen_tcp.close(socket)
-      {name, port}
-    end)
+  def reserve_port do
+    {:ok, socket} = :gen_tcp.listen(0, reuseaddr: true)
+    {:ok, port} = :inet.port(socket)
+    :gen_tcp.close(socket)
+    port
   end
 end

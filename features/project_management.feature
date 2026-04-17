@@ -1,9 +1,10 @@
 Feature: Project Management
   Users can manage projects independently from sessions. A project has a name,
   an optional git repository URL, an optional local folder path, an optional
-  setup command, an optional run command, and optional port definitions. At
-  least one of git repository URL or local folder must be provided. Projects
-  can be shared across multiple sessions.
+  setup command, an optional run command, and an optional service env var name.
+  At least one of git repository URL or local folder must be provided. When a
+  project has both a run command and a service env var name it is treated as a
+  webservice. Projects can be shared across multiple sessions.
 
   Scenario: View list of projects
     Given there are existing projects
@@ -77,13 +78,21 @@ Feature: Project Management
     And I click delete on the project
     Then I should see a message indicating the project cannot be deleted while linked to sessions
 
-  Scenario: Create a project with run command and port definitions
+  Scenario: Create a project with run command and a service env var
     When I navigate to the projects page
     And I click "New Project"
-    When I fill in the name, a git repository URL, a run command, and port definitions
+    When I fill in the name, a git repository URL, a run command, and a service env var name
     And I click "Create"
     Then the project should be created
-    And I should see the run command displayed in the project card
+    And the project should be configured as a webservice
+
+  Scenario: Create a project without a service env var name
+    When I navigate to the projects page
+    And I click "New Project"
+    When I fill in the name, a git repository URL, and a run command and leave the service env var blank
+    And I click "Create"
+    Then the project should be created
+    And the project should not be configured as a webservice
 
   Scenario: Edit a project's run configuration
     Given there is an existing project with a run command
@@ -94,13 +103,13 @@ Feature: Project Management
     And I click "Save"
     Then the project should be updated with the new run command
 
-  Scenario: Port definitions require a valid environment variable name
+  Scenario: Service env var requires a valid environment variable name
     When I navigate to the projects page
     And I click "New Project"
     When I fill in the name and a git repository URL
-    And I add a port definition with an invalid name
+    And I enter an invalid service env var name
     And I click "Create"
-    Then I should see a validation error for the port definition
+    Then I should see a validation error for the service env var
 
   Scenario: Create a project with a setup command
     When I navigate to the projects page

@@ -1,18 +1,31 @@
 Feature: Service Status Sidebar
-  The workflow session sidebar displays a "Service" item that reflects whether
-  the project's development service is running or stopped, with conditional
-  link behavior that opens the service in a new browser tab when running.
+  The workflow session sidebar displays a "Service" item for projects that are
+  configured as webservices (i.e. projects with both a run command and a
+  service env var name). The item reflects whether the project's development
+  service is running or stopped, and becomes a clickable link to
+  http://localhost:<port> in a new browser tab when running. The item is
+  hidden entirely when the project is not a webservice or the session has no
+  project.
 
-  Scenario: Service item visible when project has run_command
+  Scenario: Service item visible when project is a webservice
     Given I am on a session detail page
-    And the session's project has a run_command configured
+    And the session's project has a run_command and a service_env_var configured
     Then I should see a "Service" item in the sidebar
 
-  Scenario: Service item disabled when no run_command configured
+  Scenario: Service item hidden when project has no run_command
     Given I am on a session detail page
     And the session's project has no run_command configured
-    Then I should see a disabled "Service" item in the sidebar
-    And the item should indicate the feature is not set up
+    Then no service item should appear in the sidebar
+
+  Scenario: Service item hidden when project has no service_env_var
+    Given I am on a session detail page
+    And the session's project has no service_env_var configured
+    Then no service item should appear in the sidebar
+
+  Scenario: Service item hidden when session has no project
+    Given I am on a session detail page
+    And the session has no project assigned
+    Then no service item should appear in the sidebar
 
   Scenario: Service icon is green when service is running
     Given I am on a session detail page
@@ -27,7 +40,7 @@ Feature: Service Status Sidebar
   Scenario: Running service with port is a clickable link
     Given I am on a session detail page
     And the session's service_state status is "running"
-    And the project has port_definitions and ports are assigned
+    And the session's service_state has a port assigned
     Then the service item should be a link to http://localhost:<port>
     And the link should open in a new browser tab
 
@@ -41,18 +54,6 @@ Feature: Service Status Sidebar
     And the session's service_state is nil
     Then the service item should not be a clickable link
     And the service icon should be muted/gray
-
-  Scenario: Service item hidden when session has no project
-    Given I am on a session detail page
-    And the session has no project assigned
-    Then no service item should appear in the sidebar
-
-  Scenario: Running service without available port shows green icon
-    Given I am on a session detail page
-    And the session's service_state status is "running"
-    And the project has empty port_definitions or the port is not yet assigned
-    Then the service item should not be a clickable link
-    But the service icon should still be green
 
   Scenario: Service status updates in real-time
     Given I am on a session detail page

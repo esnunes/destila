@@ -262,16 +262,14 @@ defmodule Destila.AI.Conversation do
 
   defp build_service_section(%{service_state: state}) do
     status = state["status"]
-    ports = state["ports"] || %{}
 
-    port_lines =
-      ports
-      |> Enum.map(fn {name, port} -> "#{name}=#{port}" end)
-      |> Enum.join(", ")
+    url_info =
+      case state["port"] do
+        port when is_integer(port) -> "\nURL: http://localhost:#{port}"
+        _ -> ""
+      end
 
-    port_info = if port_lines != "", do: "\nPorts: #{port_lines}", else: ""
-
-    "# Service Status\n\nThe project service is currently #{status}.#{port_info}"
+    "# Service Status\n\nThe project service is currently #{status}.#{url_info}"
   end
 
   defp get_phase(ws, phase_number) do

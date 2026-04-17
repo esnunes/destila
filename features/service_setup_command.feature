@@ -1,11 +1,12 @@
 Feature: Service Setup Command
   A project may declare an optional setup command that runs inside the tmux
   service window (index 9) in two situations: once automatically right after
-  the session's worktree is created, and again before every run command on
-  service start or restart. Setup and run are delivered in a single
-  send_keys call chained with ";" so a non-zero exit from setup still lets
-  the run command proceed. Setup output stays inside the tmux window and is
-  not surfaced in the web UI.
+  the session's worktree is created (without any port allocated or env var
+  exported), and again before every run command on service start or restart
+  (with the project's service env var exported for both setup and run). Setup
+  and run are delivered in a single send_keys call chained with ";" so a
+  non-zero exit from setup still lets the run command proceed. Setup output
+  stays inside the tmux window and is not surfaced in the web UI.
 
   Scenario: Worktree creation triggers setup command in the tmux service window
     Given a project with a setup command
@@ -25,10 +26,17 @@ Feature: Service Setup Command
     Then the composed shell string chains setup and run with ";"
     And the run command executes even if setup exits non-zero
 
-  Scenario: Setup sees the same port environment variables as the run command
-    Given a project with a setup command and port definitions
-    When the setup command is delivered to tmux
-    Then the port environment variables are exported before the setup command
+  Scenario: Post-worktree setup runs without allocating a port
+    Given a project with a setup command and a service env var
+    When a new workflow session's worktree is ready
+    Then the setup command is sent to tmux without any env export
+    And no port is reserved for the setup invocation
+
+  Scenario: Start/restart allocates a port and exports the service env var for both setup and run
+    Given a project with a setup command, a run command, and a service env var
+    When the service is started
+    Then a single ephemeral port is reserved
+    And the service env var is exported with that port before both setup and run
 
   Scenario: Empty setup_command behaves like nil
     Given a project whose setup command is an empty string
