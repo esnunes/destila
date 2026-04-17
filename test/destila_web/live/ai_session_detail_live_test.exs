@@ -348,6 +348,27 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
     end
 
     @tag feature: "ai_session_detail",
+         scenario: "Thinking block with empty content renders as a placeholder"
+    test "renders empty thinking block as placeholder", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [
+        assistant_message([
+          %ThinkingBlock{type: "thinking", thinking: "", signature: "sig"}
+        ])
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      refute has_element?(view, ~s|details[data-block-type="thinking"]|)
+      assert has_element?(view, ~s|div[data-block-type="thinking"]|)
+      assert render(view) =~ "not preserved in transcript"
+    end
+
+    @tag feature: "ai_session_detail",
          scenario: "Redacted thinking block renders as a placeholder"
     test "renders redacted thinking block placeholder", %{conn: conn} do
       ws = create_session()

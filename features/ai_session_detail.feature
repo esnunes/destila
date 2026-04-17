@@ -80,6 +80,11 @@ Feature: AI Session Debug Detail Page
     When I open the AI Session Debug Detail page
     Then the thinking block should render as a collapsed details element
 
+  Scenario: Thinking block with empty content renders as a placeholder
+    Given the history contains a thinking block whose thinking text is empty
+    When I open the AI Session Debug Detail page
+    Then the block should render a visible placeholder noting the content is not preserved
+
   Scenario: Redacted thinking block renders as a placeholder
     Given the history contains a redacted thinking block
     When I open the AI Session Debug Detail page
