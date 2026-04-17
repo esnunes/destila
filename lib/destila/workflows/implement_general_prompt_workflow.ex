@@ -141,11 +141,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     `key: "plan"`, `type: "text_file"`, and `value` set to the path to the plan file.
     3. Commit your changes
     4. Push to the remote
-    5. Call `mcp__destila__session` with `action: "phase_complete"`
 
-    If the plan is already sufficient:
-    - Call `mcp__destila__session` with `action: "phase_complete"` and a message \
-    explaining why further detail is not needed
+    If the plan is already sufficient, say so briefly and stop.
     """
   end
 
@@ -185,11 +182,8 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     3. Add new tests for new functionality if appropriate
     4. Commit changes
     5. Push to the remote
-    6. Call `mcp__destila__session` with `action: "phase_complete"`
 
-    If no test-impacting changes exist:
-    - Call `mcp__destila__session` with `action: "phase_complete"` and a message \
-    explaining why no test changes are needed
+    If no test-impacting changes exist, say so briefly and stop.
     """
   end
 

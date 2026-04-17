@@ -422,6 +422,19 @@ defmodule Destila.Sessions.SessionProcessTest do
     end
 
     test "creates exactly one new AI session on retry of :new strategy phase" do
+      # Override the default stub so the non-interactive phase doesn't auto-advance
+      # and cascade into subsequent phases after retry.
+      ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts ->
+        [
+          ClaudeCode.Test.text("ok"),
+          ClaudeCode.Test.tool_use("mcp__destila__session", %{
+            action: "suggest_phase_complete",
+            message: "done"
+          }),
+          ClaudeCode.Test.result("ok")
+        ]
+      end)
+
       ws =
         create_session_with_ai(%{
           workflow_type: :implement_general_prompt,

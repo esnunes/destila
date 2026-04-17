@@ -3,17 +3,34 @@ defmodule Destila.AI.ConversationTest do
 
   alias Destila.{AI, Workflows}
 
-  defp create_session do
-    {:ok, ws} =
-      Workflows.insert_workflow_session(%{
-        title: "Test",
-        workflow_type: :brainstorm_idea,
-        current_phase: 1,
-        total_phases: 1
-      })
+  defp create_session(attrs \\ %{}) do
+    base = %{
+      title: "Test",
+      workflow_type: :brainstorm_idea,
+      current_phase: 1,
+      total_phases: 1
+    }
 
+    {:ok, ws} = Workflows.insert_workflow_session(Map.merge(base, attrs))
     {:ok, _ai_session} = AI.create_ai_session(%{workflow_session_id: ws.id})
     ws
+  end
+
+  defp ok_result(opts \\ []) do
+    %{
+      result: Keyword.get(opts, :result, "done"),
+      is_error: false,
+      errors: nil,
+      text: Keyword.get(opts, :text, ""),
+      session_id: nil,
+      subtype: :success,
+      auth_error: nil,
+      mcp_tool_uses: Keyword.get(opts, :mcp_tool_uses, [])
+    }
+  end
+
+  defp session_tool_use(action, message) do
+    %{name: "mcp__destila__session", input: %{action: action, message: message}}
   end
 
   defp last_message(ws_id) do
@@ -181,6 +198,54 @@ defmodule Destila.AI.ConversationTest do
     test "always returns :awaiting_input" do
       ws = create_session()
       assert :awaiting_input == AI.Conversation.handle_ai_error(ws, :error)
+    end
+  end
+
+  describe "handle_ai_result/2" do
+    test "interactive phase with no session action returns :awaiting_input" do
+      ws = create_session()
+      assert :awaiting_input == AI.Conversation.handle_ai_result(ws, ok_result())
+    end
+
+    test "non-interactive phase with no session action auto-advances" do
+      ws =
+        create_session(%{
+          workflow_type: :implement_general_prompt,
+          current_phase: 1,
+          total_phases: 7
+        })
+
+      assert :phase_complete == AI.Conversation.handle_ai_result(ws, ok_result())
+    end
+
+    test "explicit phase_complete takes precedence on non-interactive phase" do
+      ws =
+        create_session(%{
+          workflow_type: :implement_general_prompt,
+          current_phase: 1,
+          total_phases: 7
+        })
+
+      result = ok_result(mcp_tool_uses: [session_tool_use("phase_complete", "done")])
+      assert :phase_complete == AI.Conversation.handle_ai_result(ws, result)
+    end
+
+    test "explicit suggest_phase_complete on interactive phase" do
+      ws = create_session()
+
+      result = ok_result(mcp_tool_uses: [session_tool_use("suggest_phase_complete", "ok?")])
+      assert :suggest_phase_complete == AI.Conversation.handle_ai_result(ws, result)
+    end
+
+    test "interactive adjustments phase with no session action stays awaiting_input" do
+      ws =
+        create_session(%{
+          workflow_type: :implement_general_prompt,
+          current_phase: 7,
+          total_phases: 7
+        })
+
+      assert :awaiting_input == AI.Conversation.handle_ai_result(ws, ok_result())
     end
   end
 end

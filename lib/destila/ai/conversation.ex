@@ -91,10 +91,16 @@ defmodule Destila.AI.Conversation do
   Processes an AI result for the current phase.
 
   Returns `:awaiting_input`, `:phase_complete`, or `:suggest_phase_complete`.
+
+  For non-interactive phases, a completed turn with no explicit session action
+  auto-advances to `:phase_complete`. This avoids getting stuck when context
+  compaction hides the original phase prompt (which describes how to signal
+  completion) from the agent.
   """
   def handle_ai_result(ws, result) do
     phase_number = ws.current_phase
     ai_session = AI.get_ai_session_for_workflow!(ws.id)
+    %{non_interactive: non_interactive} = get_phase(ws, phase_number)
 
     response_text = ResponseProcessor.response_text(result)
     session_action = ResponseProcessor.extract_session_action(result)
@@ -143,6 +149,7 @@ defmodule Destila.AI.Conversation do
     case session_action do
       %{action: "phase_complete"} -> :phase_complete
       %{action: "suggest_phase_complete"} -> :suggest_phase_complete
+      _ when non_interactive -> :phase_complete
       _ -> :awaiting_input
     end
   end
