@@ -94,6 +94,37 @@ defmodule DestilaWeb.AiSessionSidebarLiveTest do
       assert has_element?(view, "#ai-sessions-section")
       assert html =~ "No AI sessions yet"
     end
+
+    @tag feature: "ai_session_sidebar",
+         scenario: "AI Sessions section lists every AI session for the workflow"
+    test "rows are rendered in ascending order (oldest first)", %{conn: conn} do
+      ws = create_session()
+      ai_old = create_ai_session(ws)
+      # ensure distinct inserted_at ordering
+      Process.sleep(10)
+      ai_new = create_ai_session(ws)
+
+      {:ok, _view, html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      old_idx = :binary.match(html, "ai-session-row-#{ai_old.id}") |> elem(0)
+      new_idx = :binary.match(html, "ai-session-row-#{ai_new.id}") |> elem(0)
+
+      assert old_idx < new_idx
+    end
+
+    @tag feature: "ai_session_sidebar",
+         scenario: "AI session row displays the creation time in the browser timezone"
+    test "row includes an ISO timestamp hook for browser-local formatting", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      {:ok, view, html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      iso = DateTime.to_iso8601(ai.inserted_at)
+
+      assert has_element?(view, "#ai-session-time-#{ai.id}")
+      assert html =~ ~s|data-ts="#{iso}"|
+    end
   end
 
   describe "initial aliveness state" do

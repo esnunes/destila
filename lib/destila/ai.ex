@@ -25,7 +25,7 @@ defmodule Destila.AI do
     Repo.all(
       from(s in Session,
         where: s.workflow_session_id == ^workflow_session_id,
-        order_by: [desc: s.inserted_at]
+        order_by: [asc: s.inserted_at]
       )
     )
   end
