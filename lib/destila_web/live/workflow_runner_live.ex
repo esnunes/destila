@@ -813,7 +813,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                       />
                     </.link>
                     <%= if @project do %>
-                      <% service_running? = @workflow_session.service_state["status"] == "running" %>
+                      <% service_status = @workflow_session.service_state["status"] || "stopped" %>
+                      <% service_running? = service_status == "running" %>
+                      <% service_starting? = service_status == "starting" %>
+                      <% service_active? = service_running? or service_starting? %>
                       <% url = service_url(@project, @workflow_session.service_state) %>
                       <%= if @project.run_command do %>
                         <div
@@ -826,15 +829,17 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                               name="hero-server-micro"
                               class={[
                                 "size-3.5 transition-colors duration-300",
-                                if(service_running?,
-                                  do: "text-green-500",
-                                  else: "text-base-content/30"
-                                )
+                                service_running? && "text-green-500",
+                                service_starting? && "text-amber-500",
+                                !service_active? && "text-base-content/30"
                               ]}
                             />
                             <span
-                              :if={service_running?}
-                              class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-green-500 ring-2 ring-base-100 animate-pulse"
+                              :if={service_active?}
+                              class={[
+                                "absolute -top-0.5 -right-0.5 size-2 rounded-full ring-2 ring-base-100 animate-pulse",
+                                if(service_running?, do: "bg-green-500", else: "bg-amber-500")
+                              ]}
                             >
                             </span>
                           </span>
@@ -851,7 +856,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                           <% else %>
                             <span class={[
                               "text-sm truncate flex-1 text-left transition-colors duration-300",
-                              if(service_running?,
+                              if(service_active?,
                                 do: "text-base-content/80",
                                 else: "text-base-content/60"
                               )
@@ -864,26 +869,32 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                             >
                               Live
                             </span>
+                            <span
+                              :if={service_starting?}
+                              class="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide"
+                            >
+                              Starting…
+                            </span>
                           <% end %>
                           <button
                             type="button"
-                            id={"service-#{if service_running?, do: "stop", else: "start"}-button"}
-                            phx-click={if service_running?, do: "stop_service", else: "start_service"}
+                            id={"service-#{if service_active?, do: "stop", else: "start"}-button"}
+                            phx-click={if service_active?, do: "stop_service", else: "start_service"}
                             class={[
                               "size-5 rounded flex items-center justify-center shrink-0 cursor-pointer transition-colors",
-                              if(service_running?,
+                              if(service_active?,
                                 do: "text-red-500 hover:bg-red-500/10",
                                 else: "text-base-content/50 hover:bg-base-200 hover:text-primary"
                               )
                             ]}
                             aria-label={
-                              if(service_running?, do: "Stop service", else: "Start service")
+                              if(service_active?, do: "Stop service", else: "Start service")
                             }
-                            title={if(service_running?, do: "Stop service", else: "Start service")}
+                            title={if(service_active?, do: "Stop service", else: "Start service")}
                           >
                             <.icon
                               name={
-                                if service_running?, do: "hero-stop-micro", else: "hero-play-micro"
+                                if service_active?, do: "hero-stop-micro", else: "hero-play-micro"
                               }
                               class="size-3.5"
                             />
