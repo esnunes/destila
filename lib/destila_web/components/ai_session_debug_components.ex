@@ -306,7 +306,8 @@ defmodule DestilaWeb.AiSessionDebugComponents do
     """
   end
 
-  defp content_block(%{block: %ThinkingBlock{}} = assigns) do
+  defp content_block(%{block: %ThinkingBlock{thinking: thinking}} = assigns)
+       when is_binary(thinking) and byte_size(thinking) > 0 do
     ~H"""
     <details
       id={@block_id}
@@ -319,6 +320,21 @@ defmodule DestilaWeb.AiSessionDebugComponents do
       </summary>
       <pre class="px-3 pb-3 pt-1 text-xs text-base-content/70 whitespace-pre-wrap break-words">{@block.thinking}</pre>
     </details>
+    """
+  end
+
+  defp content_block(%{block: %ThinkingBlock{}} = assigns) do
+    ~H"""
+    <div
+      id={@block_id}
+      data-block-type="thinking"
+      class="rounded-md border border-base-300/60 bg-base-200/40 px-3 py-2 flex items-center gap-2"
+    >
+      <.icon name="hero-sparkles-micro" class="size-3 text-base-content/40" />
+      <p class="text-xs text-base-content/50 italic">
+        Thinking (content not preserved in transcript)
+      </p>
+    </div>
     """
   end
 
