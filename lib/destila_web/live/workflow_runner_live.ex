@@ -943,7 +943,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                             phase_status={:idle}
                           />
                         </span>
-                        <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                        <span
+                          id={"ai-session-time-#{ai.id}"}
+                          phx-hook=".LocalTime"
+                          phx-update="ignore"
+                          data-ts={DateTime.to_iso8601(ai.inserted_at)}
+                          class="text-sm text-base-content/60 truncate flex-1 text-left"
+                        >
                           {format_ai_inserted_at(ai.inserted_at)}
                         </span>
                         <.icon
@@ -1171,6 +1177,25 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           </div>
         </div>
       <% end %>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".LocalTime">
+        export default {
+          mounted() { this.format() },
+          format() {
+            const ts = this.el.dataset.ts
+            if (!ts) return
+            const d = new Date(ts)
+            if (isNaN(d.getTime())) return
+            this.el.textContent = d.toLocaleString([], {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false
+            })
+          }
+        }
+      </script>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".MetadataSidebar">
         export default {

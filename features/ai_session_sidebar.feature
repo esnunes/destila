@@ -15,6 +15,12 @@ Feature: AI Sessions Sidebar
     When I open the workflow runner page
     Then the sidebar should show two AI session rows
     And each row should be a link to the AI Session Debug Detail page
+    And the rows should be ordered from oldest to newest
+
+  Scenario: AI session row displays the creation time in the browser timezone
+    Given the workflow session has one AI session
+    When I open the workflow runner page
+    Then the row should render the session timestamp in the browser's local timezone
 
   Scenario: Empty state when no AI sessions exist
     Given the workflow session has no AI sessions
