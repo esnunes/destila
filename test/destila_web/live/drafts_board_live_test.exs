@@ -119,6 +119,74 @@ defmodule DestilaWeb.DraftsBoardLiveTest do
     end
   end
 
+  describe "project filter" do
+    @tag feature: @feature, scenario: "Filter drafts by project"
+    test "selecting a project hides drafts from other projects", %{conn: conn} do
+      project_a = create_project!(%{name: "Project A"})
+      project_b = create_project!(%{name: "Project B"})
+
+      create_draft!(project: project_a, priority: :high, prompt: "Alpha idea")
+      create_draft!(project: project_b, priority: :high, prompt: "Bravo idea")
+
+      {:ok, view, _html} = live(conn, ~p"/drafts")
+
+      html =
+        view
+        |> form("#project-filter-form", %{project: project_a.id})
+        |> render_change()
+
+      assert html =~ "Alpha idea"
+      refute html =~ "Bravo idea"
+      assert_patched(view, ~p"/drafts?project=#{project_a.id}")
+    end
+
+    @tag feature: @feature, scenario: "Filter drafts by project"
+    test "clearing the filter restores drafts from all projects", %{conn: conn} do
+      project_a = create_project!(%{name: "Project A"})
+      project_b = create_project!(%{name: "Project B"})
+
+      create_draft!(project: project_a, priority: :high, prompt: "Alpha idea")
+      create_draft!(project: project_b, priority: :high, prompt: "Bravo idea")
+
+      {:ok, view, _html} = live(conn, ~p"/drafts?project=#{project_a.id}")
+
+      html =
+        view
+        |> form("#project-filter-form", %{project: ""})
+        |> render_change()
+
+      assert html =~ "Alpha idea"
+      assert html =~ "Bravo idea"
+      assert_patched(view, ~p"/drafts")
+    end
+
+    @tag feature: @feature, scenario: "Filter with no matching drafts shows a no-matches state"
+    test "no-matches state renders when filter yields nothing", %{conn: conn} do
+      project_a = create_project!(%{name: "Project A"})
+      project_b = create_project!(%{name: "Project B"})
+
+      create_draft!(project: project_a, priority: :high, prompt: "Alpha idea")
+
+      {:ok, view, _html} = live(conn, ~p"/drafts?project=#{project_b.id}")
+
+      assert has_element?(view, "#drafts-board-no-matches")
+      refute has_element?(view, "#column-high")
+    end
+
+    test "filter dropdown lists projects that have drafts", %{conn: conn} do
+      project_a = create_project!(%{name: "Visible Proj"})
+      _project_unused = create_project!(%{name: "Hidden Proj"})
+
+      create_draft!(project: project_a, priority: :low)
+
+      {:ok, view, _html} = live(conn, ~p"/drafts")
+      html = view |> element("#project-filter") |> render()
+
+      assert html =~ "Visible Proj"
+      refute html =~ "Hidden Proj"
+    end
+  end
+
   describe "reorder events" do
     @tag feature: @feature, scenario: "Reorder drafts within a priority column"
     test "reorder_draft within the same column updates position", %{conn: conn} do

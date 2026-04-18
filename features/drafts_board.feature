@@ -26,6 +26,20 @@ Feature: Drafts Board
     When I navigate to the drafts board
     Then I should see an empty state inviting me to create the first draft
 
+  # --- Filter ---
+
+  Scenario: Filter drafts by project
+    Given I have drafts across multiple projects
+    When I pick a project in the filter dropdown
+    Then only drafts from that project should remain visible on the board
+    And clearing the filter should restore drafts from all projects
+
+  Scenario: Filter with no matching drafts shows a no-matches state
+    Given I have drafts for project A only
+    When I filter by project B
+    Then I should see a no-matches message
+    And the columns should not be rendered
+
   # --- Sidebar ---
 
   Scenario: Sidebar has a Drafts entry next to Crafting Board
