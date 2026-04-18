@@ -71,6 +71,8 @@ defmodule DestilaWeb.DraftFormLive do
   end
 
   def handle_event("save", params, socket) do
+    action = params["action"] || "save"
+
     socket =
       socket
       |> assign(:prompt, params["prompt"] || socket.assigns.prompt)
@@ -89,10 +91,10 @@ defmodule DestilaWeb.DraftFormLive do
         {:noreply, assign(socket, :errors, errors)}
 
       socket.assigns.mode == :edit ->
-        handle_save_result(Drafts.update_draft(socket.assigns.draft, attrs), socket)
+        handle_save_result(Drafts.update_draft(socket.assigns.draft, attrs), action, socket)
 
       true ->
-        handle_save_result(Drafts.create_draft(attrs), socket)
+        handle_save_result(Drafts.create_draft(attrs), action, socket)
     end
   end
 
@@ -109,10 +111,6 @@ defmodule DestilaWeb.DraftFormLive do
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not discard draft")}
     end
-  end
-
-  def handle_event("start_workflow", _params, %{assigns: %{mode: :edit, draft: draft}} = socket) do
-    {:noreply, push_navigate(socket, to: ~p"/workflows?draft_id=#{draft.id}")}
   end
 
   # --- Project selector events ---
@@ -132,11 +130,15 @@ defmodule DestilaWeb.DraftFormLive do
     {:noreply, assign(socket, :project_step, :select)}
   end
 
-  defp handle_save_result({:ok, _draft}, socket) do
+  defp handle_save_result({:ok, draft}, "start_workflow", socket) do
+    {:noreply, push_navigate(socket, to: ~p"/workflows?draft_id=#{draft.id}")}
+  end
+
+  defp handle_save_result({:ok, _draft}, _action, socket) do
     {:noreply, push_navigate(socket, to: ~p"/drafts")}
   end
 
-  defp handle_save_result({:error, changeset}, socket) do
+  defp handle_save_result({:error, changeset}, _action, socket) do
     {:noreply, assign(socket, :errors, changeset_to_errors(changeset))}
   end
 
@@ -281,6 +283,8 @@ defmodule DestilaWeb.DraftFormLive do
             <button
               type="submit"
               form="draft-form"
+              name="action"
+              value="save"
               class="btn btn-primary w-full"
               id="save-draft-btn"
             >
@@ -289,7 +293,10 @@ defmodule DestilaWeb.DraftFormLive do
 
             <%= if @mode == :edit do %>
               <button
-                phx-click="start_workflow"
+                type="submit"
+                form="draft-form"
+                name="action"
+                value="start_workflow"
                 class="btn btn-secondary w-full"
                 id="start-workflow-btn"
               >
@@ -297,6 +304,7 @@ defmodule DestilaWeb.DraftFormLive do
               </button>
 
               <button
+                type="button"
                 phx-click="discard"
                 data-confirm="Discard this draft? This cannot be undone."
                 class="btn btn-ghost btn-sm text-error/70 hover:text-error"

@@ -146,7 +146,40 @@ defmodule DestilaWeb.DraftFormLiveTest do
       expected_path = "/workflows?draft_id=#{draft.id}"
 
       assert {:error, {:live_redirect, %{to: ^expected_path}}} =
-               view |> element("#start-workflow-btn") |> render_click()
+               view
+               |> form("#draft-form")
+               |> render_submit(%{action: "start_workflow"})
+    end
+
+    test "start workflow persists pending edits before navigating", %{conn: conn} do
+      draft = create_draft!(prompt: "Original", priority: :low)
+
+      {:ok, view, _html} = live(conn, ~p"/drafts/#{draft.id}")
+
+      expected_path = "/workflows?draft_id=#{draft.id}"
+
+      assert {:error, {:live_redirect, %{to: ^expected_path}}} =
+               view
+               |> form("#draft-form", %{prompt: "Edited before launch", priority: "high"})
+               |> render_submit(%{action: "start_workflow"})
+
+      reloaded = Drafts.get_draft(draft.id)
+      assert reloaded.prompt == "Edited before launch"
+      assert reloaded.priority == :high
+    end
+
+    test "start workflow with invalid form does not navigate or mutate draft", %{conn: conn} do
+      draft = create_draft!(prompt: "Original", priority: :low)
+
+      {:ok, view, _html} = live(conn, ~p"/drafts/#{draft.id}")
+
+      html =
+        view
+        |> form("#draft-form", %{prompt: "", priority: "high"})
+        |> render_submit(%{action: "start_workflow"})
+
+      assert html =~ "Please write a prompt"
+      assert Drafts.get_draft(draft.id).prompt == "Original"
     end
 
     test "loading an archived draft redirects with an error flash", %{conn: conn} do
