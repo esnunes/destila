@@ -98,5 +98,17 @@ defmodule DestilaWeb.ArchivedSessionsLiveTest do
       # Should disappear from the archived list
       refute has_element?(view, "#archived-session-#{archived.id}")
     end
+
+    @tag feature: "session_deletion",
+         scenario: "Deleted session is hidden from the archived sessions page"
+    test "deleted archived session is not listed", %{conn: conn, project: project} do
+      ws = create_session(%{title: "Archived and Deleted", project_id: project.id})
+      archived = archive_session(ws)
+      {:ok, _} = Destila.Workflows.delete_workflow_session(archived)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/archived")
+
+      refute has_element?(view, "#archived-session-#{archived.id}")
+    end
   end
 end

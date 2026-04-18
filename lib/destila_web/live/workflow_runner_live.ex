@@ -25,14 +25,16 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   alias Destila.Workflows.Session
 
   @impl true
-  def mount(%{"id" => id}, _session, socket) do
-    mount_session(id, socket)
+  def mount(%{"id" => id}, session, socket) do
+    mount_session(id, session, socket)
   end
 
-  defp mount_session(id, socket) do
+  defp mount_session(id, session, socket) do
     workflow_session = Workflows.get_workflow_session(id)
 
     if workflow_session do
+      post_delete_redirect = post_delete_redirect(session, id)
+
       alive_session =
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
@@ -56,6 +58,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:view, :running)
        |> assign(:workflow_type, workflow_type)
        |> assign(:workflow_session, workflow_session)
+       |> assign(:post_delete_redirect, post_delete_redirect)
        |> assign(:project, project)
        |> assign(:phases, phases)
        |> assign(:editing_title, false)
@@ -111,6 +114,19 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      socket
      |> put_flash(:info, "Session archived")
      |> push_navigate(to: ~p"/crafting")}
+  end
+
+  def handle_event("delete_session", _params, socket) do
+    case Workflows.delete_workflow_session(socket.assigns.workflow_session) do
+      {:ok, _ws} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Session deleted")
+         |> push_navigate(to: socket.assigns.post_delete_redirect)}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not delete session")}
+    end
   end
 
   def handle_event("unarchive_session", _params, socket) do
@@ -435,35 +451,44 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   # PubSub: workflow session updated — refresh shared chrome
   @impl true
   def handle_info({:workflow_session_updated, updated_ws}, socket) do
-    if socket.assigns[:workflow_session] &&
-         updated_ws.id == socket.assigns.workflow_session.id do
-      ws = Workflows.get_workflow_session!(updated_ws.id)
-      phase_status = Session.phase_status(ws)
+    cond do
+      is_nil(socket.assigns[:workflow_session]) ->
+        {:noreply, socket}
 
-      {:noreply,
-       socket
-       |> assign(:workflow_session, ws)
-       |> assign(:page_title, ws.title)
-       |> assign(:phase_status, phase_status)
-       |> assign(
-         :streaming_chunks,
-         if(phase_status == :processing,
-           do: socket.assigns[:streaming_chunks],
-           else: nil
-         )
-       )
-       |> assign(
-         :intermediate_bubbles,
-         if(phase_status == :processing,
-           do: socket.assigns.intermediate_bubbles,
-           else: []
-         )
-       )
-       |> assign_metadata(ws.id)
-       |> assign_worktree_path(ws.id)
-       |> assign_ai_state(ws)}
-    else
-      {:noreply, socket}
+      updated_ws.id != socket.assigns.workflow_session.id ->
+        {:noreply, socket}
+
+      true ->
+        case Workflows.get_workflow_session(updated_ws.id) do
+          nil ->
+            {:noreply, socket}
+
+          ws ->
+            phase_status = Session.phase_status(ws)
+
+            {:noreply,
+             socket
+             |> assign(:workflow_session, ws)
+             |> assign(:page_title, ws.title)
+             |> assign(:phase_status, phase_status)
+             |> assign(
+               :streaming_chunks,
+               if(phase_status == :processing,
+                 do: socket.assigns[:streaming_chunks],
+                 else: nil
+               )
+             )
+             |> assign(
+               :intermediate_bubbles,
+               if(phase_status == :processing,
+                 do: socket.assigns.intermediate_bubbles,
+                 else: []
+               )
+             )
+             |> assign_metadata(ws.id)
+             |> assign_worktree_path(ws.id)
+             |> assign_ai_state(ws)}
+        end
     end
   end
 
@@ -734,6 +759,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                   class="btn btn-soft btn-sm"
                 >
                   <.icon name="hero-archive-box-arrow-down-micro" class="size-4" /> Unarchive
+                </button>
+                <button
+                  phx-click="delete_session"
+                  id="delete-btn"
+                  class="btn btn-soft btn-sm"
+                  data-confirm="Permanently delete this session? This cannot be undone in the app."
+                >
+                  <.icon name="hero-trash-micro" class="size-4" /> Delete
                 </button>
               <% end %>
             </div>
@@ -1320,4 +1353,37 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   defp format_ai_inserted_at(_), do: ""
+
+  defp post_delete_redirect(session, session_id) do
+    case local_path(Map.get(session, "session_detail_referer")) do
+      nil -> ~p"/crafting"
+      path -> if points_to_session?(path, session_id), do: ~p"/crafting", else: path
+    end
+  end
+
+  defp local_path(referer) when is_binary(referer) and referer != "" do
+    uri = URI.parse(referer)
+
+    if local_uri?(uri) and is_binary(uri.path) and String.starts_with?(uri.path, "/") do
+      case uri.query do
+        nil -> uri.path
+        query -> uri.path <> "?" <> query
+      end
+    end
+  end
+
+  defp local_path(_), do: nil
+
+  defp local_uri?(%URI{host: nil, scheme: nil}), do: true
+
+  defp local_uri?(%URI{host: host}) do
+    app_host = Application.get_env(:destila, DestilaWeb.Endpoint, [])[:url][:host]
+    is_binary(host) and host == app_host
+  end
+
+  defp points_to_session?(path, session_id) when is_binary(path) do
+    path == "/sessions/#{session_id}" or
+      String.starts_with?(path, "/sessions/#{session_id}/") or
+      String.starts_with?(path, "/sessions/#{session_id}?")
+  end
 end
