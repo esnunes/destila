@@ -712,4 +712,160 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
       assert html =~ "NotARealBlock"
     end
   end
+
+  describe "assistant usage chip" do
+    defp assistant_message_with_usage(content_blocks, usage) do
+      %SessionMessage{
+        type: :assistant,
+        uuid: Ecto.UUID.generate(),
+        session_id: "test-session",
+        message: %{content: content_blocks, usage: usage},
+        parent_tool_use_id: nil
+      }
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Assistant message renders a token usage chip"
+    test "renders usage chip with input and output token counts", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      usage = ClaudeCode.Usage.parse(%{"input_tokens" => 123, "output_tokens" => 45})
+
+      messages = [
+        assistant_message_with_usage(
+          [%TextBlock{type: "text", text: "hello"}],
+          usage
+        )
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, ~s|[data-message-role="assistant"] [data-usage]|)
+      assert has_element?(view, "[data-usage-in]", "in 123")
+      assert has_element?(view, "[data-usage-out]", "out 45")
+      refute has_element?(view, "[data-usage-cache]")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Assistant usage chip shows cache tokens when present"
+    test "includes cache read and cache creation counts when non-zero", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      usage =
+        ClaudeCode.Usage.parse(%{
+          "input_tokens" => 10,
+          "output_tokens" => 20,
+          "cache_read_input_tokens" => 7,
+          "cache_creation_input_tokens" => 3
+        })
+
+      messages = [
+        assistant_message_with_usage(
+          [%TextBlock{type: "text", text: "hi"}],
+          usage
+        )
+      ]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, "[data-usage-cache]", "cache 7/3")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Assistant message without a usage map renders no chip"
+    test "renders no chip when usage is absent", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      messages = [assistant_message([%TextBlock{type: "text", text: "no usage"}])]
+
+      FakeHistory.stub(ai.claude_session_id, {:ok, messages})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      refute has_element?(view, ~s|[data-message-role="assistant"] [data-usage]|)
+    end
+  end
+
+  describe "usage totals strip" do
+    defp insert_system_message_with_usage(ai, ws, raw) do
+      {:ok, msg} =
+        AI.create_message(ai.id, %{
+          role: :system,
+          content: "ok",
+          workflow_session_id: ws.id,
+          raw_response: raw
+        })
+
+      msg
+    end
+
+    defp usage_raw(input, output, opts) do
+      %{
+        usage: %{
+          input_tokens: input,
+          output_tokens: output,
+          cache_read_input_tokens: Keyword.get(opts, :cache_read, 0),
+          cache_creation_input_tokens: Keyword.get(opts, :cache_creation, 0)
+        },
+        total_cost_usd: Keyword.get(opts, :cost, 0.0),
+        duration_ms: Keyword.get(opts, :duration, 0.0)
+      }
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Header shows aggregated token and cost totals across turns"
+    test "aggregates input/output tokens and cost from all system messages", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      insert_system_message_with_usage(ai, ws, usage_raw(100, 50, cost: 0.002))
+      insert_system_message_with_usage(ai, ws, usage_raw(40, 10, cost: 0.001))
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, "#ai-session-usage-totals")
+      assert has_element?(view, "[data-totals-turns]", "2 turns")
+      assert has_element?(view, "[data-totals-in]", "in 140")
+      assert has_element?(view, "[data-totals-out]", "out 60")
+      assert has_element?(view, "[data-totals-cost]", "$0.0030")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Totals strip hides when no turns have recorded usage yet"
+    test "omits totals strip when no messages have recorded usage", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      refute has_element?(view, "#ai-session-usage-totals")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Totals strip updates live when a new turn is recorded"
+    test "refreshes totals when a new system message is broadcast", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+      refute has_element?(view, "#ai-session-usage-totals")
+
+      insert_system_message_with_usage(ai, ws, usage_raw(10, 5, cost: 0.0005))
+
+      assert has_element?(view, "#ai-session-usage-totals")
+      assert has_element?(view, "[data-totals-in]", "in 10")
+      assert has_element?(view, "[data-totals-out]", "out 5")
+      assert has_element?(view, "[data-totals-cost]", "$0.0005")
+    end
+  end
 end

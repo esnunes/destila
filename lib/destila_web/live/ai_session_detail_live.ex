@@ -57,6 +57,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Destila.PubSub, AlivenessTracker.topic())
       Phoenix.PubSub.subscribe(Destila.PubSub, PubSubHelper.ai_stream_topic(ws.id))
+      Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
     end
 
     {history_state, loaded_count} = load_history(ai_session)
@@ -69,6 +70,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
      |> assign(:history_state, history_state)
      |> assign(:loaded_count, loaded_count)
      |> assign(:reload_scheduled?, false)
+     |> assign(:usage_totals, AI.aggregate_usage_for_ai_session(ai_session.id))
      |> assign(:page_title, "AI Session — #{ws.title}")}
   end
 
@@ -87,6 +89,14 @@ defmodule DestilaWeb.AiSessionDetailLive do
 
   def handle_info(:reload_history, socket) do
     {:noreply, refresh_history(socket)}
+  end
+
+  def handle_info({:message_added, %Destila.AI.Message{ai_session_id: ai_id}}, socket) do
+    if socket.assigns.ai_session.id == ai_id do
+      {:noreply, assign(socket, :usage_totals, AI.aggregate_usage_for_ai_session(ai_id))}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -231,6 +241,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
             >
               {@ai_session.claude_session_id}
             </code>
+            <.usage_totals_strip :if={@usage_totals.turns > 0} totals={@usage_totals} />
           </div>
         </div>
 
@@ -284,4 +295,51 @@ defmodule DestilaWeb.AiSessionDetailLive do
   end
 
   defp format_inserted_at(_), do: ""
+
+  attr :totals, :map, required: true
+
+  defp usage_totals_strip(assigns) do
+    ~H"""
+    <span
+      id="ai-session-usage-totals"
+      data-usage-totals
+      class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-200/60 px-2 py-0.5 text-[10px] font-mono text-base-content/60 shrink-0"
+      title={usage_totals_tooltip(@totals)}
+    >
+      <.icon name="hero-chart-bar-micro" class="size-3 text-base-content/40" />
+      <span data-totals-turns>{@totals.turns} {pluralize(@totals.turns, "turn", "turns")}</span>
+      <span class="text-base-content/30">·</span>
+      <span data-totals-in>in {@totals.input_tokens}</span>
+      <span class="text-base-content/30">·</span>
+      <span data-totals-out>out {@totals.output_tokens}</span>
+      <span :if={@totals.total_cost_usd > 0} class="text-base-content/30">·</span>
+      <span :if={@totals.total_cost_usd > 0} data-totals-cost>
+        {format_cost(@totals.total_cost_usd)}
+      </span>
+    </span>
+    """
+  end
+
+  defp usage_totals_tooltip(totals) do
+    [
+      "turns: #{totals.turns}",
+      "input: #{totals.input_tokens}",
+      "output: #{totals.output_tokens}",
+      "cache read: #{totals.cache_read_input_tokens}",
+      "cache write: #{totals.cache_creation_input_tokens}",
+      "cost: #{format_cost(totals.total_cost_usd)}",
+      "duration: #{Float.round(totals.duration_ms / 1000, 2)}s"
+    ]
+    |> Enum.join(" · ")
+  end
+
+  defp format_cost(usd) when is_float(usd) do
+    :erlang.float_to_binary(usd, decimals: 4)
+    |> then(&("$" <> &1))
+  end
+
+  defp format_cost(_), do: "$0.0000"
+
+  defp pluralize(1, singular, _plural), do: singular
+  defp pluralize(_, _singular, plural), do: plural
 end

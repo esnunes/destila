@@ -143,3 +143,33 @@ Feature: AI Session Debug Detail Page
     When I open the AI Session Debug Detail page
     Then the page should render the block through a pre element with inspect output
     And the page should not crash
+
+  Scenario: Assistant message renders a token usage chip
+    Given the history contains an assistant message whose inner message carries a usage map
+    When I open the AI Session Debug Detail page
+    Then the assistant bubble should render a usage chip with input and output token counts
+
+  Scenario: Assistant usage chip shows cache tokens when present
+    Given the history contains an assistant message whose usage includes cache tokens
+    When I open the AI Session Debug Detail page
+    Then the usage chip should include the cache read and cache creation token counts
+
+  Scenario: Assistant message without a usage map renders no chip
+    Given the history contains an assistant message whose inner message has no usage field
+    When I open the AI Session Debug Detail page
+    Then the assistant bubble should not render a usage chip
+
+  Scenario: Header shows aggregated token and cost totals across turns
+    Given the AI session has stored per-turn usage and cost in its messages
+    When I open the AI Session Debug Detail page
+    Then the header should render a totals strip summing input/output tokens and total cost across turns
+
+  Scenario: Totals strip hides when no turns have recorded usage yet
+    Given the AI session has no messages with recorded usage
+    When I open the AI Session Debug Detail page
+    Then the header should not render the totals strip
+
+  Scenario: Totals strip updates live when a new turn is recorded
+    Given I am on the AI Session Debug Detail page
+    When a new system message with usage is inserted for this AI session
+    Then the totals strip should refresh to include the new turn without a reload

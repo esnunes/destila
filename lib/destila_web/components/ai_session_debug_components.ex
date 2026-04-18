@@ -72,6 +72,7 @@ defmodule DestilaWeb.AiSessionDebugComponents do
       assigns
       |> assign(:msg, msg)
       |> assign(:content, extract_content(msg.message))
+      |> assign(:usage, extract_usage(msg.message))
 
     ~H"""
     <div
@@ -80,7 +81,7 @@ defmodule DestilaWeb.AiSessionDebugComponents do
       data-message-uuid={@msg.uuid}
       class="rounded-lg border border-base-300 bg-base-100 px-4 py-3"
     >
-      <.role_header role="assistant" />
+      <.role_header role="assistant" usage={@usage} />
       <.content_list content={@content} tool_index={@tool_index} idx={@idx} />
     </div>
     """
@@ -248,6 +249,7 @@ defmodule DestilaWeb.AiSessionDebugComponents do
   end
 
   attr :role, :string, required: true
+  attr :usage, :any, default: nil
 
   defp role_header(assigns) do
     ~H"""
@@ -258,9 +260,50 @@ defmodule DestilaWeb.AiSessionDebugComponents do
       ]}>
         {@role}
       </span>
+      <.usage_chip :if={@usage} usage={@usage} />
     </div>
     """
   end
+
+  attr :usage, :map, required: true
+
+  defp usage_chip(assigns) do
+    ~H"""
+    <span
+      data-usage
+      class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-200/60 px-2 py-0.5 text-[10px] font-mono text-base-content/60"
+      title={usage_tooltip(@usage)}
+    >
+      <.icon name="hero-bolt-micro" class="size-3 text-base-content/40" />
+      <span data-usage-in>in {format_int(@usage.input_tokens)}</span>
+      <span class="text-base-content/30">·</span>
+      <span data-usage-out>out {format_int(@usage.output_tokens)}</span>
+      <%= if @usage.cache_read_input_tokens > 0 or @usage.cache_creation_input_tokens > 0 do %>
+        <span class="text-base-content/30">·</span>
+        <span data-usage-cache>
+          cache {format_int(@usage.cache_read_input_tokens)}/{format_int(
+            @usage.cache_creation_input_tokens
+          )}
+        </span>
+      <% end %>
+    </span>
+    """
+  end
+
+  defp usage_tooltip(usage) do
+    [
+      "input: #{usage.input_tokens}",
+      "output: #{usage.output_tokens}",
+      "cache read: #{usage.cache_read_input_tokens}",
+      "cache write: #{usage.cache_creation_input_tokens}",
+      usage.service_tier && "tier: #{usage.service_tier}"
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
+  end
+
+  defp format_int(n) when is_integer(n), do: Integer.to_string(n)
+  defp format_int(_), do: "0"
 
   defp role_color("user"), do: "text-primary"
   defp role_color("assistant"), do: "text-base-content/60"
@@ -664,6 +707,10 @@ defmodule DestilaWeb.AiSessionDebugComponents do
   defp extract_content(%{content: content}), do: content
   defp extract_content(%{"content" => content}), do: content
   defp extract_content(_), do: []
+
+  defp extract_usage(%{usage: %{input_tokens: _} = usage}), do: usage
+  defp extract_usage(%{"usage" => %{} = raw}), do: ClaudeCode.Usage.parse(raw)
+  defp extract_usage(_), do: nil
 
   defp render_tool_result_content(content) when is_binary(content), do: content
 
