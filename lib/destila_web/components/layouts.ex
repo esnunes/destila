@@ -68,6 +68,11 @@ defmodule DestilaWeb.Layouts do
           icon="hero-plus-circle"
           label="New Session"
         />
+        <.sidebar_item
+          navigate={~p"/drafts/new"}
+          icon="hero-document-plus"
+          label="New Draft"
+        />
       </nav>
 
       <%!-- Bottom --%>
