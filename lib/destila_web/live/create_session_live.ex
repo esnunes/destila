@@ -10,20 +10,80 @@ defmodule DestilaWeb.CreateSessionLive do
   alias Destila.Workflows
 
   def mount(params, _session, socket) do
-    if Map.has_key?(params, "workflow_type") do
-      mount_form(params["workflow_type"], socket)
-    else
-      mount_type_selection(socket)
+    draft_id = params["draft_id"]
+
+    cond do
+      draft_id && Map.has_key?(params, "workflow_type") ->
+        mount_launch_from_draft(draft_id, params["workflow_type"], socket)
+
+      Map.has_key?(params, "workflow_type") ->
+        mount_form(params["workflow_type"], socket)
+
+      true ->
+        mount_type_selection(socket, draft_id)
     end
   end
 
-  defp mount_type_selection(socket) do
+  defp mount_type_selection(socket, draft_id) do
     {:ok,
      socket
      |> assign(:view, :selecting_type)
      |> assign(:workflow_metadata, Workflows.workflow_type_metadata())
+     |> assign(:draft_id, draft_id)
      |> assign(:page_title, "New Session")}
   end
+
+  defp mount_launch_from_draft(draft_id, workflow_type_str, socket) do
+    with {:ok, workflow_type} <- cast_workflow_type(workflow_type_str),
+         %Destila.Drafts.Draft{} = draft <- Destila.Drafts.get_draft(draft_id) do
+      case Workflows.create_workflow_session(%{
+             workflow_type: workflow_type,
+             input_text: draft.prompt,
+             project_id: draft.project_id
+           }) do
+        {:ok, ws} ->
+          {:ok, _} = Destila.Drafts.archive_draft(draft)
+
+          {:ok,
+           socket
+           |> assign(:view, :launching)
+           |> assign(:page_title, "Launching workflow…")
+           |> push_navigate(to: ~p"/sessions/#{ws.id}")}
+
+        {:error, _} ->
+          {:ok,
+           socket
+           |> put_flash(:error, "Could not launch workflow from this draft")
+           |> push_navigate(to: ~p"/drafts/#{draft.id}")}
+      end
+    else
+      :invalid_workflow_type ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Unknown workflow type")
+         |> push_navigate(to: ~p"/workflows")}
+
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Draft not found")
+         |> push_navigate(to: ~p"/drafts")}
+    end
+  end
+
+  defp cast_workflow_type(str) when is_binary(str) do
+    atom = String.to_existing_atom(str)
+
+    if atom in Workflows.workflow_types() do
+      {:ok, atom}
+    else
+      :invalid_workflow_type
+    end
+  rescue
+    ArgumentError -> :invalid_workflow_type
+  end
+
+  defp cast_workflow_type(_), do: :invalid_workflow_type
 
   defp mount_form(workflow_type_str, socket) do
     workflow_type = String.to_existing_atom(workflow_type_str)
@@ -149,6 +209,24 @@ defmodule DestilaWeb.CreateSessionLive do
      |> assign(:errors, %{})}
   end
 
+  defp type_card_path(type, nil), do: ~p"/workflows/#{type}"
+  defp type_card_path(type, draft_id), do: ~p"/workflows/#{type}?draft_id=#{draft_id}"
+
+  # --- Render: launching from draft ---
+
+  def render(%{view: :launching} = assigns) do
+    ~H"""
+    <Layouts.app flash={@flash} page_title={@page_title}>
+      <div class="flex items-center justify-center min-h-screen" id="launching-from-draft">
+        <div class="text-center">
+          <.icon name="hero-arrow-path" class="size-8 motion-safe:animate-spin mb-4" />
+          <p class="text-sm text-base-content/60">Launching workflow…</p>
+        </div>
+      </div>
+    </Layouts.app>
+    """
+  end
+
   # --- Render: type selection ---
 
   def render(%{view: :selecting_type} = assigns) do
@@ -164,7 +242,7 @@ defmodule DestilaWeb.CreateSessionLive do
           <div class="grid gap-4">
             <.link
               :for={wf <- @workflow_metadata}
-              navigate={~p"/workflows/#{wf.type}"}
+              navigate={type_card_path(wf.type, @draft_id)}
               class="card bg-base-100 border-2 border-base-300 hover:border-primary transition-colors cursor-pointer text-left"
               id={"type-#{wf.type}"}
             >

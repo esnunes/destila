@@ -49,6 +49,12 @@ defmodule DestilaWeb.Layouts do
           active={@page_title == "Crafting Board"}
         />
         <.sidebar_item
+          navigate={~p"/drafts"}
+          icon="hero-document-text"
+          label="Drafts"
+          active={@page_title == "Drafts"}
+        />
+        <.sidebar_item
           navigate={~p"/projects"}
           icon="hero-folder"
           label="Projects"
