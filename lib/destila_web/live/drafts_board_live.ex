@@ -9,6 +9,8 @@ defmodule DestilaWeb.DraftsBoardLive do
 
   use DestilaWeb, :live_view
 
+  require Logger
+
   alias Destila.Drafts
 
   @priorities [:high, :medium, :low]
@@ -25,7 +27,7 @@ defmodule DestilaWeb.DraftsBoardLive do
   end
 
   def handle_info({event, _data}, socket)
-      when event in [:draft_created, :draft_updated, :draft_deleted] do
+      when event in [:draft_created, :draft_updated] do
     grouped = Drafts.list_all_active()
 
     socket =
@@ -47,7 +49,14 @@ defmodule DestilaWeb.DraftsBoardLive do
          draft when not is_nil(draft) <- Drafts.get_draft(draft_id) do
       before_id = empty_to_nil(params["before_id"])
       after_id = empty_to_nil(params["after_id"])
-      Drafts.reposition_draft(draft, priority, before_id, after_id)
+
+      case Drafts.reposition_draft(draft, priority, before_id, after_id) do
+        {:ok, _} ->
+          :ok
+
+        {:error, reason} ->
+          Logger.warning("reposition_draft failed: #{inspect(reason)} draft_id=#{draft_id}")
+      end
     end
 
     {:noreply, socket}

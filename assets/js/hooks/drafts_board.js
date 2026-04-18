@@ -37,7 +37,7 @@ const DraftsBoard = {
     event.dataTransfer.effectAllowed = "move"
     event.dataTransfer.setData("text/plain", card.dataset.draftId)
     card.classList.add("opacity-40")
-    window.__draftsBoardDraggingId = card.dataset.draftId
+    DraftsBoard._draggingId = card.dataset.draftId
   },
 
   handleDragOver(event) {
@@ -58,7 +58,7 @@ const DraftsBoard = {
 
     const draftId =
       event.dataTransfer.getData("text/plain") ||
-      window.__draftsBoardDraggingId
+      DraftsBoard._draggingId
 
     if (!draftId) return
 
@@ -92,7 +92,7 @@ const DraftsBoard = {
     this.el.classList.remove("ring-2", "ring-primary/40")
     const card = this.el.querySelector(".opacity-40")
     if (card) card.classList.remove("opacity-40")
-    window.__draftsBoardDraggingId = null
+    DraftsBoard._draggingId = null
   },
 }
 

@@ -99,12 +99,16 @@ defmodule DestilaWeb.DraftFormLive do
   # --- Detail-only events ---
 
   def handle_event("discard", _params, %{assigns: %{mode: :edit, draft: draft}} = socket) do
-    {:ok, _} = Drafts.archive_draft(draft)
+    case Drafts.archive_draft(draft) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Draft discarded")
+         |> push_navigate(to: ~p"/drafts")}
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Draft discarded")
-     |> push_navigate(to: ~p"/drafts")}
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not discard draft")}
+    end
   end
 
   def handle_event("start_workflow", _params, %{assigns: %{mode: :edit, draft: draft}} = socket) do
