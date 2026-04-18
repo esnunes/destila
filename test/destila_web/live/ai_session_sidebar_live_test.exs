@@ -241,4 +241,78 @@ defmodule DestilaWeb.AiSessionSidebarLiveTest do
       assert render(view) =~ "ai-sessions-section"
     end
   end
+
+  describe "usage subtitle" do
+    defp create_usage_message(ws, ai, overrides \\ %{}) do
+      raw =
+        Map.merge(
+          %{
+            "usage" => %{
+              "input_tokens" => 120,
+              "output_tokens" => 80,
+              "cache_read_input_tokens" => 0,
+              "cache_creation_input_tokens" => 0
+            },
+            "total_cost_usd" => 0.0123,
+            "duration_ms" => 4200.0
+          },
+          overrides
+        )
+
+      {:ok, msg} =
+        AI.create_message(ai.id, %{
+          workflow_session_id: ws.id,
+          role: :system,
+          content: "",
+          raw_response: raw,
+          phase: 1
+        })
+
+      msg
+    end
+
+    @tag feature: "ai_session_sidebar",
+         scenario: "AI session row shows a usage subtitle with turns, cost, and duration"
+    test "row renders a subtitle with turn count, cost, and duration", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+      _ = create_usage_message(ws, ai)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "#ai-session-usage-#{ai.id}")
+      assert has_element?(view, "#ai-session-usage-#{ai.id} [data-subtitle-turns]", "1 turn")
+      assert has_element?(view, "#ai-session-usage-#{ai.id} [data-subtitle-cost]", "$0.0123")
+      assert has_element?(view, "#ai-session-usage-#{ai.id} [data-subtitle-duration]", "4.2s")
+    end
+
+    @tag feature: "ai_session_sidebar",
+         scenario: "AI session row without recorded usage hides the subtitle"
+    test "row without usage does not render a subtitle", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "#ai-session-row-#{ai.id}")
+      refute has_element?(view, "#ai-session-usage-#{ai.id}")
+    end
+
+    @tag feature: "ai_session_sidebar",
+         scenario: "Usage subtitle refreshes live when a new turn is recorded"
+    test "subtitle appears live after a new system message is inserted", %{conn: conn} do
+      ws = create_session()
+      ai = create_ai_session(ws)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      refute has_element?(view, "#ai-session-usage-#{ai.id}")
+
+      _ = create_usage_message(ws, ai)
+      _ = render(view)
+
+      assert has_element?(view, "#ai-session-usage-#{ai.id}")
+      assert has_element?(view, "#ai-session-usage-#{ai.id} [data-subtitle-turns]", "1 turn")
+    end
+  end
 end

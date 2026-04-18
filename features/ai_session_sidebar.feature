@@ -57,3 +57,18 @@ Feature: AI Sessions Sidebar
     Given I am on a workflow runner page
     When the AlivenessTracker broadcasts an AI-specific aliveness change
     Then the workflow-level header aliveness dot should remain unchanged
+
+  Scenario: AI session row shows a usage subtitle with turns, cost, and duration
+    Given the workflow session has one AI session whose messages carry recorded usage and cost
+    When I open the workflow runner page
+    Then the row should render a subtitle with the turn count, total cost, and total duration
+
+  Scenario: AI session row without recorded usage hides the subtitle
+    Given the workflow session has one AI session with no messages carrying usage
+    When I open the workflow runner page
+    Then the row should not render a usage subtitle
+
+  Scenario: Usage subtitle refreshes live when a new turn is recorded
+    Given I am on a workflow runner page showing an AI session with no recorded usage
+    When a new system message with usage is inserted for that AI session
+    Then the row's usage subtitle should appear without a reload

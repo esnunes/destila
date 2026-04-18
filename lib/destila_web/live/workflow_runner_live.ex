@@ -541,6 +541,26 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
+  def handle_info({:message_added, %Destila.AI.Message{ai_session_id: ai_id} = msg}, socket) do
+    ws = socket.assigns[:workflow_session]
+    totals = socket.assigns[:ai_sessions_totals] || %{}
+
+    cond do
+      is_nil(ws) ->
+        {:noreply, socket}
+
+      msg.workflow_session_id != ws.id ->
+        {:noreply, socket}
+
+      not Map.has_key?(totals, ai_id) ->
+        {:noreply, socket}
+
+      true ->
+        updated = Map.put(totals, ai_id, AI.aggregate_usage_for_ai_session(ai_id))
+        {:noreply, assign(socket, :ai_sessions_totals, updated)}
+    end
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp extract_intermediate_text(%ClaudeCode.Message.AssistantMessage{message: message}) do
@@ -577,9 +597,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     ai_sessions_alive =
       Map.new(ai_sessions, fn ai -> {ai.id, AlivenessTracker.alive_ai?(ai.id)} end)
 
+    ai_sessions_totals =
+      Map.new(ai_sessions, fn ai -> {ai.id, AI.aggregate_usage_for_ai_session(ai.id)} end)
+
     socket
     |> assign(:ai_sessions, ai_sessions)
     |> assign(:ai_sessions_alive, ai_sessions_alive)
+    |> assign(:ai_sessions_totals, ai_sessions_totals)
   end
 
   defp compute_current_step(ws, phase_status, messages) do
@@ -966,7 +990,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                         :for={ai <- @ai_sessions}
                         id={"ai-session-row-#{ai.id}"}
                         navigate={~p"/sessions/#{@workflow_session.id}/ai/#{ai.id}"}
-                        class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                        class="w-full flex items-start gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
                         aria-label={"Open AI session from #{format_ai_inserted_at(ai.inserted_at)}"}
                       >
                         <span class="size-5 rounded flex items-center justify-center shrink-0">
@@ -976,18 +1000,24 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                             phase_status={:idle}
                           />
                         </span>
-                        <span
-                          id={"ai-session-time-#{ai.id}"}
-                          phx-hook="LocalTime"
-                          phx-update="ignore"
-                          data-ts={DateTime.to_iso8601(ai.inserted_at)}
-                          class="text-sm text-base-content/60 truncate flex-1 text-left"
-                        >
-                          {format_ai_inserted_at(ai.inserted_at)}
-                        </span>
+                        <div class="flex-1 min-w-0 text-left">
+                          <span
+                            id={"ai-session-time-#{ai.id}"}
+                            phx-hook="LocalTime"
+                            phx-update="ignore"
+                            data-ts={DateTime.to_iso8601(ai.inserted_at)}
+                            class="text-sm text-base-content/60 truncate block"
+                          >
+                            {format_ai_inserted_at(ai.inserted_at)}
+                          </span>
+                          <.ai_session_usage_subtitle
+                            ai_id={ai.id}
+                            totals={Map.get(@ai_sessions_totals, ai.id)}
+                          />
+                        </div>
                         <.icon
                           name="hero-chevron-right-micro"
-                          class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                          class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors mt-1"
                         />
                       </.link>
                     </div>
@@ -1353,6 +1383,49 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   defp format_ai_inserted_at(_), do: ""
+
+  attr :ai_id, :string, required: true
+  attr :totals, :map, default: nil
+
+  defp ai_session_usage_subtitle(assigns) do
+    ~H"""
+    <span
+      :if={@totals && @totals.turns > 0}
+      id={"ai-session-usage-#{@ai_id}"}
+      data-usage-subtitle
+      class="text-[11px] font-mono text-base-content/40 truncate block"
+    >
+      <span data-subtitle-turns>{@totals.turns} {pluralize_turns(@totals.turns)}</span>
+      <span class="text-base-content/25">·</span>
+      <span data-subtitle-cost>{format_cost(@totals.total_cost_usd)}</span>
+      <span class="text-base-content/25">·</span>
+      <span data-subtitle-duration>{format_duration(@totals.duration_ms)}</span>
+    </span>
+    """
+  end
+
+  defp pluralize_turns(1), do: "turn"
+  defp pluralize_turns(_), do: "turns"
+
+  defp format_cost(usd) when is_float(usd) do
+    :erlang.float_to_binary(usd, decimals: 4)
+    |> then(&("$" <> &1))
+  end
+
+  defp format_cost(_), do: "$0.0000"
+
+  defp format_duration(ms) when is_number(ms) and ms >= 0 do
+    seconds = ms / 1000
+
+    cond do
+      seconds < 10 -> "#{Float.round(seconds, 1)}s"
+      seconds < 60 -> "#{round(seconds)}s"
+      seconds < 3600 -> "#{div(round(seconds), 60)}m #{rem(round(seconds), 60)}s"
+      true -> "#{div(round(seconds), 3600)}h #{div(rem(round(seconds), 3600), 60)}m"
+    end
+  end
+
+  defp format_duration(_), do: "0s"
 
   defp post_delete_redirect(session, session_id) do
     case local_path(Map.get(session, "session_detail_referer")) do
