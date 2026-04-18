@@ -41,6 +41,9 @@ defmodule DestilaWeb.Router do
     live "/crafting", CraftingBoardLive
     live "/projects/archived", ArchivedProjectsLive
     live "/projects", ProjectsLive
+    live "/drafts", DraftsBoardLive
+    live "/drafts/new", DraftFormLive
+    live "/drafts/:id", DraftFormLive
     live "/workflows", CreateSessionLive
     live "/workflows/:workflow_type", CreateSessionLive
     live "/sessions/archived", ArchivedSessionsLive

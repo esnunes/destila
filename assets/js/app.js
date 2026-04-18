@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/destila"
 import topbar from "../vendor/topbar"
 import TerminalPanel from "./hooks/terminal_panel"
 import LocalTime from "./hooks/local_time"
+import DraftsBoard from "./hooks/drafts_board"
 
 const ScrollBottomHook = {
   mounted() { this.el.scrollTop = this.el.scrollHeight },
@@ -62,6 +63,7 @@ const Hooks = {
   AutoDismiss: AutoDismissHook,
   TerminalPanel: TerminalPanel,
   LocalTime: LocalTime,
+  DraftsBoard: DraftsBoard,
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
