@@ -19,6 +19,7 @@ defmodule Destila.Workflows.Session do
     field(:position, :integer)
     field(:done_at, :utc_datetime)
     field(:archived_at, :utc_datetime)
+    field(:deleted_at, :utc_datetime)
 
     belongs_to(:project, Destila.Projects.Project)
     belongs_to(:source_session, __MODULE__)
@@ -48,6 +49,7 @@ defmodule Destila.Workflows.Session do
       :title_generating,
       :position,
       :archived_at,
+      :deleted_at,
       :user_prompt,
       :source_session_id,
       :service_state

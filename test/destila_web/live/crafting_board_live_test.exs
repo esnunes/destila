@@ -560,4 +560,17 @@ defmodule DestilaWeb.CraftingBoardLiveTest do
              )
     end
   end
+
+  describe "deleted sessions" do
+    @tag feature: "session_deletion",
+         scenario: "Deleted session is hidden from the crafting board"
+    test "soft-deleted session is not shown on crafting board", %{conn: conn, project_a: project} do
+      ws = create_prompt(%{title: "Deleted Prompt", project_id: project.id})
+      Destila.Workflows.delete_workflow_session(ws)
+
+      {:ok, view, _html} = live(conn, ~p"/crafting")
+
+      refute has_element?(view, "#crafting-card-#{ws.id}")
+    end
+  end
 end

@@ -61,30 +61,32 @@ defmodule Destila.Workflows do
 
   # --- Session CRUD ---
 
+  defp base_session_query do
+    from(ws in Session, where: is_nil(ws.deleted_at))
+  end
+
   def list_workflow_sessions do
-    from(ws in Session,
-      where: is_nil(ws.archived_at),
-      order_by: ws.position
-    )
+    base_session_query()
+    |> where([ws], is_nil(ws.archived_at))
+    |> order_by([ws], ws.position)
     |> preload(:project)
     |> Repo.all()
   end
 
   def list_archived_workflow_sessions do
-    from(ws in Session,
-      where: not is_nil(ws.archived_at),
-      order_by: [desc: ws.archived_at]
-    )
+    base_session_query()
+    |> where([ws], not is_nil(ws.archived_at))
+    |> order_by([ws], desc: ws.archived_at)
     |> preload(:project)
     |> Repo.all()
   end
 
   def get_workflow_session(id) do
-    Repo.get(Session, id)
+    Repo.get(base_session_query(), id)
   end
 
   def get_workflow_session!(id) do
-    Repo.get!(Session, id)
+    Repo.get!(base_session_query(), id)
   end
 
   def create_workflow_session(params) do
@@ -168,14 +170,14 @@ defmodule Destila.Workflows do
   with the given key. Returns `{session, text}` tuples, ordered by most recent.
   """
   def list_sessions_with_exported_metadata(metadata_key) do
-    from(ws in Session,
-      join: m in SessionMetadata,
-      on: m.workflow_session_id == ws.id and m.key == ^metadata_key and m.exported == true,
-      where: not is_nil(ws.done_at) and is_nil(ws.archived_at),
-      preload: [:project],
-      order_by: [desc: ws.done_at],
-      select: {ws, m.value}
+    base_session_query()
+    |> join(:inner, [ws], m in SessionMetadata,
+      on: m.workflow_session_id == ws.id and m.key == ^metadata_key and m.exported == true
     )
+    |> where([ws], not is_nil(ws.done_at) and is_nil(ws.archived_at))
+    |> preload(:project)
+    |> order_by([ws], desc: ws.done_at)
+    |> select([ws, m], {ws, m.value})
     |> Repo.all()
     |> Enum.map(fn {ws, value} -> {ws, extract_metadata_text(value)} end)
     |> Enum.reject(fn {_ws, text} -> is_nil(text) || text == "" end)
@@ -212,6 +214,19 @@ defmodule Destila.Workflows do
 
     ws
     |> Session.changeset(%{archived_at: DateTime.utc_now()})
+    |> Repo.update()
+    |> broadcast(:workflow_session_updated)
+  end
+
+  def delete_workflow_session(%Session{} = ws) do
+    if ws.service_state do
+      Destila.Services.ServiceManager.cleanup(ws)
+    end
+
+    Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
+
+    ws
+    |> Session.changeset(%{deleted_at: DateTime.utc_now()})
     |> Repo.update()
     |> broadcast(:workflow_session_updated)
   end

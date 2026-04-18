@@ -25,14 +25,16 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   alias Destila.Workflows.Session
 
   @impl true
-  def mount(%{"id" => id}, _session, socket) do
-    mount_session(id, socket)
+  def mount(%{"id" => id}, session, socket) do
+    mount_session(id, session, socket)
   end
 
-  defp mount_session(id, socket) do
+  defp mount_session(id, session, socket) do
     workflow_session = Workflows.get_workflow_session(id)
 
     if workflow_session do
+      post_delete_redirect = post_delete_redirect(session, id)
+
       alive_session =
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
@@ -56,6 +58,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:view, :running)
        |> assign(:workflow_type, workflow_type)
        |> assign(:workflow_session, workflow_session)
+       |> assign(:post_delete_redirect, post_delete_redirect)
        |> assign(:project, project)
        |> assign(:phases, phases)
        |> assign(:editing_title, false)
@@ -111,6 +114,15 @@ defmodule DestilaWeb.WorkflowRunnerLive do
      socket
      |> put_flash(:info, "Session archived")
      |> push_navigate(to: ~p"/crafting")}
+  end
+
+  def handle_event("delete_session", _params, socket) do
+    {:ok, _ws} = Workflows.delete_workflow_session(socket.assigns.workflow_session)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Session deleted")
+     |> push_navigate(to: socket.assigns.post_delete_redirect)}
   end
 
   def handle_event("unarchive_session", _params, socket) do
@@ -735,6 +747,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 >
                   <.icon name="hero-archive-box-arrow-down-micro" class="size-4" /> Unarchive
                 </button>
+                <button
+                  phx-click="delete_session"
+                  id="delete-btn"
+                  class="btn btn-soft btn-sm"
+                  data-confirm="Permanently delete this session? This cannot be undone in the app."
+                >
+                  <.icon name="hero-trash-micro" class="size-4" /> Delete
+                </button>
               <% end %>
             </div>
           </div>
@@ -1320,4 +1340,30 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   defp format_ai_inserted_at(_), do: ""
+
+  defp post_delete_redirect(session, session_id) do
+    referer =
+      Map.get(session, "session_detail_referer") || Map.get(session, :session_detail_referer)
+
+    cond do
+      is_nil(referer) or referer == "" ->
+        ~p"/crafting"
+
+      points_to_session?(referer, session_id) ->
+        ~p"/crafting"
+
+      true ->
+        referer
+    end
+  end
+
+  defp points_to_session?(referer, session_id) when is_binary(referer) do
+    case URI.parse(referer) do
+      %URI{path: path} when is_binary(path) ->
+        String.starts_with?(path, "/sessions/#{session_id}")
+
+      _ ->
+        false
+    end
+  end
 end
