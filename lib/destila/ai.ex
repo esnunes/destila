@@ -79,6 +79,74 @@ defmodule Destila.AI do
     )
   end
 
+  def list_messages_for_ai_session(ai_session_id) do
+    Repo.all(
+      from(m in Message,
+        where: m.ai_session_id == ^ai_session_id,
+        order_by: m.inserted_at
+      )
+    )
+  end
+
+  @doc """
+  Sums per-turn usage and cost from the stored `raw_response` maps of all
+  system (assistant) messages for an AI session.
+
+  Returns a map with integer token counts, float `total_cost_usd`, float
+  `duration_ms`, and a `turns` count (number of turns that contributed usage).
+  Returns zeros when no usage has been recorded yet.
+  """
+  def aggregate_usage_for_ai_session(ai_session_id) do
+    ai_session_id
+    |> list_messages_for_ai_session()
+    |> Enum.reduce(empty_usage_totals(), &add_message_usage/2)
+  end
+
+  defp empty_usage_totals do
+    %{
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      total_cost_usd: 0.0,
+      duration_ms: 0.0,
+      turns: 0
+    }
+  end
+
+  defp add_message_usage(%Message{raw_response: raw}, acc) when is_map(raw) do
+    usage = Map.get(raw, "usage") || %{}
+
+    %{
+      input_tokens: acc.input_tokens + read_int(usage, "input_tokens"),
+      output_tokens: acc.output_tokens + read_int(usage, "output_tokens"),
+      cache_read_input_tokens:
+        acc.cache_read_input_tokens + read_int(usage, "cache_read_input_tokens"),
+      cache_creation_input_tokens:
+        acc.cache_creation_input_tokens + read_int(usage, "cache_creation_input_tokens"),
+      total_cost_usd: acc.total_cost_usd + read_float(raw, "total_cost_usd"),
+      duration_ms: acc.duration_ms + read_float(raw, "duration_ms"),
+      turns: acc.turns + if(usage == %{}, do: 0, else: 1)
+    }
+  end
+
+  defp add_message_usage(_msg, acc), do: acc
+
+  defp read_int(map, key) do
+    case Map.get(map, key) do
+      n when is_integer(n) -> n
+      _ -> 0
+    end
+  end
+
+  defp read_float(map, key) do
+    case Map.get(map, key) do
+      n when is_float(n) -> n
+      n when is_integer(n) -> n * 1.0
+      _ -> 0.0
+    end
+  end
+
   def create_message(ai_session_id, attrs) do
     attrs =
       attrs

@@ -255,7 +255,14 @@ defmodule Destila.AI.ClaudeSession do
       session_id: nil,
       subtype: nil,
       errors: nil,
-      auth_error: nil
+      auth_error: nil,
+      usage: nil,
+      model_usage: nil,
+      total_cost_usd: nil,
+      duration_ms: nil,
+      duration_api_ms: nil,
+      num_turns: nil,
+      stop_reason: nil
     }
 
     acc =
@@ -279,7 +286,14 @@ defmodule Destila.AI.ClaudeSession do
                 is_error: msg.is_error,
                 session_id: msg.session_id,
                 subtype: msg.subtype,
-                errors: msg.errors
+                errors: msg.errors,
+                usage: msg.usage,
+                model_usage: msg.model_usage,
+                total_cost_usd: msg.total_cost_usd,
+                duration_ms: msg.duration_ms,
+                duration_api_ms: msg.duration_api_ms,
+                num_turns: msg.num_turns,
+                stop_reason: msg.stop_reason
             }
 
           %ClaudeCode.Message.AuthStatusMessage{error: error} when is_binary(error) ->
@@ -298,7 +312,14 @@ defmodule Destila.AI.ClaudeSession do
       subtype: acc.subtype,
       errors: acc.errors,
       auth_error: acc.auth_error,
-      mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses)
+      mcp_tool_uses: Enum.reverse(acc.mcp_tool_uses),
+      usage: acc.usage,
+      model_usage: acc.model_usage,
+      total_cost_usd: acc.total_cost_usd,
+      duration_ms: acc.duration_ms,
+      duration_api_ms: acc.duration_api_ms,
+      num_turns: acc.num_turns,
+      stop_reason: acc.stop_reason
     }
   end
 
