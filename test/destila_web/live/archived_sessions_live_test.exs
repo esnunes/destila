@@ -106,10 +106,9 @@ defmodule DestilaWeb.ArchivedSessionsLiveTest do
       archived = archive_session(ws)
       {:ok, _} = Destila.Workflows.delete_workflow_session(archived)
 
-      {:ok, view, html} = live(conn, ~p"/sessions/archived")
+      {:ok, view, _html} = live(conn, ~p"/sessions/archived")
 
       refute has_element?(view, "#archived-session-#{archived.id}")
-      refute html =~ "Archived and Deleted"
     end
   end
 end

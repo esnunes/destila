@@ -61,6 +61,26 @@ defmodule Destila.WorkflowsDeletionTest do
 
       assert {:ok, _ws} = Workflows.delete_workflow_session(ws)
     end
+
+    @tag feature: @feature,
+         scenario: "Deleting a running session stops its service and AI sessions"
+    test "clears service_state when a session has an active service", %{project: project} do
+      ws = create_session(%{project_id: project.id})
+
+      {:ok, ws} =
+        Workflows.update_workflow_session(ws, %{
+          service_state: %{"status" => "running", "port" => 4712}
+        })
+
+      assert ws.service_state
+
+      {:ok, _deleted} = Workflows.delete_workflow_session(ws)
+
+      # Observe raw row bypassing soft-delete filter
+      row = Destila.Repo.get(Session, ws.id)
+      assert %DateTime{} = row.deleted_at
+      assert is_nil(row.service_state)
+    end
   end
 
   describe "read paths exclude deleted sessions" do

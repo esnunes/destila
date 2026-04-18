@@ -17,9 +17,11 @@ defmodule DestilaWeb.Router do
   end
 
   defp put_session_detail_referer(conn, _opts) do
+    conn = Plug.Conn.delete_session(conn, "session_detail_referer")
+
     case Plug.Conn.get_req_header(conn, "referer") do
       [referer | _] when is_binary(referer) and referer != "" ->
-        Plug.Conn.put_session(conn, :session_detail_referer, referer)
+        Plug.Conn.put_session(conn, "session_detail_referer", referer)
 
       _ ->
         conn

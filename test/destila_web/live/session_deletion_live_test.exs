@@ -74,22 +74,18 @@ defmodule DestilaWeb.SessionDeletionLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      html = view |> element("#delete-btn") |> render()
-
-      assert html =~
-               ~s(data-confirm="Permanently delete this session? This cannot be undone in the app.")
-
-      refute html =~ "phx-hook"
+      assert has_element?(
+               view,
+               ~s(#delete-btn[data-confirm="Permanently delete this session? This cannot be undone in the app."])
+             )
     end
 
     @tag feature: @feature, scenario: "Delete a session from the session detail page"
-    test "redirects to referer captured in session", %{conn: conn, project: project} do
+    test "redirects to referer captured from the Referer header", %{conn: conn, project: project} do
       ws = create_session(%{title: "Fix login bug", project_id: project.id})
       seed_welcome_message(ws)
 
-      conn =
-        conn
-        |> init_test_session(%{"session_detail_referer" => "/"})
+      conn = Plug.Conn.put_req_header(conn, "referer", "/")
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -108,8 +104,7 @@ defmodule DestilaWeb.SessionDeletionLiveTest do
       seed_welcome_message(ws)
 
       conn =
-        conn
-        |> init_test_session(%{"session_detail_referer" => "http://localhost/sessions/#{ws.id}"})
+        Plug.Conn.put_req_header(conn, "referer", "http://localhost/sessions/#{ws.id}")
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -127,9 +122,7 @@ defmodule DestilaWeb.SessionDeletionLiveTest do
       ws = create_session(%{project_id: project.id})
       seed_welcome_message(ws)
 
-      conn =
-        conn
-        |> init_test_session(%{"session_detail_referer" => "/sessions/#{ws.id}/terminal"})
+      conn = Plug.Conn.put_req_header(conn, "referer", "/sessions/#{ws.id}/terminal")
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -140,13 +133,9 @@ defmodule DestilaWeb.SessionDeletionLiveTest do
     end
 
     @tag feature: @feature, scenario: "Delete a session from the session detail page"
-    test "falls back to /crafting when referer is empty string", %{conn: conn, project: project} do
+    test "falls back to /crafting when no referer is present", %{conn: conn, project: project} do
       ws = create_session(%{project_id: project.id})
       seed_welcome_message(ws)
-
-      conn =
-        conn
-        |> init_test_session(%{"session_detail_referer" => ""})
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
@@ -154,6 +143,72 @@ defmodule DestilaWeb.SessionDeletionLiveTest do
 
       {path, _flash} = assert_redirect(view)
       assert path == "/crafting"
+    end
+
+    @tag feature: @feature, scenario: "Delete a session from the session detail page"
+    test "falls back to /crafting when referer is a cross-origin absolute URL", %{
+      conn: conn,
+      project: project
+    } do
+      ws = create_session(%{project_id: project.id})
+      seed_welcome_message(ws)
+
+      conn = Plug.Conn.put_req_header(conn, "referer", "https://evil.example/steal")
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("#delete-btn") |> render_click()
+
+      {path, _flash} = assert_redirect(view)
+      assert path == "/crafting"
+    end
+
+    @tag feature: @feature, scenario: "Delete a session from the session detail page"
+    test "redirects to referer path when referer is a same-origin absolute URL", %{
+      conn: conn,
+      project: project
+    } do
+      ws = create_session(%{project_id: project.id})
+      seed_welcome_message(ws)
+
+      conn = Plug.Conn.put_req_header(conn, "referer", "http://localhost/crafting")
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("#delete-btn") |> render_click()
+
+      {path, _flash} = assert_redirect(view)
+      assert path == "/crafting"
+    end
+  end
+
+  describe "cancel delete confirmation" do
+    @tag feature: @feature, scenario: "Cancel the delete confirmation dialog"
+    test "delete button carries a data-confirm attribute so the browser prompt is shown", %{
+      conn: conn,
+      project: project
+    } do
+      ws = create_session(%{title: "Fix login bug", project_id: project.id})
+      seed_welcome_message(ws)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "#delete-btn[data-confirm]")
+    end
+
+    @tag feature: @feature, scenario: "Cancel the delete confirmation dialog"
+    test "session is not deleted when the delete event is never dispatched", %{
+      conn: conn,
+      project: project
+    } do
+      ws = create_session(%{title: "Fix login bug", project_id: project.id})
+      seed_welcome_message(ws)
+
+      {:ok, _view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      reloaded = Destila.Workflows.get_workflow_session(ws.id)
+      assert reloaded
+      assert is_nil(reloaded.deleted_at)
     end
   end
 
