@@ -1,7 +1,7 @@
 ---
 title: "refactor: Dashboard missing-tools banner and feature overview"
 type: refactor
-status: active
+status: completed
 date: 2026-04-19
 ---
 
