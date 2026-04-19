@@ -157,7 +157,7 @@ defmodule DestilaWeb.DashboardLive do
 
   defp feature_overview(assigns) do
     ~H"""
-    <section id="feature-overview" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <section id="feature-overview" class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
       <.feature_card
         id="feature-card-crafting"
         title="Crafting Board"
@@ -201,18 +201,31 @@ defmodule DestilaWeb.DashboardLive do
     <.link
       id={@id}
       navigate={@navigate}
-      class="group rounded-xl border border-base-300 bg-base-100 hover:bg-base-200/60 hover:border-base-300 p-5 shadow-sm hover:shadow-md transition-all flex items-start gap-4"
+      class={[
+        "group relative flex items-start gap-4 p-5",
+        "rounded-xl border border-base-300 bg-base-100 shadow-xs",
+        "transition-[background-color,border-color,box-shadow] duration-200 ease-out",
+        "hover:border-base-content/15 hover:bg-base-200/50 hover:shadow-sm",
+        "dark:hover:bg-base-content/[0.03]",
+        "focus-visible:outline-none focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/25"
+      ]}
     >
-      <div class="shrink-0 size-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+      <div class="shrink-0 size-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center transition-colors duration-200 ease-out group-hover:bg-primary/15">
         <.icon name={@icon} class="size-5" />
       </div>
       <div class="flex-1 min-w-0">
-        <h3 class="text-base font-semibold text-base-content">{@title}</h3>
-        <p class="text-sm text-base-content/60 mt-1">{@description}</p>
+        <h3 class="text-[0.9375rem] font-semibold text-base-content tracking-tight leading-snug">
+          {@title}
+        </h3>
+        <p class="mt-1 text-sm leading-relaxed text-base-content/65">{@description}</p>
       </div>
       <.icon
         name="hero-arrow-right"
-        class="size-4 text-base-content/30 group-hover:text-base-content/60 group-hover:translate-x-0.5 transition-all shrink-0 mt-1"
+        class={[
+          "size-4 shrink-0 mt-1.5 text-base-content/25",
+          "transition-[color,transform] duration-200 ease-out",
+          "group-hover:text-base-content/60 group-hover:translate-x-0.5"
+        ]}
       />
     </.link>
     """
