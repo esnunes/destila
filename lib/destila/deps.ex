@@ -12,8 +12,8 @@ defmodule Destila.Deps do
       name: "claude",
       display_name: "Claude Code CLI",
       purpose: "Runs AI sessions inside Destila.",
-      install_command: "npm install -g @anthropic-ai/claude-code",
-      docs_url: "https://docs.claude.com/en/docs/claude-code/overview"
+      install_command: "curl -fsSL https://claude.ai/install.sh | bash",
+      docs_url: "https://docs.claude.com/en/docs/claude-code/setup"
     },
     %{
       name: "tmux",
