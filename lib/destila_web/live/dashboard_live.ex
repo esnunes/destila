@@ -126,7 +126,7 @@ defmodule DestilaWeb.DashboardLive do
       <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyToClipboard">
         export default {
           mounted() {
-            this.el.addEventListener("click", async () => {
+            this._onClick = async () => {
               const text = this.el.dataset.copy
               if (!text || !navigator.clipboard) return
               try {
@@ -142,7 +142,12 @@ defmodule DestilaWeb.DashboardLive do
               } catch (_err) {
                 // Clipboard write can fail in insecure contexts; silently no-op.
               }
-            })
+            }
+            this.el.addEventListener("click", this._onClick)
+          },
+          destroyed() {
+            clearTimeout(this._copyTimer)
+            if (this._onClick) this.el.removeEventListener("click", this._onClick)
           }
         }
       </script>

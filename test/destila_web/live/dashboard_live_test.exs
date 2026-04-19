@@ -151,14 +151,18 @@ defmodule DestilaWeb.DashboardLiveTest do
       {:ok, view, _html} = live(conn, ~p"/")
 
       assert has_element?(view, "#feature-overview")
-      assert has_element?(view, "#feature-card-crafting")
-      assert has_element?(view, "#feature-card-drafts")
-      assert has_element?(view, "#feature-card-new-workflow")
-      assert has_element?(view, "#feature-card-projects")
 
-      for id <-
-            ~w(feature-card-crafting feature-card-drafts feature-card-new-workflow feature-card-projects) do
+      cards = [
+        {"feature-card-crafting", "Crafting Board"},
+        {"feature-card-drafts", "Drafts"},
+        {"feature-card-new-workflow", "New Workflow"},
+        {"feature-card-projects", "Projects"}
+      ]
+
+      for {id, title} <- cards do
+        assert has_element?(view, "##{id}")
         html = view |> element("##{id}") |> render()
+        assert html =~ title
         assert html =~ ~r/<p[^>]*>[^<]+<\/p>/
       end
     end
