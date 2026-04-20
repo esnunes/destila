@@ -787,7 +787,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                 <button
                   phx-click="delete_session"
                   id="delete-btn"
-                  class="btn btn-soft btn-sm"
+                  class="btn btn-soft btn-error btn-sm"
                   data-confirm="Permanently delete this session? This cannot be undone in the app."
                 >
                   <.icon name="hero-trash-micro" class="size-4" /> Delete
