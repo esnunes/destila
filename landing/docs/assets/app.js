@@ -1057,7 +1057,6 @@ if (!document.getElementById('destila-anim')) {
 function Shot({
   src,
   caption,
-  shadow = true,
   style = {}
 }) {
   return /*#__PURE__*/React.createElement("figure", {
@@ -1074,8 +1073,7 @@ function Shot({
       display: 'block',
       width: '100%',
       height: 'auto',
-      borderRadius: 10,
-      boxShadow: shadow ? '0 30px 60px -20px rgba(0,0,0,.35), 0 12px 24px -12px rgba(0,0,0,.25)' : 'none'
+      borderRadius: 10
     }
   }), caption && /*#__PURE__*/React.createElement("figcaption", {
     style: {
