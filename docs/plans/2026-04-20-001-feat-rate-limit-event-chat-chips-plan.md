@@ -1,7 +1,7 @@
 ---
 title: "feat: Surface RateLimitEvent as transient chat chips"
 type: feat
-status: active
+status: completed
 date: 2026-04-20
 ---
 

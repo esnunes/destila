@@ -36,6 +36,27 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
     project
   end
 
+  defp rate_limit_chunk(opts) do
+    info = %{
+      status: Keyword.get(opts, :status, :allowed_warning),
+      resets_at: Keyword.get(opts, :resets_at),
+      utilization: Keyword.get(opts, :utilization),
+      rate_limit_type: Keyword.get(opts, :rate_limit_type),
+      overage_status: Keyword.get(opts, :overage_status),
+      overage_resets_at: Keyword.get(opts, :overage_resets_at),
+      overage_disabled_reason: Keyword.get(opts, :overage_disabled_reason),
+      is_using_overage: Keyword.get(opts, :is_using_overage),
+      surpassed_threshold: Keyword.get(opts, :surpassed_threshold)
+    }
+
+    %ClaudeCode.Message.RateLimitEvent{
+      type: :rate_limit_event,
+      rate_limit_info: info,
+      session_id: "test",
+      uuid: Keyword.get(opts, :uuid, "evt-#{System.unique_integer([:positive])}")
+    }
+  end
+
   # Creates a brainstorm_idea session in the given phase with appropriate state.
   defp create_session_in_phase(phase, opts \\ []) do
     pe_status = Keyword.get(opts, :pe_status, :awaiting_input)
@@ -740,6 +761,296 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       html = render(view)
       assert html =~ "First chunk"
       assert html =~ "Second chunk"
+    end
+
+    # --- Rate-limit chips ---
+
+    @tag feature: @feature,
+         scenario: "Allowed-warning rate limit event renders as a warning chip"
+    test "allowed_warning RateLimitEvent renders a warning chip with type/utilization/title",
+         %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      resets_at = DateTime.utc_now() |> DateTime.add(2 * 3600 + 15 * 60, :second)
+      resets_at_ms = DateTime.to_unix(resets_at, :millisecond)
+
+      chunk =
+        rate_limit_chunk(
+          status: :allowed_warning,
+          rate_limit_type: "five_hour",
+          utilization: 0.85,
+          resets_at: resets_at_ms,
+          is_using_overage: false
+        )
+
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      assert has_element?(
+               view,
+               "[data-test=rate-limit-chip][data-status=allowed_warning]"
+             )
+
+      html = render(view)
+      assert html =~ "five_hour"
+      assert html =~ "85%"
+      assert html =~ ~s|title="Resets at|
+      assert html =~ "bg-warning/10"
+    end
+
+    @tag feature: @feature,
+         scenario: "Rejected rate limit event renders as an error chip"
+    test "rejected RateLimitEvent renders an error-variant chip", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = rate_limit_chunk(status: :rejected, rate_limit_type: "five_hour")
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      assert has_element?(view, "[data-test=rate-limit-chip][data-status=rejected]")
+      assert render(view) =~ "bg-error/10"
+    end
+
+    @tag feature: @feature,
+         scenario: "Allowed rate limit event renders as an informational chip"
+    test "allowed RateLimitEvent renders an informational chip", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = rate_limit_chunk(status: :allowed, rate_limit_type: "seven_day", utilization: 0.10)
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      assert has_element?(view, "[data-test=rate-limit-chip][data-status=allowed]")
+      html = render(view)
+      assert html =~ "bg-info/10"
+      assert html =~ "seven_day"
+      assert html =~ "10%"
+    end
+
+    @tag feature: @feature,
+         scenario: "Rate-limit chip tolerates missing optional fields and unknown statuses"
+    test "RateLimitEvent with unknown status renders with neutral fallback", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = rate_limit_chunk(status: "throttled")
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      assert has_element?(view, "[data-test=rate-limit-chip][data-status=throttled]")
+      html = render(view)
+      refute html =~ "bg-warning/10"
+      refute html =~ "bg-error/10"
+      refute html =~ "bg-info/10"
+    end
+
+    @tag feature: @feature,
+         scenario: "Rate-limit chip tolerates missing optional fields and unknown statuses"
+    test "RateLimitEvent with all optional fields nil renders without spurious markers",
+         %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk =
+        rate_limit_chunk(
+          status: :allowed,
+          rate_limit_type: nil,
+          utilization: nil,
+          resets_at: nil,
+          is_using_overage: nil
+        )
+
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      assert has_element?(view, "[data-test=rate-limit-chip][data-status=allowed]")
+
+      chip_html =
+        view
+        |> element("[data-test=rate-limit-chip]")
+        |> render()
+
+      # No utilization percentage rendered (excludes the "max-w-[80%]" class token).
+      refute chip_html =~ ~r/>\s*·\s*\d+%/
+      refute chip_html =~ "resets in"
+      refute chip_html =~ "data-test=\"overage-indicator\""
+    end
+
+    @tag feature: @feature,
+         scenario: "Rate-limit chip surfaces overage usage indicator"
+    test "overage indicator appears when is_using_overage is true", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = rate_limit_chunk(status: :allowed_warning, is_using_overage: true)
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      assert has_element?(
+               view,
+               "[data-test=rate-limit-chip] [data-test=overage-indicator]"
+             )
+    end
+
+    @tag feature: @feature,
+         scenario: "Rate-limit chip surfaces overage usage indicator"
+    test "overage indicator absent when is_using_overage is false", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      chunk = rate_limit_chunk(status: :allowed_warning, is_using_overage: false)
+      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+
+      assert has_element?(view, "[data-test=rate-limit-chip]")
+      refute has_element?(view, "[data-test=overage-indicator]")
+    end
+
+    @tag feature: @feature,
+         scenario:
+           "Multiple rate-limit events render as separate chips and clear on turn completion"
+    test "multiple RateLimitEvents in a turn render as separate chips in order",
+         %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      for status <- [:allowed, :allowed_warning, :rejected] do
+        chunk = rate_limit_chunk(status: status)
+        Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:ai_stream_chunk, chunk})
+      end
+
+      assert has_element?(view, "[data-test=rate-limit-chip][data-status=allowed]")
+      assert has_element?(view, "[data-test=rate-limit-chip][data-status=allowed_warning]")
+      assert has_element?(view, "[data-test=rate-limit-chip][data-status=rejected]")
+
+      html = render(view)
+      idx_allowed = :binary.match(html, "data-status=\"allowed\"") |> elem(0)
+      idx_warning = :binary.match(html, "data-status=\"allowed_warning\"") |> elem(0)
+      idx_rejected = :binary.match(html, "data-status=\"rejected\"") |> elem(0)
+
+      assert idx_allowed < idx_warning
+      assert idx_warning < idx_rejected
+    end
+
+    @tag feature: @feature,
+         scenario:
+           "Multiple rate-limit events render as separate chips and clear on turn completion"
+    test "rate-limit chip is cleared when processing completes", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        topic,
+        {:ai_stream_chunk, rate_limit_chunk(status: :rejected)}
+      )
+
+      assert has_element?(view, "[data-test=rate-limit-chip]")
+
+      pe = Executions.get_phase_execution_by_number(ws.id, 1)
+      pe |> Ecto.Changeset.change(%{status: :awaiting_input}) |> Destila.Repo.update!()
+      send(view.pid, {:workflow_session_updated, ws})
+
+      refute has_element?(view, "[data-test=rate-limit-chip]")
+    end
+
+    @tag feature: @feature,
+         scenario: "Allowed rate limit event renders as an informational chip"
+    test "fresh mount shows no rate-limit chips (no persistence)", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      refute has_element?(view, "[data-test=rate-limit-chip]")
+    end
+
+    @tag feature: @feature,
+         scenario: "Intermediate text bubbles appear during AI processing"
+    test "text bubbles and rate-limit chips interleave in arrival order", %{conn: conn} do
+      ws = create_session_in_phase(1, pe_status: :processing)
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      topic = Destila.PubSubHelper.ai_stream_topic(ws.id)
+
+      text_chunk = fn t ->
+        %ClaudeCode.Message.AssistantMessage{
+          type: :assistant,
+          session_id: "test",
+          message: %{
+            content: [%ClaudeCode.Content.TextBlock{type: "text", text: t}]
+          }
+        }
+      end
+
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        topic,
+        {:ai_stream_chunk, text_chunk.("First text")}
+      )
+
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        topic,
+        {:ai_stream_chunk, rate_limit_chunk(status: :allowed_warning)}
+      )
+
+      Phoenix.PubSub.broadcast(
+        Destila.PubSub,
+        topic,
+        {:ai_stream_chunk, text_chunk.("Second text")}
+      )
+
+      html = render(view)
+      idx_first = :binary.match(html, "First text") |> elem(0)
+      idx_chip = :binary.match(html, "data-test=\"rate-limit-chip\"") |> elem(0)
+      idx_second = :binary.match(html, "Second text") |> elem(0)
+
+      assert idx_first < idx_chip
+      assert idx_chip < idx_second
+    end
+  end
+
+  describe "ChatComponents.format_reset_time/2" do
+    @tag feature: @feature,
+         scenario: "Allowed-warning rate limit event renders as a warning chip"
+    test "returns relative and absolute strings for a future timestamp" do
+      now = ~U[2026-04-20 10:00:00Z]
+      future_ms = DateTime.to_unix(DateTime.add(now, 2 * 3600 + 15 * 60, :second), :millisecond)
+
+      {relative, absolute} = DestilaWeb.ChatComponents.format_reset_time(future_ms, now)
+
+      assert relative == "resets in 2h 15m"
+      assert is_binary(absolute)
+      assert absolute =~ "Resets at"
+    end
+
+    @tag feature: @feature,
+         scenario: "Rate-limit chip tolerates missing optional fields and unknown statuses"
+    test "returns nil tuple when resets_at is nil" do
+      assert {nil, nil} =
+               DestilaWeb.ChatComponents.format_reset_time(nil, DateTime.utc_now())
+    end
+
+    @tag feature: @feature,
+         scenario: "Allowed-warning rate limit event renders as a warning chip"
+    test "returns 'resets soon' for a near-zero diff" do
+      now = ~U[2026-04-20 10:00:00Z]
+      ms = DateTime.to_unix(now, :millisecond)
+      {relative, _abs} = DestilaWeb.ChatComponents.format_reset_time(ms, now)
+      assert relative == "resets soon"
     end
   end
 
