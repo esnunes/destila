@@ -46,3 +46,6 @@ npm-debug.log
 /assets/node_modules/
 
 .context/
+
+# macOS Finder metadata
+.DS_Store
