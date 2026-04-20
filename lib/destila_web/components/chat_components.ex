@@ -704,7 +704,6 @@ defmodule DestilaWeb.ChatComponents do
             id={"rate-limit-chip-#{@phase}-#{idx}"}
             event={bubble.event}
           />
-        <% _ -> %>
       <% end %>
     <% end %>
     <%= if @streaming_chunks && @streaming_chunks != [] do %>
@@ -737,7 +736,7 @@ defmodule DestilaWeb.ChatComponents do
   attr :now, :any, default: nil
 
   def chat_rate_limit_chip(assigns) do
-    info = assigns.event.rate_limit_info || %{}
+    info = assigns.event.rate_limit_info
     status = info[:status]
     variant = rate_limit_variant(status)
     now = assigns.now || DateTime.utc_now()
@@ -818,7 +817,6 @@ defmodule DestilaWeb.ChatComponents do
 
   defp status_label(status) when is_atom(status), do: Atom.to_string(status)
   defp status_label(status) when is_binary(status), do: status
-  defp status_label(_), do: "unknown"
 
   defp format_utilization(util) when is_number(util) do
     "#{round(util * 100)}%"
@@ -846,8 +844,6 @@ defmodule DestilaWeb.ChatComponents do
         {nil, nil}
     end
   end
-
-  def format_reset_time(_, _), do: {nil, nil}
 
   # Upstream docs claim milliseconds, but the Claude CLI has been observed
   # emitting seconds for `resets_at`. Disambiguate by magnitude: any realistic
