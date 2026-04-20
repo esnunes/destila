@@ -102,6 +102,7 @@ defmodule Destila.MixProject do
         "esbuild destila --minify",
         "phx.digest"
       ],
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
     ]
   end
