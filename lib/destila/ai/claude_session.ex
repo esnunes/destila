@@ -159,58 +159,69 @@ defmodule Destila.AI.ClaudeSession do
     claude_opts = Keyword.put_new(claude_opts, :setting_sources, ["user", "project"])
     claude_opts = Keyword.put_new(claude_opts, :max_turns, 200)
 
-    # Register marketplaces and install/enable plugins before starting the session.
-    # Treat "already" errors as success since these operations aren't fully idempotent.
-    with :ok <-
-           plugin_cmd(ClaudeCode.Plugin.Marketplace, :add, [
-             "EveryInc/compound-engineering-plugin"
-           ]),
-         :ok <- plugin_cmd(ClaudeCode.Plugin.Marketplace, :add, ["pbakaus/impeccable"]),
-         :ok <-
-           plugin_cmd(ClaudeCode.Plugin, :install, [
-             "compound-engineering@compound-engineering-plugin"
-           ]),
-         :ok <-
-           plugin_cmd(ClaudeCode.Plugin, :enable, [
-             "compound-engineering@compound-engineering-plugin"
-           ]),
-         :ok <- plugin_cmd(ClaudeCode.Plugin, :install, ["impeccable@impeccable"]),
-         :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["impeccable@impeccable"]),
-         {:ok, installed} <- ClaudeCode.Plugin.list() do
-      # Pass enabled plugin install_paths so they are loaded into the session.
-      plugin_paths =
-        installed
-        |> Enum.filter(&(&1.enabled && &1.install_path))
-        |> Enum.map(& &1.install_path)
+    case setup_plugins() do
+      {:ok, plugin_paths} ->
+        claude_opts = Keyword.put(claude_opts, :plugins, plugin_paths)
 
-      claude_opts = Keyword.put(claude_opts, :plugins, plugin_paths)
+        case ClaudeCode.start_link(claude_opts) do
+          {:ok, claude_session} ->
+            timer_ref = schedule_timeout(timeout_ms)
 
-      case ClaudeCode.start_link(claude_opts) do
-        {:ok, claude_session} ->
-          timer_ref = schedule_timeout(timeout_ms)
+            if workflow_session_id do
+              Phoenix.PubSub.broadcast(
+                Destila.PubSub,
+                Destila.PubSubHelper.claude_session_topic(),
+                {:claude_session_started, workflow_session_id, ai_session_id}
+              )
+            end
 
-          if workflow_session_id do
-            Phoenix.PubSub.broadcast(
-              Destila.PubSub,
-              Destila.PubSubHelper.claude_session_topic(),
-              {:claude_session_started, workflow_session_id, ai_session_id}
-            )
-          end
+            {:ok,
+             %{
+               claude_session: claude_session,
+               timeout_ms: timeout_ms,
+               timer_ref: timer_ref,
+               workflow_session_id: workflow_session_id,
+               ai_session_id: ai_session_id
+             }}
 
-          {:ok,
-           %{
-             claude_session: claude_session,
-             timeout_ms: timeout_ms,
-             timer_ref: timer_ref,
-             workflow_session_id: workflow_session_id,
-             ai_session_id: ai_session_id
-           }}
+          {:error, reason} ->
+            {:stop, reason}
+        end
 
-        {:error, reason} ->
-          {:stop, reason}
+      {:error, reason} ->
+        {:stop, {:plugin_setup_failed, reason}}
+    end
+  end
+
+  # Skipped when `:setup_claude_plugins` is false — each CLI call takes
+  # hundreds of ms, which dominates test suite time.
+  defp setup_plugins do
+    if Application.get_env(:destila, :setup_claude_plugins, true) do
+      with :ok <-
+             plugin_cmd(ClaudeCode.Plugin.Marketplace, :add, [
+               "EveryInc/compound-engineering-plugin"
+             ]),
+           :ok <- plugin_cmd(ClaudeCode.Plugin.Marketplace, :add, ["pbakaus/impeccable"]),
+           :ok <-
+             plugin_cmd(ClaudeCode.Plugin, :install, [
+               "compound-engineering@compound-engineering-plugin"
+             ]),
+           :ok <-
+             plugin_cmd(ClaudeCode.Plugin, :enable, [
+               "compound-engineering@compound-engineering-plugin"
+             ]),
+           :ok <- plugin_cmd(ClaudeCode.Plugin, :install, ["impeccable@impeccable"]),
+           :ok <- plugin_cmd(ClaudeCode.Plugin, :enable, ["impeccable@impeccable"]),
+           {:ok, installed} <- ClaudeCode.Plugin.list() do
+        plugin_paths =
+          installed
+          |> Enum.filter(&(&1.enabled && &1.install_path))
+          |> Enum.map(& &1.install_path)
+
+        {:ok, plugin_paths}
       end
     else
-      {:error, reason} -> {:stop, {:plugin_setup_failed, reason}}
+      {:ok, []}
     end
   end
 
