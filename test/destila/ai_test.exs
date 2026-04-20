@@ -106,6 +106,37 @@ defmodule Destila.AITest do
       assert totals[1].output_tokens == 0
     end
 
+    test "total_cost_usd is per-turn delta, not cumulative" do
+      ws = create_ws()
+      ai = create_ai(ws)
+
+      # ClaudeCode reports cumulative session cost on each result message.
+      # Three turns in three phases: 2.00 → 4.42 → 12.20 cumulative
+      # means actual per-phase spend is 2.00, 2.42, 7.78 (session total 12.20).
+      insert_msg(ai, ws, 1,
+        usage: {100, 50, 2.00},
+        inserted_at: ~U[2026-01-01 00:00:00.000000Z]
+      )
+
+      insert_msg(ai, ws, 2,
+        usage: {200, 100, 4.42},
+        inserted_at: ~U[2026-01-01 00:01:00.000000Z]
+      )
+
+      insert_msg(ai, ws, 3,
+        usage: {300, 150, 12.20},
+        inserted_at: ~U[2026-01-01 00:02:00.000000Z]
+      )
+
+      totals = AI.aggregate_usage_by_phase(ai.id)
+      assert_in_delta totals[1].total_cost_usd, 2.00, 0.001
+      assert_in_delta totals[2].total_cost_usd, 2.42, 0.001
+      assert_in_delta totals[3].total_cost_usd, 7.78, 0.001
+
+      session_total = AI.aggregate_usage_for_ai_session(ai.id)
+      assert_in_delta session_total.total_cost_usd, 12.20, 0.001
+    end
+
     test "sum across phases equals aggregate_usage_for_ai_session/1" do
       ws = create_ws()
       ai = create_ai(ws)

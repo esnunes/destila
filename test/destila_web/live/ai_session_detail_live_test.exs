@@ -827,7 +827,7 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
       FakeHistory.stub(ai.claude_session_id, {:ok, []})
 
       insert_system_message_with_usage(ai, ws, usage_raw(100, 50, cost: 0.002))
-      insert_system_message_with_usage(ai, ws, usage_raw(40, 10, cost: 0.001))
+      insert_system_message_with_usage(ai, ws, usage_raw(40, 10, cost: 0.003))
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
 
@@ -980,8 +980,8 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
       FakeHistory.stub(ai.claude_session_id, {:ok, []})
 
       insert_phase_message(ai, ws, 1, input: 100, output: 50, cost: 0.002)
-      insert_phase_message(ai, ws, 2, input: 40, output: 10, cost: 0.001)
-      insert_phase_message(ai, ws, 2, input: 10, output: 5, cost: 0.0005)
+      insert_phase_message(ai, ws, 2, input: 40, output: 10, cost: 0.003)
+      insert_phase_message(ai, ws, 2, input: 10, output: 5, cost: 0.0035)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
 
