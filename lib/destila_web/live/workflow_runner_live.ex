@@ -511,12 +511,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     bubbles = socket.assigns.intermediate_bubbles
 
     bubbles =
-      case extract_intermediate_text(chunk) do
-        {:ok, text} ->
-          bubbles ++ [%{text: text}]
-
-        :skip ->
-          bubbles
+      case extract_intermediate_entry(chunk) do
+        {:ok, entry} -> bubbles ++ [entry]
+        :skip -> bubbles
       end
 
     {:noreply,
@@ -565,21 +562,25 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   def handle_info(_msg, socket), do: {:noreply, socket}
 
-  defp extract_intermediate_text(%ClaudeCode.Message.AssistantMessage{message: message}) do
+  defp extract_intermediate_entry(%ClaudeCode.Message.AssistantMessage{message: message}) do
     text =
       message.content
       |> Enum.filter(&match?(%ClaudeCode.Content.TextBlock{}, &1))
       |> Enum.map_join(& &1.text)
 
-    if String.trim(text) != "", do: {:ok, text}, else: :skip
+    if String.trim(text) != "", do: {:ok, %{type: :text, text: text}}, else: :skip
   end
 
-  defp extract_intermediate_text(%ClaudeCode.Message.ResultMessage{result: result})
+  defp extract_intermediate_entry(%ClaudeCode.Message.ResultMessage{result: result})
        when is_binary(result) do
-    if String.trim(result) != "", do: {:ok, result}, else: :skip
+    if String.trim(result) != "", do: {:ok, %{type: :text, text: result}}, else: :skip
   end
 
-  defp extract_intermediate_text(_chunk), do: :skip
+  defp extract_intermediate_entry(%ClaudeCode.Message.RateLimitEvent{} = event) do
+    {:ok, %{type: :rate_limit, event: event}}
+  end
+
+  defp extract_intermediate_entry(_chunk), do: :skip
 
   # --- Private: AI state management ---
 

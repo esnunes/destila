@@ -197,6 +197,42 @@ Feature: Brainstorm Idea Workflow
     Then all intermediate bubbles should be instantly removed
     And the final merged message should appear as a standard system bubble
 
+  Scenario: Allowed rate limit event renders as an informational chip
+    Given the session is processing an AI response
+    When the AI emits a RateLimitEvent with status allowed
+    Then a transient rate-limit chip should appear in the chat
+    And the chip should use the informational variant
+    And the chip should display the rate limit type and utilization percentage
+
+  Scenario: Allowed-warning rate limit event renders as a warning chip
+    Given the session is processing an AI response
+    When the AI emits a RateLimitEvent with status allowed_warning
+    Then a transient rate-limit chip should appear with the warning variant
+    And the chip should display the relative reset time
+    And the chip should expose the absolute reset time as a tooltip
+
+  Scenario: Rejected rate limit event renders as an error chip
+    Given the session is processing an AI response
+    When the AI emits a RateLimitEvent with status rejected
+    Then a transient rate-limit chip should appear with the error variant
+
+  Scenario: Rate-limit chip tolerates missing optional fields and unknown statuses
+    Given the session is processing an AI response
+    When the AI emits a RateLimitEvent with missing optional fields or an unknown status
+    Then a rate-limit chip should still render without crashing the LiveView
+    And the chip should omit any unknown or absent fields
+
+  Scenario: Rate-limit chip surfaces overage usage indicator
+    Given the session is processing an AI response
+    When the AI emits a RateLimitEvent whose is_using_overage is true
+    Then the rate-limit chip should display an overage indicator
+
+  Scenario: Multiple rate-limit events render as separate chips and clear on turn completion
+    Given the session is processing an AI response
+    When the AI emits multiple RateLimitEvent chunks during the same turn
+    Then each event should render as its own chip in arrival order
+    And every rate-limit chip should disappear when processing completes
+
   # --- Aliveness Indicator ---
 
   Scenario: Workflow runner shows green indicator when Claude Code GenServer is running

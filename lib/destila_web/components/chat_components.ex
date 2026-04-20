@@ -84,15 +84,11 @@ defmodule DestilaWeb.ChatComponents do
                   </div>
                 <% end %>
                 <%= if phase == @phase_number && @phase_status == :processing do %>
-                  <.chat_intermediate_bubble
-                    :for={bubble <- @intermediate_bubbles}
-                    text={bubble.text}
+                  <.chat_processing_stream
+                    phase={phase}
+                    intermediate_bubbles={@intermediate_bubbles}
+                    streaming_chunks={@streaming_chunks}
                   />
-                  <%= if @streaming_chunks && @streaming_chunks != [] do %>
-                    <.chat_stream_debug chunks={@streaming_chunks} />
-                  <% else %>
-                    <.chat_typing_indicator />
-                  <% end %>
                 <% end %>
               </details>
             <% else %>
@@ -111,15 +107,11 @@ defmodule DestilaWeb.ChatComponents do
                   </div>
                 <% end %>
                 <%= if phase == @phase_number && @phase_status == :processing do %>
-                  <.chat_intermediate_bubble
-                    :for={bubble <- @intermediate_bubbles}
-                    text={bubble.text}
+                  <.chat_processing_stream
+                    phase={phase}
+                    intermediate_bubbles={@intermediate_bubbles}
+                    streaming_chunks={@streaming_chunks}
                   />
-                  <%= if @streaming_chunks && @streaming_chunks != [] do %>
-                    <.chat_stream_debug chunks={@streaming_chunks} />
-                  <% else %>
-                    <.chat_typing_indicator />
-                  <% end %>
                 <% end %>
               </div>
             <% end %>
@@ -697,6 +689,31 @@ defmodule DestilaWeb.ChatComponents do
 
   # --- Streaming / typing ---
 
+  attr :phase, :integer, required: true
+  attr :intermediate_bubbles, :list, required: true
+  attr :streaming_chunks, :any, default: nil
+
+  def chat_processing_stream(assigns) do
+    ~H"""
+    <%= for {bubble, idx} <- Enum.with_index(@intermediate_bubbles) do %>
+      <%= case bubble.type do %>
+        <% :text -> %>
+          <.chat_intermediate_bubble text={bubble.text} />
+        <% :rate_limit -> %>
+          <.chat_rate_limit_chip
+            id={"rate-limit-chip-#{@phase}-#{idx}"}
+            event={bubble.event}
+          />
+      <% end %>
+    <% end %>
+    <%= if @streaming_chunks && @streaming_chunks != [] do %>
+      <.chat_stream_debug chunks={@streaming_chunks} />
+    <% else %>
+      <.chat_typing_indicator />
+    <% end %>
+    """
+  end
+
   attr :text, :string, required: true
 
   def chat_intermediate_bubble(assigns) do
@@ -712,6 +729,144 @@ defmodule DestilaWeb.ChatComponents do
       </div>
     </div>
     """
+  end
+
+  attr :id, :string, required: true
+  attr :event, :map, required: true
+  attr :now, :any, default: nil
+
+  def chat_rate_limit_chip(assigns) do
+    info = assigns.event.rate_limit_info
+    status = info[:status]
+    variant = rate_limit_variant(status)
+    now = assigns.now || DateTime.utc_now()
+    {relative, absolute} = format_reset_time(info[:resets_at], now)
+    utilization_pct = format_utilization(info[:utilization])
+
+    assigns =
+      assigns
+      |> assign(:status, status)
+      |> assign(:status_label, status_label(status))
+      |> assign(:variant, variant)
+      |> assign(:rate_limit_type, info[:rate_limit_type])
+      |> assign(:utilization_pct, utilization_pct)
+      |> assign(:relative_reset, relative)
+      |> assign(:absolute_reset, absolute)
+      |> assign(:is_using_overage, info[:is_using_overage] == true)
+
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div
+        id={@id}
+        data-test="rate-limit-chip"
+        data-status={@status_label}
+        class={[
+          "rounded-2xl px-4 py-2 text-xs max-w-[80%] border inline-flex items-center gap-2 flex-wrap",
+          rate_limit_variant_classes(@variant)
+        ]}
+      >
+        <.icon name={rate_limit_variant_icon(@variant)} class="size-4 shrink-0" />
+        <span class="font-semibold uppercase tracking-wide">Rate limit</span>
+        <span :if={@rate_limit_type} class="opacity-80">· {@rate_limit_type}</span>
+        <span :if={@utilization_pct} class="opacity-80">· {@utilization_pct}</span>
+        <span
+          :if={@relative_reset}
+          class="opacity-80"
+          title={@absolute_reset}
+        >
+          · {@relative_reset}
+        </span>
+        <span
+          :if={@is_using_overage}
+          data-test="overage-indicator"
+          class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-warning/20 text-warning border border-warning/40"
+          title="Using overage"
+        >
+          overage
+        </span>
+      </div>
+    </div>
+    """
+  end
+
+  @doc false
+  def rate_limit_variant(:allowed), do: :info
+  def rate_limit_variant(:allowed_warning), do: :warning
+  def rate_limit_variant(:rejected), do: :error
+  def rate_limit_variant(_), do: :neutral
+
+  defp rate_limit_variant_classes(:info),
+    do: "border-info/40 bg-info/10 text-info"
+
+  defp rate_limit_variant_classes(:warning),
+    do: "border-warning/40 bg-warning/10 text-warning"
+
+  defp rate_limit_variant_classes(:error),
+    do: "border-error/40 bg-error/10 text-error"
+
+  defp rate_limit_variant_classes(:neutral),
+    do: "border-base-content/20 bg-base-200/50 text-base-content/70"
+
+  defp rate_limit_variant_icon(:info), do: "hero-information-circle-micro"
+  defp rate_limit_variant_icon(:warning), do: "hero-exclamation-triangle-micro"
+  defp rate_limit_variant_icon(:error), do: "hero-no-symbol-micro"
+  defp rate_limit_variant_icon(:neutral), do: "hero-information-circle-micro"
+
+  defp status_label(status) when is_atom(status), do: Atom.to_string(status)
+  defp status_label(status) when is_binary(status), do: status
+
+  defp format_utilization(util) when is_number(util) do
+    "#{round(util * 100)}%"
+  end
+
+  defp format_utilization(_), do: nil
+
+  @doc false
+  def format_reset_time(nil, _now), do: {nil, nil}
+
+  def format_reset_time(resets_at, %DateTime{} = now) when is_integer(resets_at) do
+    case DateTime.from_unix(resets_at, detect_unix_unit(resets_at)) do
+      {:ok, reset_dt} ->
+        diff_seconds = DateTime.diff(reset_dt, now, :second)
+
+        # Hide the label for resets that already happened more than a minute ago;
+        # showing "resets soon" for a long-past timestamp is misleading.
+        if diff_seconds < -60 do
+          {nil, nil}
+        else
+          {format_relative_reset(diff_seconds), format_absolute_reset(reset_dt)}
+        end
+
+      _ ->
+        {nil, nil}
+    end
+  end
+
+  # Upstream docs claim milliseconds, but the Claude CLI has been observed
+  # emitting seconds for `resets_at`. Disambiguate by magnitude: any realistic
+  # modern ms timestamp is >= 10^12 (year 2001+); smaller values are seconds.
+  @ms_threshold 1_000_000_000_000
+  defp detect_unix_unit(value) when value >= @ms_threshold, do: :millisecond
+  defp detect_unix_unit(_), do: :second
+
+  defp format_relative_reset(diff_seconds) when diff_seconds <= 60, do: "resets soon"
+
+  defp format_relative_reset(diff_seconds) do
+    hours = div(diff_seconds, 3600)
+    minutes = div(rem(diff_seconds, 3600), 60)
+
+    cond do
+      hours > 0 and minutes > 0 -> "resets in #{hours}h #{minutes}m"
+      hours > 0 -> "resets in #{hours}h"
+      true -> "resets in #{minutes}m"
+    end
+  end
+
+  defp format_absolute_reset(%DateTime{} = dt) do
+    "Resets at " <> Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
   end
 
   attr :chunks, :list, required: true
