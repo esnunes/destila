@@ -1,7 +1,7 @@
 ---
 title: "fix: Scroll chat to bottom only when user was already at bottom"
 type: fix
-status: active
+status: completed
 date: 2026-04-20
 ---
 
@@ -66,7 +66,7 @@ Change the `ScrollBottom` hook so it only auto-scrolls when the user was already
 
 ## Implementation Units
 
-- [ ] **Unit 1: Make `ScrollBottom` hook sticky-aware**
+- [x] **Unit 1: Make `ScrollBottom` hook sticky-aware**
 
 **Goal:** Replace the unconditional `updated()` scroll with a two-phase snapshot-and-reapply that preserves user scroll when they've scrolled up.
 
