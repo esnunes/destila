@@ -42,7 +42,8 @@ defmodule Mix.Tasks.Landing.Build do
 
   @impl Mix.Task
   def run(_args) do
-    Mix.Task.run("app.config")
+    Mix.Task.run("loadpaths")
+    Application.ensure_all_started(:esbuild)
 
     File.mkdir_p!(@build_root)
     File.mkdir_p!("landing/docs/assets")
