@@ -1044,6 +1044,39 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
     end
 
     @tag feature: "ai_session_detail",
+         scenario: "Phase separator divider precedes the first message of each phase"
+    test "first populated phase claims index 0 when earlier phases are empty",
+         %{conn: conn} do
+      ws = create_session_with_phase(3)
+      ai = create_ai_session(ws)
+
+      insert_phase_message(ai, ws, 3,
+        input: 10,
+        output: 5,
+        cost: 0.0,
+        inserted_at: ~U[2026-01-01 00:01:00.000000Z]
+      )
+
+      insert_phase_message(ai, ws, 4, input: 20, output: 10, cost: 0.0)
+
+      entries = [
+        raw_entry("user", "2026-01-01T00:00:30Z"),
+        raw_entry("assistant", "2026-01-01T00:01:30Z")
+      ]
+
+      FakeHistory.stub_raw(ai.claude_session_id, {:ok, entries})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      refute has_element?(view, "#phase-separator-1")
+      refute has_element?(view, "#phase-separator-2")
+      assert has_element?(view, "#phase-separator-3")
+      assert has_element?(view, "#phase-separator-4")
+      assert has_element?(view, ~s|a#phase-step-3[href="#phase-separator-3"]|)
+      assert has_element?(view, ~s|a#phase-step-4[href="#phase-separator-4"]|)
+    end
+
+    @tag feature: "ai_session_detail",
          scenario: "Clicking a non-empty phase step scrolls to its separator"
     test "phase step anchor points at matching separator and container scrolls smoothly",
          %{conn: conn} do

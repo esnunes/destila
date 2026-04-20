@@ -342,27 +342,28 @@ defmodule DestilaWeb.AiSessionDetailLive do
 
   defp compute_separator_targets([], _entry_times, _boundaries, _total), do: %{}
 
-  defp compute_separator_targets(items, entry_times, boundaries, total) do
-    initial = if Map.has_key?(boundaries, 1), do: %{0 => 1}, else: %{}
+  defp compute_separator_targets(items, entry_times, boundaries, _total) do
+    populated = boundaries |> Map.keys() |> Enum.sort()
 
-    Enum.reduce(2..max(total, 1), initial, fn n, acc ->
-      case Map.get(boundaries, n - 1) do
-        %DateTime{} = boundary ->
-          case first_idx_after(entry_times, boundary) do
-            nil ->
-              acc
-
-            idx ->
-              if Map.has_key?(acc, idx), do: acc, else: Map.put(acc, idx, n)
+    targets =
+      Enum.reduce(populated, %{}, fn phase, acc ->
+        idx =
+          case prev_populated_phase(populated, phase) do
+            nil -> 0
+            prev -> first_idx_after(entry_times, Map.fetch!(boundaries, prev))
           end
 
-        _ ->
-          acc
-      end
-    end)
-    |> then(fn map ->
-      if items == [], do: %{}, else: map
-    end)
+        case idx do
+          nil -> acc
+          idx -> Map.put_new(acc, idx, phase)
+        end
+      end)
+
+    if items == [], do: %{}, else: targets
+  end
+
+  defp prev_populated_phase(populated, phase) do
+    populated |> Enum.filter(&(&1 < phase)) |> Enum.max(fn -> nil end)
   end
 
   defp first_idx_after(entry_times, boundary) do
