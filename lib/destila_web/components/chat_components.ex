@@ -84,23 +84,11 @@ defmodule DestilaWeb.ChatComponents do
                   </div>
                 <% end %>
                 <%= if phase == @phase_number && @phase_status == :processing do %>
-                  <%= for {bubble, idx} <- Enum.with_index(@intermediate_bubbles) do %>
-                    <%= case bubble.type do %>
-                      <% :text -> %>
-                        <.chat_intermediate_bubble text={bubble.text} />
-                      <% :rate_limit -> %>
-                        <.chat_rate_limit_chip
-                          id={"rate-limit-chip-#{phase}-#{idx}"}
-                          event={bubble.event}
-                        />
-                      <% _ -> %>
-                    <% end %>
-                  <% end %>
-                  <%= if @streaming_chunks && @streaming_chunks != [] do %>
-                    <.chat_stream_debug chunks={@streaming_chunks} />
-                  <% else %>
-                    <.chat_typing_indicator />
-                  <% end %>
+                  <.chat_processing_stream
+                    phase={phase}
+                    intermediate_bubbles={@intermediate_bubbles}
+                    streaming_chunks={@streaming_chunks}
+                  />
                 <% end %>
               </details>
             <% else %>
@@ -119,23 +107,11 @@ defmodule DestilaWeb.ChatComponents do
                   </div>
                 <% end %>
                 <%= if phase == @phase_number && @phase_status == :processing do %>
-                  <%= for {bubble, idx} <- Enum.with_index(@intermediate_bubbles) do %>
-                    <%= case bubble.type do %>
-                      <% :text -> %>
-                        <.chat_intermediate_bubble text={bubble.text} />
-                      <% :rate_limit -> %>
-                        <.chat_rate_limit_chip
-                          id={"rate-limit-chip-#{phase}-#{idx}"}
-                          event={bubble.event}
-                        />
-                      <% _ -> %>
-                    <% end %>
-                  <% end %>
-                  <%= if @streaming_chunks && @streaming_chunks != [] do %>
-                    <.chat_stream_debug chunks={@streaming_chunks} />
-                  <% else %>
-                    <.chat_typing_indicator />
-                  <% end %>
+                  <.chat_processing_stream
+                    phase={phase}
+                    intermediate_bubbles={@intermediate_bubbles}
+                    streaming_chunks={@streaming_chunks}
+                  />
                 <% end %>
               </div>
             <% end %>
@@ -713,6 +689,32 @@ defmodule DestilaWeb.ChatComponents do
 
   # --- Streaming / typing ---
 
+  attr :phase, :integer, required: true
+  attr :intermediate_bubbles, :list, required: true
+  attr :streaming_chunks, :any, default: nil
+
+  def chat_processing_stream(assigns) do
+    ~H"""
+    <%= for {bubble, idx} <- Enum.with_index(@intermediate_bubbles) do %>
+      <%= case bubble.type do %>
+        <% :text -> %>
+          <.chat_intermediate_bubble text={bubble.text} />
+        <% :rate_limit -> %>
+          <.chat_rate_limit_chip
+            id={"rate-limit-chip-#{@phase}-#{idx}"}
+            event={bubble.event}
+          />
+        <% _ -> %>
+      <% end %>
+    <% end %>
+    <%= if @streaming_chunks && @streaming_chunks != [] do %>
+      <.chat_stream_debug chunks={@streaming_chunks} />
+    <% else %>
+      <.chat_typing_indicator />
+    <% end %>
+    """
+  end
+
   attr :text, :string, required: true
 
   def chat_intermediate_bubble(assigns) do
@@ -781,7 +783,7 @@ defmodule DestilaWeb.ChatComponents do
         <span
           :if={@is_using_overage}
           data-test="overage-indicator"
-          class="badge badge-xs badge-warning ml-1"
+          class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-warning/20 text-warning border border-warning/40"
           title="Using overage"
         >
           overage
@@ -791,10 +793,11 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
-  defp rate_limit_variant(:allowed), do: :info
-  defp rate_limit_variant(:allowed_warning), do: :warning
-  defp rate_limit_variant(:rejected), do: :error
-  defp rate_limit_variant(_), do: :neutral
+  @doc false
+  def rate_limit_variant(:allowed), do: :info
+  def rate_limit_variant(:allowed_warning), do: :warning
+  def rate_limit_variant(:rejected), do: :error
+  def rate_limit_variant(_), do: :neutral
 
   defp rate_limit_variant_classes(:info),
     do: "border-info/40 bg-info/10 text-info"
@@ -851,6 +854,9 @@ defmodule DestilaWeb.ChatComponents do
       true -> "resets in #{minutes}m"
     end
   end
+
+  # NOTE: keep guard ordering — negative diffs match the first clause's "<= 60"
+  # check, which intentionally collapses already-expired resets into "resets soon".
 
   defp format_absolute_reset(%DateTime{} = dt) do
     "Resets at " <> Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")

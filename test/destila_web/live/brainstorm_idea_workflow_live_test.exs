@@ -1052,6 +1052,74 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
       {relative, _abs} = DestilaWeb.ChatComponents.format_reset_time(ms, now)
       assert relative == "resets soon"
     end
+
+    @tag feature: @feature,
+         scenario: "Allowed-warning rate limit event renders as a warning chip"
+    test "returns 'resets soon' for a past timestamp" do
+      now = ~U[2026-04-20 10:00:00Z]
+      past_ms = DateTime.to_unix(DateTime.add(now, -3600, :second), :millisecond)
+      {relative, absolute} = DestilaWeb.ChatComponents.format_reset_time(past_ms, now)
+
+      assert relative == "resets soon"
+      assert is_binary(absolute)
+      assert absolute =~ "Resets at"
+    end
+
+    @tag feature: @feature,
+         scenario: "Allowed-warning rate limit event renders as a warning chip"
+    test "formats hours-only diff without trailing minutes" do
+      now = ~U[2026-04-20 10:00:00Z]
+      ms = DateTime.to_unix(DateTime.add(now, 2 * 3600, :second), :millisecond)
+      {relative, _abs} = DestilaWeb.ChatComponents.format_reset_time(ms, now)
+      assert relative == "resets in 2h"
+    end
+
+    @tag feature: @feature,
+         scenario: "Allowed-warning rate limit event renders as a warning chip"
+    test "formats minutes-only diff without leading hours" do
+      now = ~U[2026-04-20 10:00:00Z]
+      ms = DateTime.to_unix(DateTime.add(now, 5 * 60, :second), :millisecond)
+      {relative, _abs} = DestilaWeb.ChatComponents.format_reset_time(ms, now)
+      assert relative == "resets in 5m"
+    end
+  end
+
+  describe "ChatComponents.rate_limit_variant/1" do
+    @tag feature: @feature,
+         scenario: "Allowed rate limit event renders as an informational chip"
+    test "returns :info for :allowed" do
+      assert DestilaWeb.ChatComponents.rate_limit_variant(:allowed) == :info
+    end
+
+    @tag feature: @feature,
+         scenario: "Allowed-warning rate limit event renders as a warning chip"
+    test "returns :warning for :allowed_warning" do
+      assert DestilaWeb.ChatComponents.rate_limit_variant(:allowed_warning) == :warning
+    end
+
+    @tag feature: @feature,
+         scenario: "Rejected rate limit event renders as an error chip"
+    test "returns :error for :rejected" do
+      assert DestilaWeb.ChatComponents.rate_limit_variant(:rejected) == :error
+    end
+
+    @tag feature: @feature,
+         scenario: "Rate-limit chip tolerates missing optional fields and unknown statuses"
+    test "returns :neutral for an unknown atom status" do
+      assert DestilaWeb.ChatComponents.rate_limit_variant(:throttled) == :neutral
+    end
+
+    @tag feature: @feature,
+         scenario: "Rate-limit chip tolerates missing optional fields and unknown statuses"
+    test "returns :neutral for a binary status" do
+      assert DestilaWeb.ChatComponents.rate_limit_variant("allowed") == :neutral
+    end
+
+    @tag feature: @feature,
+         scenario: "Rate-limit chip tolerates missing optional fields and unknown statuses"
+    test "returns :neutral for nil" do
+      assert DestilaWeb.ChatComponents.rate_limit_variant(nil) == :neutral
+    end
   end
 
   # --- Phase toggle preservation ---
