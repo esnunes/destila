@@ -10,8 +10,12 @@ defmodule DestilaWeb.DraftFormLive do
   use DestilaWeb, :live_view
 
   import DestilaWeb.ProjectComponents
+  import Ecto.Changeset
 
   alias Destila.Drafts
+  alias Destila.Drafts.Draft
+
+  @priority_options [{"High", "high"}, {"Medium", "medium"}, {"Low", "low"}]
 
   def mount(%{"id" => id}, _session, socket) do
     if connected?(socket), do: Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
@@ -34,67 +38,68 @@ defmodule DestilaWeb.DraftFormLive do
   end
 
   defp assign_form(socket, mode, draft) do
-    params =
-      case draft do
-        nil ->
-          %{"prompt" => "", "priority" => "", "project_id" => ""}
+    draft_struct = draft || %Draft{}
 
-        %Drafts.Draft{} = d ->
-          %{
-            "prompt" => d.prompt || "",
-            "priority" => if(d.priority, do: Atom.to_string(d.priority), else: ""),
-            "project_id" => d.project_id || ""
-          }
-      end
-
-    page_title = if mode == :edit, do: "Edit Draft", else: "New Draft"
+    params = %{
+      "prompt" => draft_struct.prompt || "",
+      "priority" => priority_to_string(draft_struct.priority)
+    }
 
     socket
     |> assign(:mode, mode)
     |> assign(:draft, draft)
-    |> assign(:page_title, page_title)
+    |> assign(:page_title, if(mode == :edit, do: "Edit Draft", else: "New Draft"))
     |> assign(:projects, Destila.Projects.list_projects())
-    |> assign(:project_id, params["project_id"])
+    |> assign(:project_id, draft_struct.project_id)
     |> assign(:project_step, :select)
-    |> assign(:prompt, params["prompt"])
-    |> assign(:priority, params["priority"])
-    |> assign(:errors, %{})
+    |> assign(:project_error, nil)
+    |> assign(:priority_options, @priority_options)
+    |> assign(:form, to_form(params, as: :draft))
   end
 
   # --- Form events ---
 
-  def handle_event("validate", params, socket) do
+  def handle_event("validate", %{"draft" => params}, socket) do
+    changeset =
+      form_changeset(
+        socket.assigns.draft || %Draft{},
+        Map.put(params, "project_id", socket.assigns.project_id)
+      )
+
     {:noreply,
-     socket
-     |> assign(:prompt, params["prompt"] || "")
-     |> assign(:priority, params["priority"] || "")}
+     assign(socket, :form, to_form(params, as: :draft, errors: field_errors(changeset)))}
   end
 
   def handle_event("save", params, socket) do
     action = params["action"] || "save"
-
-    socket =
-      socket
-      |> assign(:prompt, params["prompt"] || socket.assigns.prompt)
-      |> assign(:priority, params["priority"] || socket.assigns.priority)
+    form_params = Map.get(params, "draft", %{})
 
     attrs = %{
-      prompt: String.trim(socket.assigns.prompt || ""),
-      priority: socket.assigns.priority,
+      prompt: String.trim(form_params["prompt"] || ""),
+      priority: form_params["priority"],
       project_id: socket.assigns.project_id
     }
 
-    errors = validate(attrs)
+    changeset =
+      form_changeset(socket.assigns.draft || %Draft{}, %{
+        "prompt" => attrs.prompt,
+        "priority" => attrs.priority,
+        "project_id" => attrs.project_id
+      })
 
-    cond do
-      errors != %{} ->
-        {:noreply, assign(socket, :errors, errors)}
+    if changeset.valid? do
+      result =
+        case socket.assigns.mode do
+          :edit -> Drafts.update_draft(socket.assigns.draft, attrs)
+          :new -> Drafts.create_draft(attrs)
+        end
 
-      socket.assigns.mode == :edit ->
-        handle_save_result(Drafts.update_draft(socket.assigns.draft, attrs), action, socket)
-
-      true ->
-        handle_save_result(Drafts.create_draft(attrs), action, socket)
+      handle_save_result(result, action, socket)
+    else
+      {:noreply,
+       socket
+       |> assign(:form, to_form(form_params, as: :draft, errors: field_errors(changeset)))
+       |> assign(:project_error, project_error_from(changeset))}
     end
   end
 
@@ -119,11 +124,11 @@ defmodule DestilaWeb.DraftFormLive do
     {:noreply,
      socket
      |> assign(:project_id, id)
-     |> assign(:errors, Map.delete(socket.assigns.errors, :project))}
+     |> assign(:project_error, nil)}
   end
 
   def handle_event("show_create_project", _params, socket) do
-    {:noreply, assign(socket, project_step: :create, errors: %{})}
+    {:noreply, assign(socket, project_step: :create, project_error: nil)}
   end
 
   def handle_event("back_to_select", _params, socket) do
@@ -138,8 +143,22 @@ defmodule DestilaWeb.DraftFormLive do
     {:noreply, push_navigate(socket, to: ~p"/drafts")}
   end
 
-  defp handle_save_result({:error, changeset}, _action, socket) do
-    {:noreply, assign(socket, :errors, changeset_to_errors(changeset))}
+  defp handle_save_result({:error, %Ecto.Changeset{} = changeset}, _action, socket) do
+    form_params =
+      socket.assigns.form.params
+      |> Map.put("prompt", Ecto.Changeset.get_field(changeset, :prompt) || "")
+      |> Map.put(
+        "priority",
+        Ecto.Changeset.get_field(changeset, :priority) |> priority_to_string()
+      )
+
+    {:noreply,
+     socket
+     |> assign(
+       :form,
+       to_form(form_params, as: :draft, errors: field_errors(changeset))
+     )
+     |> assign(:project_error, project_error_from(changeset))}
   end
 
   # --- Callbacks ---
@@ -150,7 +169,7 @@ defmodule DestilaWeb.DraftFormLive do
      |> assign(:project_id, project.id)
      |> assign(:projects, Destila.Projects.list_projects())
      |> assign(:project_step, :select)
-     |> assign(:errors, %{})}
+     |> assign(:project_error, nil)}
   end
 
   def handle_info({event, _data}, socket)
@@ -162,35 +181,36 @@ defmodule DestilaWeb.DraftFormLive do
 
   # --- Helpers ---
 
-  defp validate(attrs) do
-    errors = %{}
+  defp form_changeset(draft, params) do
+    params = normalize_priority(params)
 
-    errors =
-      if attrs.prompt == "",
-        do: Map.put(errors, :prompt, "Please write a prompt"),
-        else: errors
-
-    errors =
-      if attrs.priority in ["low", "medium", "high"],
-        do: errors,
-        else: Map.put(errors, :priority, "Please pick a priority")
-
-    errors =
-      if attrs.project_id in [nil, ""],
-        do: Map.put(errors, :project, "Please select a project"),
-        else: errors
-
-    errors
+    draft
+    |> cast(params, [:prompt, :priority, :project_id])
+    |> validate_required([:prompt], message: "Please write a prompt")
+    |> validate_required([:priority], message: "Please pick a priority")
+    |> validate_required([:project_id], message: "Please select a project")
   end
 
-  defp changeset_to_errors(%Ecto.Changeset{} = changeset) do
-    Enum.reduce(changeset.errors, %{}, fn
-      {:prompt, {msg, _}}, acc -> Map.put(acc, :prompt, msg)
-      {:priority, {msg, _}}, acc -> Map.put(acc, :priority, msg)
-      {:project_id, {msg, _}}, acc -> Map.put(acc, :project, msg)
-      _, acc -> acc
-    end)
+  defp normalize_priority(%{"priority" => ""} = params), do: Map.put(params, "priority", nil)
+  defp normalize_priority(params), do: params
+
+  defp field_errors(%Ecto.Changeset{errors: errors}) do
+    Enum.filter(errors, fn {field, _} -> field in [:prompt, :priority] end)
   end
+
+  defp project_error_from(%Ecto.Changeset{errors: errors}) do
+    case Keyword.get(errors, :project_id) do
+      {msg, _opts} -> msg
+      nil -> nil
+    end
+  end
+
+  defp priority_to_string(nil), do: ""
+  defp priority_to_string(atom) when is_atom(atom), do: Atom.to_string(atom)
+  defp priority_to_string(str) when is_binary(str), do: str
+
+  defp error_msg(%Phoenix.HTML.FormField{errors: [{msg, _} | _]}), do: msg
+  defp error_msg(_), do: nil
 
   # --- Render ---
 
@@ -210,56 +230,55 @@ defmodule DestilaWeb.DraftFormLive do
             </.link>
           </div>
 
-          <form
+          <.form
+            for={@form}
             id="draft-form"
-            phx-submit="save"
             phx-change="validate"
+            phx-submit="save"
             class="space-y-5"
           >
-            <%!-- Prompt --%>
-            <div>
-              <label class="block text-sm font-medium mb-2" for="draft-prompt">
+            <fieldset class="fieldset">
+              <label class="fieldset-label text-xs font-medium" for={@form[:prompt].id}>
                 Prompt <span class="text-error">*</span>
               </label>
               <textarea
-                id="draft-prompt"
-                name="prompt"
+                id={@form[:prompt].id}
+                name={@form[:prompt].name}
                 rows="6"
-                phx-debounce="300"
                 placeholder="What's the idea?"
-                aria-invalid={@errors[:prompt] && "true"}
+                phx-debounce="300"
+                aria-invalid={error_msg(@form[:prompt]) && "true"}
                 class={[
                   "textarea textarea-bordered w-full",
-                  @errors[:prompt] && "textarea-error"
+                  error_msg(@form[:prompt]) && "textarea-error"
                 ]}
-              >{@prompt}</textarea>
-              <p :if={@errors[:prompt]} class="text-xs text-error mt-1">{@errors[:prompt]}</p>
-            </div>
+              >{Phoenix.HTML.Form.normalize_value("textarea", @form[:prompt].value)}</textarea>
+              <p :if={error_msg(@form[:prompt])} class="text-xs text-error mt-2">
+                {error_msg(@form[:prompt])}
+              </p>
+            </fieldset>
 
-            <%!-- Priority --%>
-            <div>
-              <label class="block text-sm font-medium mb-2" for="draft-priority">
+            <fieldset class="fieldset">
+              <label class="fieldset-label text-xs font-medium" for={@form[:priority].id}>
                 Priority <span class="text-error">*</span>
               </label>
               <select
-                id="draft-priority"
-                name="priority"
-                aria-invalid={@errors[:priority] && "true"}
+                id={@form[:priority].id}
+                name={@form[:priority].name}
+                aria-invalid={error_msg(@form[:priority]) && "true"}
                 class={[
                   "select select-bordered w-full",
-                  @errors[:priority] && "select-error"
+                  error_msg(@form[:priority]) && "select-error"
                 ]}
               >
-                <option value="" disabled selected={@priority in [nil, ""]}>
-                  Select priority…
-                </option>
-                <option value="high" selected={@priority == "high"}>High</option>
-                <option value="medium" selected={@priority == "medium"}>Medium</option>
-                <option value="low" selected={@priority == "low"}>Low</option>
+                <option value="">Select priority…</option>
+                {Phoenix.HTML.Form.options_for_select(@priority_options, @form[:priority].value)}
               </select>
-              <p :if={@errors[:priority]} class="text-xs text-error mt-1">{@errors[:priority]}</p>
-            </div>
-          </form>
+              <p :if={error_msg(@form[:priority])} class="text-xs text-error mt-2">
+                {error_msg(@form[:priority])}
+              </p>
+            </fieldset>
+          </.form>
 
           <%!-- Project section (its own <.live_component> form) --%>
           <div class="border-t border-base-300 pt-6">
@@ -267,7 +286,7 @@ defmodule DestilaWeb.DraftFormLive do
               projects={@projects}
               selected_id={@project_id}
               step={@project_step}
-              errors={@errors}
+              errors={%{project: @project_error}}
               target={nil}
             />
             <%= if @mode == :edit && @draft.project && @draft.project.archived_at do %>

@@ -48,7 +48,7 @@ defmodule DestilaWeb.DraftFormLiveTest do
       view |> element("#project-#{project.id}") |> render_click()
 
       view
-      |> form("#draft-form", %{prompt: "Hello draft", priority: "high"})
+      |> form("#draft-form", draft: %{prompt: "Hello draft", priority: "high"})
       |> render_submit()
 
       assert [draft] = Drafts.list_drafts_by_priority(:high)
@@ -64,7 +64,7 @@ defmodule DestilaWeb.DraftFormLiveTest do
 
       html =
         view
-        |> form("#draft-form", %{prompt: "Hi", priority: "low"})
+        |> form("#draft-form", draft: %{prompt: "Hi", priority: "low"})
         |> render_submit()
 
       assert html =~ "Please select a project"
@@ -81,7 +81,7 @@ defmodule DestilaWeb.DraftFormLiveTest do
 
       html =
         view
-        |> form("#draft-form", %{prompt: "Hi", priority: ""})
+        |> form("#draft-form", draft: %{prompt: "Hi", priority: ""})
         |> render_submit()
 
       assert html =~ "Please pick a priority"
@@ -115,7 +115,7 @@ defmodule DestilaWeb.DraftFormLiveTest do
       view |> element("#project-#{project2.id}") |> render_click()
 
       view
-      |> form("#draft-form", %{prompt: "Updated", priority: "high"})
+      |> form("#draft-form", draft: %{prompt: "Updated", priority: "high"})
       |> render_submit()
 
       updated = Drafts.get_draft(draft.id)
@@ -160,7 +160,7 @@ defmodule DestilaWeb.DraftFormLiveTest do
 
       assert {:error, {:live_redirect, %{to: ^expected_path}}} =
                view
-               |> form("#draft-form", %{prompt: "Edited before launch", priority: "high"})
+               |> form("#draft-form", draft: %{prompt: "Edited before launch", priority: "high"})
                |> render_submit(%{action: "start_workflow"})
 
       reloaded = Drafts.get_draft(draft.id)
@@ -175,7 +175,7 @@ defmodule DestilaWeb.DraftFormLiveTest do
 
       html =
         view
-        |> form("#draft-form", %{prompt: "", priority: "high"})
+        |> form("#draft-form", draft: %{prompt: "", priority: "high"})
         |> render_submit(%{action: "start_workflow"})
 
       assert html =~ "Please write a prompt"
