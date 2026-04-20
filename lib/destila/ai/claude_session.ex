@@ -193,10 +193,8 @@ defmodule Destila.AI.ClaudeSession do
     end
   end
 
-  # Registers marketplaces and installs/enables plugins, returning the list of
-  # enabled plugin install paths. Skipped when `:setup_claude_plugins` is false
-  # (e.g., in tests) — each CLI call takes hundreds of ms.
-  # Treats "already" errors as success since these operations aren't fully idempotent.
+  # Skipped when `:setup_claude_plugins` is false — each CLI call takes
+  # hundreds of ms, which dominates test suite time.
   defp setup_plugins do
     if Application.get_env(:destila, :setup_claude_plugins, true) do
       with :ok <-
