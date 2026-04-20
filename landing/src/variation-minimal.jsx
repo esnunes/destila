@@ -32,7 +32,7 @@ function VariationMinimal({ accent }) {
           </div>
           <div style={{marginLeft:'auto', display:'flex', gap:10, alignItems:'center'}}>
             <span style={{fontFamily:'JetBrains Mono,monospace', fontSize:11, color:'#888'}}>v0.12.3</span>
-            <a className="min-btn min-btn-primary" href="#"><GhIconM/> View on GitHub</a>
+            <a className="min-btn min-btn-primary" href="https://github.com/esnunes/destila"><GhIconM/> View on GitHub</a>
           </div>
         </nav>
 
@@ -48,8 +48,8 @@ function VariationMinimal({ accent }) {
             An agentic IDE that takes you from rough ideas to shipped code. Autonomous, multi-phase pipelines that plan, implement, review, and ship — pausing for human judgment only when it actually helps.
           </p>
           <div style={{display:'flex', gap:10, marginTop:30, flexWrap:'wrap', justifyContent:'center'}}>
-            <a className="min-btn min-btn-primary" href="#"><GhIconM/> View on GitHub</a>
-            <a className="min-btn min-btn-ghost" href="#">Read the docs →</a>
+            <a className="min-btn min-btn-primary" href="https://github.com/esnunes/destila"><GhIconM/> View on GitHub</a>
+            <a className="min-btn min-btn-ghost" href="https://github.com/esnunes/destila">Read the docs →</a>
           </div>
         </div>
 
@@ -304,8 +304,8 @@ function VariationMinimal({ accent }) {
             Ship without babysitting the robot.
           </h2>
           <div style={{display:'flex', gap:10, justifyContent:'center', marginTop:32, flexWrap:'wrap'}}>
-            <a className="min-btn min-btn-primary" href="#"><GhIconM/> View on GitHub</a>
-            <a className="min-btn min-btn-ghost" href="#">Read the docs →</a>
+            <a className="min-btn min-btn-primary" href="https://github.com/esnunes/destila"><GhIconM/> View on GitHub</a>
+            <a className="min-btn min-btn-ghost" href="https://github.com/esnunes/destila">Read the docs →</a>
           </div>
           <div style={{marginTop:48, paddingTop:28, borderTop:'1px solid rgba(255,255,255,.08)', display:'flex', justifyContent:'space-between', fontFamily:'JetBrains Mono,monospace', fontSize:11, color:'#666', flexWrap:'wrap', gap:12}}>
             <span>destila · elixir · phoenix liveview · claude code</span>

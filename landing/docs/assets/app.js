@@ -1232,7 +1232,7 @@ function VariationMinimal({
     }
   }, "v0.12.3"), /*#__PURE__*/React.createElement("a", {
     className: "min-btn min-btn-primary",
-    href: "#"
+    href: "https://github.com/esnunes/destila"
   }, /*#__PURE__*/React.createElement(GhIconM, null), " View on GitHub"))), /*#__PURE__*/React.createElement("div", {
     className: "min-wrap",
     style: {
@@ -1279,10 +1279,10 @@ function VariationMinimal({
     }
   }, /*#__PURE__*/React.createElement("a", {
     className: "min-btn min-btn-primary",
-    href: "#"
+    href: "https://github.com/esnunes/destila"
   }, /*#__PURE__*/React.createElement(GhIconM, null), " View on GitHub"), /*#__PURE__*/React.createElement("a", {
     className: "min-btn min-btn-ghost",
-    href: "#"
+    href: "https://github.com/esnunes/destila"
   }, "Read the docs \u2192"))), /*#__PURE__*/React.createElement("div", {
     className: "min-wrap",
     style: {
@@ -1703,10 +1703,10 @@ function VariationMinimal({
     }
   }, /*#__PURE__*/React.createElement("a", {
     className: "min-btn min-btn-primary",
-    href: "#"
+    href: "https://github.com/esnunes/destila"
   }, /*#__PURE__*/React.createElement(GhIconM, null), " View on GitHub"), /*#__PURE__*/React.createElement("a", {
     className: "min-btn min-btn-ghost",
-    href: "#"
+    href: "https://github.com/esnunes/destila"
   }, "Read the docs \u2192")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 48,
