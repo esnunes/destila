@@ -1,47 +1,81 @@
 # docs/ — production landing page
 
-This folder contains the deployable landing page. Copy it to
-`esnunes/destila` and enable GitHub Pages.
+This folder is the build output served to `destila.nunes.dev` by GitHub
+Pages. The HTML and static assets (images, `CNAME`) live here in source
+control; `assets/app.js` is **build output** and is not tracked — it's
+produced by `mix landing.build` (and automatically by CI on every
+push to `main`).
 
 ## Files
 
 - `index.html` — stripped production HTML (no Tweaks panel, production React)
-- `assets/app.js` — pre-compiled JSX bundle (no in-browser Babel)
+- `assets/app.js` — **generated**, gitignored; produced from `../src/*.jsx`
 - `assets/*.png` — product screenshots (served separately so the browser can cache them)
+- `CNAME` — custom domain for the Pages site
 
-## Deploy to GitHub Pages
+## How deploys work
 
-1. Copy this `docs/` folder to the root of the `esnunes/destila` repo.
-2. Commit and push to `main`.
-3. Repo **Settings → Pages**:
-   - Source: **Deploy from a branch**
-   - Branch: **main** · Folder: **/docs**
-4. Wait ~1 min. Site goes live at `https://esnunes.github.io/destila/`.
+GitHub Pages is configured with **Source: GitHub Actions**. The workflow
+at `.github/workflows/deploy-landing.yml` runs on every push to `main`
+that touches `landing/**` (or the build config), and does three things:
 
-## Custom domain (optional)
+1. `mix deps.get`
+2. `mix landing.build` — concatenates `landing/src/*.jsx` and transpiles
+   with esbuild into `landing/docs/assets/app.js`
+3. `actions/upload-pages-artifact` + `actions/deploy-pages` ship the
+   contents of `landing/docs/` to the Pages site
 
-1. Create `docs/CNAME` with your domain on a single line (e.g. `destila.dev`).
-2. At your DNS provider add:
-   - Apex → 4 A records to GitHub Pages IPs (185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153), OR
-   - Subdomain → CNAME → `esnunes.github.io`.
-3. Settings → Pages → Custom domain → enter the domain → Enforce HTTPS.
+No `gh-pages` branch. No manual copy step. Edits to either the JSX
+sources or the HTML go live on the next push to `main`.
 
-## Rebuilding after edits
+## Building locally
 
-The JSX lives in `../src/*.jsx` in the design project. To rebuild:
+From the repo root:
 
-1. Edit the source files (`src/mocks.jsx`, `src/variation-minimal.jsx`, etc.).
-2. Run the bundler (Babel standalone) — it concatenates + transpiles them into
-   `docs/assets/app.js`. The process removes the duplicate
-   `const { useState, useEffect } = React;` that each source file declares.
-3. Bump the `?v=` query param on the `<script src="assets/app.js?v=…">` tag in
-   `index.html` to bust caches.
+```sh
+mix landing.build
+```
+
+This invokes the `Mix.Tasks.Landing.Build` task (in
+`lib/mix/tasks/landing.build.ex`), which uses the project's `:esbuild`
+dependency under the `:landing` profile configured in
+`config/config.exs`. No separate Node/npm install is needed — the
+esbuild Elixir wrapper downloads and runs the native binary.
+
+To preview, open `landing/docs/index.html` directly or serve the
+directory with any static server:
+
+```sh
+python3 -m http.server --directory landing/docs 8000
+```
+
+## Editing
+
+- **HTML / meta / analytics / CSS**: edit `landing/docs/index.html`
+  directly. It's committed as-is.
+- **React UI**: edit `landing/src/*.jsx`. The task concatenates them in
+  this fixed order (defined in the task module):
+  1. `mocks.jsx` — shared component primitives
+  2. `shot.jsx` — screenshot helpers
+  3. `variation-minimal.jsx` — the production variation
+  4. `app.jsx` — React root and variation picker
+  Each file may declare its own `const { useState, ... } = React;`; the
+  task strips those per-file declarations and emits a single superset at
+  the top of the combined bundle.
+- After JSX edits, bump the `?v=` query param on the `<script src="assets/app.js?v=…">`
+  tag in `index.html` to bust browser caches.
 
 ## Why this shape
 
+- **Single source of truth.** `landing/src/` is the source; `landing/docs/`
+  is the deploy root. No drift between branches.
+- **Same toolchain as the rest of the app.** `:esbuild` is already a
+  project dependency — no extra Node/Vite/webpack footprint.
+- **Production React** (`react.production.min.js`) — ~45 KB vs ~1 MB dev
+  build. Loaded via CDN, not bundled.
 - **Separate image files** so browsers cache them across visits.
-- **Production React** (`react.production.min.js`) — ~45 KB vs ~1 MB dev build.
-- **No runtime Babel** — the whole page is ready as soon as `app.js` parses.
-- **`<img loading="lazy">`** on every non-hero screenshot — only the hero loads eagerly.
+- **`<img loading="lazy">`** on every non-hero screenshot — only the hero
+  loads eagerly.
 - **Preload hint** on the hero image so LCP is snappy.
-- **Open Graph + Twitter meta** so link previews on GitHub/Twitter/Slack render nicely.
+- **Open Graph + Twitter meta** so link previews on GitHub/Twitter/Slack
+  render nicely.

@@ -1,0 +1,67 @@
+name: Deploy landing page
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "landing/**"
+      - ".github/workflows/deploy-landing.yml"
+      - "lib/mix/tasks/landing.build.ex"
+      - "config/config.exs"
+      - "mix.exs"
+      - "mix.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.19"
+          otp-version: "28"
+
+      - name: Cache mix deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-landing-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-landing-mix-
+
+      - name: Cache esbuild binary
+        uses: actions/cache@v4
+        with:
+          path: _build/esbuild-*
+          key: ${{ runner.os }}-esbuild-0.25.4
+
+      - run: mix deps.get
+
+      - run: mix landing.build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: landing/docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

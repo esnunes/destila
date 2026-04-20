@@ -51,6 +51,10 @@ config :esbuild,
           ":"
         )
     }
+  ],
+  landing: [
+    args: ~w(.build/combined.jsx --loader:.jsx=jsx --target=es2022 --outfile=docs/assets/app.js),
+    cd: Path.expand("../landing", __DIR__)
   ]
 
 # Configure tailwind (the version is required)
