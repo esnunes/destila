@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Destila — The Agentic IDE built on Claude Code</title>
+<meta name="description" content="An agentic IDE that takes you from rough ideas to shipped code. Autonomous, multi-phase pipelines that plan, implement, review, and ship — pausing for human judgment only when it actually helps." />
+
+<!-- Open Graph / social -->
+<meta property="og:title" content="Destila — The Agentic IDE built on Claude Code" />
+<meta property="og:description" content="Autonomous multi-phase pipelines. Managed Claude Code session lifecycle. Real terminal. Real dev server. Your AI does the work; Destila handles the lifecycle." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="assets/implement-video.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="assets/implement-video.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap">
+
+<!-- Preload the hero image so it renders ASAP -->
+<link rel="preload" as="image" href="assets/implement-video.png">
+
+<style>
+  html,body{margin:0;padding:0;}
+  body{font-family:'Inter',system-ui,sans-serif;background:#0a0a0a;color:#fff;}
+  *{box-sizing:border-box;}
+  img{max-width:100%;height:auto;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+  // Locked production config — minimal variation, Destila blue.
+  window.TWEAKS = { variation: 'minimal', accent: 'blue' };
+  window.ACCENT_COLORS = {
+    blue:   '#3060e0',
+    lime:   '#d4ff3a',
+    orange: '#ff6a3d',
+    mint:   '#6ee7b7',
+    violet: '#a78bfa',
+    amber:  '#f5a524',
+    white:  '#ffffff'
+  };
+</script>
+
+<!-- Production React (minified, no DevTools warning) -->
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+
+<!-- Pre-compiled JSX bundle (no in-browser Babel) -->
+<script src="assets/app.js?v=2"></script>
+</body>
+</html>
