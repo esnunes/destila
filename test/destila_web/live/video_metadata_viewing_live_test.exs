@@ -49,7 +49,7 @@ defmodule DestilaWeb.VideoMetadataViewingLiveTest do
                 "action" => "export",
                 "key" => "demo_video",
                 "value" => "/tmp/test.mp4",
-                "type" => "video_file"
+                "type" => "file"
               }
             }
           ],
@@ -63,7 +63,7 @@ defmodule DestilaWeb.VideoMetadataViewingLiveTest do
       ws.id,
       "phase_4",
       "demo_video",
-      %{"video_file" => "/tmp/test.mp4"},
+      %{"file" => "/tmp/test.mp4"},
       exported: true
     )
 
@@ -97,6 +97,18 @@ defmodule DestilaWeb.VideoMetadataViewingLiveTest do
 
       html = render(view)
       assert html =~ "Demo Video"
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Video metadata appears as inline chat message"
+    test "file-type export with .mp4 renders as inline video card", %{conn: conn} do
+      ws = create_session_with_video_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "[id^='export-video-']")
+      assert has_element?(view, "video")
+      assert has_element?(view, "source[type='video/mp4']")
+      refute has_element?(view, "video[autoplay]")
     end
   end
 

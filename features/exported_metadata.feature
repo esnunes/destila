@@ -80,7 +80,7 @@ Feature: Exported Metadata
 
   Scenario: Video metadata appears as inline chat message
     Given I am on a session detail page
-    And the AI exports metadata with type "video_file"
+    And the AI exports metadata with type "file" with a ".mp4" extension
     Then a chat message should appear with the video card component
     And the card header should show the humanized metadata key
     And the card should display a video player with click-to-play controls
@@ -88,7 +88,7 @@ Feature: Exported Metadata
 
   Scenario: Video metadata sidebar entry has play button
     Given I am on a session detail page
-    And the session has exported metadata of type "video_file"
+    And the session has exported metadata of type "file" with a ".mp4" extension
     Then the sidebar entry should display a play button instead of a text preview
     When I click the play button
     Then a modal overlay should open with a larger video player
@@ -100,16 +100,16 @@ Feature: Exported Metadata
     When I click the view button
     Then a modal overlay should open with the rendered markdown
 
-  Scenario: Text file metadata sidebar entry has view button
+  Scenario: File metadata sidebar entry has view button
     Given I am on a session detail page
-    And the session has exported metadata of type "text_file"
+    And the session has exported metadata of type "file" with a ".txt" extension
     Then the sidebar entry should display a view button instead of an expandable text preview
     When I click the view button
     Then a modal overlay should open displaying the file's text content
 
-  Scenario: Text file with .md extension uses markdown viewer
+  Scenario: File with .md extension uses markdown viewer
     Given I am on a session detail page
-    And the session has exported metadata of type "text_file" with a ".md" file extension
+    And the session has exported metadata of type "file" with a ".md" extension
     When I click the view button
     Then the markdown modal should open instead of the plain text modal
 

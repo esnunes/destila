@@ -308,7 +308,7 @@ defmodule DestilaWeb.ChatComponents do
             key={export.key}
             content={export.value}
           />
-        <% (export.type || "text") == "video_file" -> %>
+        <% (export.type || "text") == "file" and Workflows.file_kind(export.value) == :video -> %>
           <% meta = Enum.find(@exported_metadata, &(&1.key == export.key)) %>
           <%= if meta do %>
             <.video_card

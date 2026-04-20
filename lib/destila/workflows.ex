@@ -9,12 +9,28 @@ defmodule Destila.Workflows do
   alias Destila.Repo
   alias Destila.Workflows.{Session, SessionMetadata}
 
-  @valid_metadata_types ~w(text text_file markdown video_file)
+  @valid_metadata_types ~w(text markdown file)
 
   @doc """
   Returns the list of valid metadata types for exported metadata values.
   """
   def valid_metadata_types, do: @valid_metadata_types
+
+  @doc """
+  Classifies a file path into a renderer kind based on its extension.
+
+  The same mapping is used by the sidebar, chat cards, modal handler, and
+  media controller so every UI consumer agrees on how a given path is
+  rendered.
+  """
+  def file_kind(path) when is_binary(path) do
+    case path |> Path.extname() |> String.downcase() do
+      ".md" -> :markdown
+      ".markdown" -> :markdown
+      ".mp4" -> :video
+      _ -> :text
+    end
+  end
 
   @workflow_modules %{
     brainstorm_idea: Destila.Workflows.BrainstormIdeaWorkflow,

@@ -1,11 +1,12 @@
 Feature: Video Metadata Viewing
-  When a workflow exports video_file-type metadata, it is displayed inline
-  in the chat using a video card component. Users can play the video directly
-  in the chat or open a larger modal from the metadata sidebar. Videos are
-  served via a streaming endpoint that reads MP4 files from the local filesystem.
+  When a workflow exports file metadata pointing to an .mp4 file, it is displayed
+  inline in the chat using a video card component. Users can play the video
+  directly in the chat or open a larger modal from the metadata sidebar. Videos
+  are served via a streaming endpoint that reads MP4 files from the local
+  filesystem.
 
   Background:
-    Given a session has exported video_file metadata
+    Given a session has exported file metadata pointing to an .mp4 file
 
   Scenario: Video card displays with click-to-play controls
     Then the video card should display an HTML5 video player
@@ -29,6 +30,6 @@ Feature: Video Metadata Viewing
     And the inline video card should still be visible
 
   Scenario: Video file is streamed from disk
-    Given the exported video_file path points to a valid MP4 file
+    Given the exported file path points to a valid MP4 file
     Then the video player source should load via the streaming endpoint
     And the video should be playable

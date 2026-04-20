@@ -414,19 +414,21 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     meta = Enum.find(socket.assigns.exported_metadata, &(&1.id == id))
 
     case meta.value do
-      %{"text_file" => path} ->
+      %{"file" => path} ->
         case File.read(path) do
           {:ok, content} ->
-            if Path.extname(path) == ".md" do
-              {:noreply,
-               socket
-               |> assign(:markdown_modal_content, content)
-               |> assign(:markdown_modal_label, humanize_key(meta.key))}
-            else
-              {:noreply,
-               socket
-               |> assign(:text_modal_content, content)
-               |> assign(:text_modal_label, humanize_key(meta.key))}
+            case Workflows.file_kind(path) do
+              :markdown ->
+                {:noreply,
+                 socket
+                 |> assign(:markdown_modal_content, content)
+                 |> assign(:markdown_modal_label, humanize_key(meta.key))}
+
+              _ ->
+                {:noreply,
+                 socket
+                 |> assign(:text_modal_content, content)
+                 |> assign(:text_modal_label, humanize_key(meta.key))}
             end
 
           {:error, _reason} ->
@@ -1047,28 +1049,49 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                     <div class="space-y-0.5">
                       <%= for meta <- @exported_metadata do %>
                         <%= cond do %>
-                          <% Map.has_key?(meta.value, "video_file") -> %>
-                            <button
-                              id={"metadata-entry-#{meta.id}"}
-                              phx-click="open_video_modal"
-                              phx-value-id={meta.id}
-                              class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
-                              aria-label={"Play #{humanize_key(meta.key)}"}
-                            >
-                              <span class="size-5 rounded flex items-center justify-center bg-error/10 shrink-0">
+                          <% file_path = meta.value["file"] -> %>
+                            <%= if Workflows.file_kind(file_path) == :video do %>
+                              <button
+                                id={"metadata-entry-#{meta.id}"}
+                                phx-click="open_video_modal"
+                                phx-value-id={meta.id}
+                                class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                                aria-label={"Play #{humanize_key(meta.key)}"}
+                              >
+                                <span class="size-5 rounded flex items-center justify-center bg-error/10 shrink-0">
+                                  <.icon name="hero-film-micro" class="size-3 text-error/70" />
+                                </span>
+                                <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                                  {humanize_key(meta.key)}
+                                </span>
                                 <.icon
-                                  name="hero-film-micro"
-                                  class="size-3 text-error/70"
+                                  name="hero-play-micro"
+                                  class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
                                 />
-                              </span>
-                              <span class="text-sm text-base-content/60 truncate flex-1 text-left">
-                                {humanize_key(meta.key)}
-                              </span>
-                              <.icon
-                                name="hero-play-micro"
-                                class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
-                              />
-                            </button>
+                              </button>
+                            <% else %>
+                              <button
+                                id={"metadata-entry-#{meta.id}"}
+                                phx-click="open_text_modal"
+                                phx-value-id={meta.id}
+                                class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                                aria-label={"View #{humanize_key(meta.key)}"}
+                              >
+                                <span class="size-5 rounded flex items-center justify-center bg-success/10 shrink-0">
+                                  <.icon
+                                    name="hero-document-text-micro"
+                                    class="size-3 text-success/70"
+                                  />
+                                </span>
+                                <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                                  {humanize_key(meta.key)}
+                                </span>
+                                <.icon
+                                  name="hero-eye-micro"
+                                  class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                                />
+                              </button>
+                            <% end %>
                           <% Map.has_key?(meta.value, "markdown") -> %>
                             <button
                               id={"metadata-entry-#{meta.id}"}
@@ -1091,7 +1114,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                                 class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
                               />
                             </button>
-                          <% Map.has_key?(meta.value, "text_file") or Map.has_key?(meta.value, "text") -> %>
+                          <% Map.has_key?(meta.value, "text") -> %>
                             <button
                               id={"metadata-entry-#{meta.id}"}
                               phx-click="open_text_modal"
@@ -1367,8 +1390,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
 
   defp format_metadata_value(%{"text" => text}) when is_binary(text), do: text
   defp format_metadata_value(%{"markdown" => md}) when is_binary(md), do: md
-  defp format_metadata_value(%{"text_file" => path}) when is_binary(path), do: path
-  defp format_metadata_value(%{"video_file" => path}) when is_binary(path), do: path
+  defp format_metadata_value(%{"file" => path}) when is_binary(path), do: path
   defp format_metadata_value(value) when is_map(value), do: Jason.encode!(value, pretty: true)
   defp format_metadata_value(value), do: inspect(value)
 
