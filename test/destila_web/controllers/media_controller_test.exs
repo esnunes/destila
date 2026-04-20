@@ -18,7 +18,7 @@ defmodule DestilaWeb.MediaControllerTest do
       })
 
     {:ok, meta} =
-      Destila.Workflows.upsert_metadata(ws.id, "phase_1", "demo_video", %{"video_file" => path},
+      Destila.Workflows.upsert_metadata(ws.id, "phase_1", "demo_video", %{"file" => path},
         exported: true
       )
 

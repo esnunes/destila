@@ -86,7 +86,7 @@ defmodule Destila.AI.Tools do
 
     field(:type, :string,
       description:
-        "Type of the exported value. One of: text (default), text_file, markdown, video_file. " <>
+        "Type of the exported value. One of: text (default), markdown, file. " <>
           "Determines how the value is interpreted and rendered."
     )
 
@@ -117,8 +117,10 @@ defmodule Destila.AI.Tools do
   multiple times in a single response and may combine it with a phase transition action.
 
   You can optionally specify a `type` string to indicate how the value should be \
-  interpreted: `text` (default), `text_file` (absolute path to a text file), \
-  `markdown` (markdown content), or `video_file` (absolute path to a video file).
+  interpreted: `text` (default), `markdown` (markdown content), or `file` \
+  (absolute path to a file). When `type: "file"` is used, the file is rendered \
+  based on its extension — `.md`/`.markdown` open in the markdown viewer, `.mp4` \
+  plays as a video, and any other extension is shown as plain text.
   """
 
   tool :service do

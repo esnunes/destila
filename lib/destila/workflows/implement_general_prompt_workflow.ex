@@ -119,7 +119,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     Steps:
     1. You MUST use the compound engineering skill `ce:plan` to create a plan
     2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
-    `key: "plan"`, `type: "text_file", and `value` set to the path to the plan file.
+    `key: "plan"`, `type: "file", and `value` set to the path to the plan file.
     3. Commit your changes
     4. Push to the remote
     """
@@ -128,7 +128,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
   defp deepen_plan_prompt(workflow_session) do
     plan_path =
       Destila.Workflows.get_metadata(workflow_session.id)
-      |> get_in(["plan", "text_file"]) || "unknown"
+      |> get_in(["plan", "file"]) || "unknown"
 
     """
     The plan generated in the previous phase is at `#{plan_path}`. Review it \
@@ -138,7 +138,7 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
     If the plan needs more detail:
     1. You MUST use the compound engineering skill `deepen-plan` to deepen the plan
     2. Call `mcp__destila__session` with these exact parameters: `action: "export"`, \
-    `key: "plan"`, `type: "text_file"`, and `value` set to the path to the plan file.
+    `key: "plan"`, `type: "file"`, and `value` set to the path to the plan file.
     3. Commit your changes
     4. Push to the remote
 

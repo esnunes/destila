@@ -1,6 +1,6 @@
 defmodule DestilaWeb.FileMetadataSidebarLiveTest do
   @moduledoc """
-  LiveView tests for text_file sidebar modals.
+  LiveView tests for file-type sidebar modals.
   Feature: features/exported_metadata.feature
   """
   use DestilaWeb.ConnCase, async: false
@@ -40,16 +40,16 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
         ws.id,
         "phase_4",
         "build_log",
-        %{"text_file" => path},
+        %{"file" => path},
         exported: true
       )
 
     {ws, path}
   end
 
-  describe "text_file sidebar entry" do
+  describe "file sidebar entry with .txt extension" do
     @tag feature: "exported_metadata",
-         scenario: "Text file metadata sidebar entry has view button"
+         scenario: "File metadata sidebar entry has view button"
     test "shows view button instead of details block", %{conn: conn} do
       {ws, _path} = create_session_with_text_file_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -59,7 +59,7 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
     end
 
     @tag feature: "exported_metadata",
-         scenario: "Text file metadata sidebar entry has view button"
+         scenario: "File metadata sidebar entry has view button"
     test "clicking view button opens text file modal", %{conn: conn} do
       {ws, _path} = create_session_with_text_file_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -75,7 +75,7 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
     end
 
     @tag feature: "exported_metadata",
-         scenario: "Text file metadata sidebar entry has view button"
+         scenario: "File metadata sidebar entry has view button"
     test "closing text file modal removes it", %{conn: conn} do
       {ws, _path} = create_session_with_text_file_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
@@ -91,7 +91,7 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
     end
   end
 
-  describe "text_file with .md extension" do
+  describe "file sidebar entry with .md extension" do
     defp create_session_with_md_text_file_export do
       path = Path.join(System.tmp_dir!(), "destila_test_#{System.unique_integer([:positive])}.md")
       File.write!(path, "# Heading\n\nSome **bold** text")
@@ -112,7 +112,7 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
           ws.id,
           "phase_4",
           "plan_doc",
-          %{"text_file" => path},
+          %{"file" => path},
           exported: true
         )
 
@@ -120,7 +120,7 @@ defmodule DestilaWeb.FileMetadataSidebarLiveTest do
     end
 
     @tag feature: "exported_metadata",
-         scenario: "Text file with .md extension uses markdown viewer"
+         scenario: "File with .md extension uses markdown viewer"
     test "opens markdown modal instead of text modal", %{conn: conn} do
       {ws, _path} = create_session_with_md_text_file_export()
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")

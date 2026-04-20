@@ -5,7 +5,7 @@ defmodule DestilaWeb.MediaController do
 
   def show(conn, %{"id" => id}) do
     metadata = Workflows.get_metadata!(id)
-    path = metadata.value["video_file"]
+    path = metadata.value["file"]
     %{size: size} = File.stat!(path)
 
     conn = put_resp_header(conn, "accept-ranges", "bytes")

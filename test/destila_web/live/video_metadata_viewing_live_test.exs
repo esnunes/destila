@@ -49,7 +49,7 @@ defmodule DestilaWeb.VideoMetadataViewingLiveTest do
                 "action" => "export",
                 "key" => "demo_video",
                 "value" => "/tmp/test.mp4",
-                "type" => "video_file"
+                "type" => "file"
               }
             }
           ],
@@ -63,7 +63,7 @@ defmodule DestilaWeb.VideoMetadataViewingLiveTest do
       ws.id,
       "phase_4",
       "demo_video",
-      %{"video_file" => "/tmp/test.mp4"},
+      %{"file" => "/tmp/test.mp4"},
       exported: true
     )
 

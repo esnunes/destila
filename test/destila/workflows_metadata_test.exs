@@ -189,7 +189,7 @@ defmodule Destila.WorkflowsMetadataTest do
     test "accepts all valid metadata types" do
       ws = create_session()
 
-      for type <- ~w(text text_file markdown video_file) do
+      for type <- ~w(text markdown file) do
         assert {:ok, _} =
                  Workflows.upsert_metadata(
                    ws.id,
@@ -210,6 +210,32 @@ defmodule Destila.WorkflowsMetadataTest do
                  "phase",
                  "key",
                  %{"html" => "<p>bad</p>"},
+                 exported: true
+               )
+    end
+
+    test "rejects legacy text_file type for exported metadata" do
+      ws = create_session()
+
+      assert {:error, :invalid_metadata_type} =
+               Workflows.upsert_metadata(
+                 ws.id,
+                 "phase",
+                 "key",
+                 %{"text_file" => "/tmp/x.txt"},
+                 exported: true
+               )
+    end
+
+    test "rejects legacy video_file type for exported metadata" do
+      ws = create_session()
+
+      assert {:error, :invalid_metadata_type} =
+               Workflows.upsert_metadata(
+                 ws.id,
+                 "phase",
+                 "key",
+                 %{"video_file" => "/tmp/x.mp4"},
                  exported: true
                )
     end
@@ -349,6 +375,41 @@ defmodule Destila.WorkflowsMetadataTest do
       assert [{session, text}] = result
       assert session.id == ws.id
       assert text == "# Hello"
+    end
+  end
+
+  describe "valid_metadata_types/0" do
+    test "returns exactly text, markdown, file" do
+      assert Workflows.valid_metadata_types() == ~w(text markdown file)
+    end
+  end
+
+  describe "file_kind/1" do
+    test "returns :markdown for .md paths" do
+      assert Workflows.file_kind("plan.md") == :markdown
+      assert Workflows.file_kind("/tmp/nested/plan.md") == :markdown
+    end
+
+    test "returns :markdown for .markdown paths" do
+      assert Workflows.file_kind("README.markdown") == :markdown
+    end
+
+    test "returns :video for .mp4 paths" do
+      assert Workflows.file_kind("/tmp/demo.mp4") == :video
+    end
+
+    test "returns :text for other extensions" do
+      assert Workflows.file_kind("/tmp/build.log") == :text
+      assert Workflows.file_kind("/tmp/output.txt") == :text
+    end
+
+    test "returns :text for extensionless paths" do
+      assert Workflows.file_kind("Makefile") == :text
+    end
+
+    test "is case-insensitive" do
+      assert Workflows.file_kind("README.MD") == :markdown
+      assert Workflows.file_kind("CLIP.MP4") == :video
     end
   end
 
