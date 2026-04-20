@@ -67,11 +67,7 @@ defmodule DestilaWeb.DraftFormLive do
       )
 
     {:noreply,
-     assign(
-       socket,
-       :form,
-       to_form(params, as: :draft, errors: field_errors(changeset), action: :validate)
-     )}
+     assign(socket, :form, to_form(params, as: :draft, errors: field_errors(changeset)))}
   end
 
   def handle_event("save", params, socket) do
@@ -102,10 +98,7 @@ defmodule DestilaWeb.DraftFormLive do
     else
       {:noreply,
        socket
-       |> assign(
-         :form,
-         to_form(form_params, as: :draft, errors: field_errors(changeset), action: :validate)
-       )
+       |> assign(:form, to_form(form_params, as: :draft, errors: field_errors(changeset)))
        |> assign(:project_error, project_error_from(changeset))}
     end
   end
@@ -163,7 +156,7 @@ defmodule DestilaWeb.DraftFormLive do
      socket
      |> assign(
        :form,
-       to_form(form_params, as: :draft, errors: field_errors(changeset), action: :validate)
+       to_form(form_params, as: :draft, errors: field_errors(changeset))
      )
      |> assign(:project_error, project_error_from(changeset))}
   end
@@ -216,6 +209,9 @@ defmodule DestilaWeb.DraftFormLive do
   defp priority_to_string(atom) when is_atom(atom), do: Atom.to_string(atom)
   defp priority_to_string(str) when is_binary(str), do: str
 
+  defp error_msg(%Phoenix.HTML.FormField{errors: [{msg, _} | _]}), do: msg
+  defp error_msg(_), do: nil
+
   # --- Render ---
 
   def render(assigns) do
@@ -241,22 +237,47 @@ defmodule DestilaWeb.DraftFormLive do
             phx-submit="save"
             class="space-y-5"
           >
-            <.input
-              field={@form[:prompt]}
-              type="textarea"
-              label="Prompt *"
-              rows="6"
-              placeholder="What's the idea?"
-              phx-debounce="300"
-            />
+            <fieldset class="fieldset">
+              <label class="fieldset-label text-xs font-medium" for={@form[:prompt].id}>
+                Prompt <span class="text-error">*</span>
+              </label>
+              <textarea
+                id={@form[:prompt].id}
+                name={@form[:prompt].name}
+                rows="6"
+                placeholder="What's the idea?"
+                phx-debounce="300"
+                aria-invalid={error_msg(@form[:prompt]) && "true"}
+                class={[
+                  "textarea textarea-bordered w-full",
+                  error_msg(@form[:prompt]) && "textarea-error"
+                ]}
+              >{Phoenix.HTML.Form.normalize_value("textarea", @form[:prompt].value)}</textarea>
+              <p :if={error_msg(@form[:prompt])} class="text-xs text-error mt-2">
+                {error_msg(@form[:prompt])}
+              </p>
+            </fieldset>
 
-            <.input
-              field={@form[:priority]}
-              type="select"
-              label="Priority *"
-              prompt="Select priority…"
-              options={@priority_options}
-            />
+            <fieldset class="fieldset">
+              <label class="fieldset-label text-xs font-medium" for={@form[:priority].id}>
+                Priority <span class="text-error">*</span>
+              </label>
+              <select
+                id={@form[:priority].id}
+                name={@form[:priority].name}
+                aria-invalid={error_msg(@form[:priority]) && "true"}
+                class={[
+                  "select select-bordered w-full",
+                  error_msg(@form[:priority]) && "select-error"
+                ]}
+              >
+                <option value="">Select priority…</option>
+                {Phoenix.HTML.Form.options_for_select(@priority_options, @form[:priority].value)}
+              </select>
+              <p :if={error_msg(@form[:priority])} class="text-xs text-error mt-2">
+                {error_msg(@form[:priority])}
+              </p>
+            </fieldset>
           </.form>
 
           <%!-- Project section (its own <.live_component> form) --%>
