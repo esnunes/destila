@@ -1055,13 +1055,22 @@ defmodule DestilaWeb.BrainstormIdeaWorkflowLiveTest do
 
     @tag feature: @feature,
          scenario: "Allowed-warning rate limit event renders as a warning chip"
-    test "returns 'resets soon' for a past timestamp" do
+    test "returns nil tuple for a long-past timestamp" do
       now = ~U[2026-04-20 10:00:00Z]
       past_ms = DateTime.to_unix(DateTime.add(now, -3600, :second), :millisecond)
-      {relative, absolute} = DestilaWeb.ChatComponents.format_reset_time(past_ms, now)
 
-      assert relative == "resets soon"
-      assert is_binary(absolute)
+      assert {nil, nil} = DestilaWeb.ChatComponents.format_reset_time(past_ms, now)
+    end
+
+    @tag feature: @feature,
+         scenario: "Allowed-warning rate limit event renders as a warning chip"
+    test "treats sub-1e12 integers as Unix seconds" do
+      now = ~U[2026-04-20 10:00:00Z]
+      future_seconds = DateTime.to_unix(DateTime.add(now, 4 * 3600, :second), :second)
+
+      {relative, absolute} = DestilaWeb.ChatComponents.format_reset_time(future_seconds, now)
+
+      assert relative == "resets in 4h"
       assert absolute =~ "Resets at"
     end
 

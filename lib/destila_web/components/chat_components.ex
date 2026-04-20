@@ -829,11 +829,18 @@ defmodule DestilaWeb.ChatComponents do
   @doc false
   def format_reset_time(nil, _now), do: {nil, nil}
 
-  def format_reset_time(resets_at_ms, %DateTime{} = now) when is_integer(resets_at_ms) do
-    case DateTime.from_unix(resets_at_ms, :millisecond) do
+  def format_reset_time(resets_at, %DateTime{} = now) when is_integer(resets_at) do
+    case DateTime.from_unix(resets_at, detect_unix_unit(resets_at)) do
       {:ok, reset_dt} ->
         diff_seconds = DateTime.diff(reset_dt, now, :second)
-        {format_relative_reset(diff_seconds), format_absolute_reset(reset_dt)}
+
+        # Hide the label for resets that already happened more than a minute ago;
+        # showing "resets soon" for a long-past timestamp is misleading.
+        if diff_seconds < -60 do
+          {nil, nil}
+        else
+          {format_relative_reset(diff_seconds), format_absolute_reset(reset_dt)}
+        end
 
       _ ->
         {nil, nil}
@@ -841,6 +848,13 @@ defmodule DestilaWeb.ChatComponents do
   end
 
   def format_reset_time(_, _), do: {nil, nil}
+
+  # Upstream docs claim milliseconds, but the Claude CLI has been observed
+  # emitting seconds for `resets_at`. Disambiguate by magnitude: any realistic
+  # modern ms timestamp is >= 10^12 (year 2001+); smaller values are seconds.
+  @ms_threshold 1_000_000_000_000
+  defp detect_unix_unit(value) when value >= @ms_threshold, do: :millisecond
+  defp detect_unix_unit(_), do: :second
 
   defp format_relative_reset(diff_seconds) when diff_seconds <= 60, do: "resets soon"
 
@@ -854,9 +868,6 @@ defmodule DestilaWeb.ChatComponents do
       true -> "resets in #{minutes}m"
     end
   end
-
-  # NOTE: keep guard ordering — negative diffs match the first clause's "<= 60"
-  # check, which intentionally collapses already-expired resets into "resets soon".
 
   defp format_absolute_reset(%DateTime{} = dt) do
     "Resets at " <> Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
