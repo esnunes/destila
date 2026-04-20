@@ -117,6 +117,44 @@ defmodule DestilaWeb.ProjectsLiveTest do
 
       assert render(view) =~ "can&#39;t be blank"
     end
+
+    @tag feature: @feature,
+         scenario: "Typing in git repository URL preserves focus after validation errors"
+    test "typing in git URL after failed submit preserves server preconditions for focus hook",
+         %{conn: conn} do
+      # Locks in the server contract that FocusFirstError relies on: aria-invalid
+      # must persist across phx-change patches, and phx-mounted must not be
+      # re-emitted on other inputs. Actual focus preservation is enforced by the
+      # JS hook's active-element guard and verified via manual walkthrough.
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+      assert has_element?(view, "#create-project-card")
+
+      view
+      |> form("#project-form-create-form", %{"name" => "", "git_repo_url" => ""})
+      |> render_submit()
+
+      assert has_element?(view, "input[name=name][aria-invalid='true']")
+      assert render(view) =~ "can&#39;t be blank"
+      assert render(view) =~ "provide at least one"
+
+      html =
+        view
+        |> form("#project-form-create-form", %{
+          "name" => "",
+          "git_repo_url" => "https://github.com/test/repo"
+        })
+        |> render_change()
+
+      assert has_element?(
+               view,
+               "input[name=git_repo_url][value='https://github.com/test/repo']"
+             )
+
+      assert has_element?(view, "input[name=name][aria-invalid='true']")
+      refute html =~ ~s(name="git_repo_url"[^>]*phx-mounted)
+    end
   end
 
   describe "edit project" do

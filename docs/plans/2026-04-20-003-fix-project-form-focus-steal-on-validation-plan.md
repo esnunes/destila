@@ -1,7 +1,7 @@
 ---
 title: "fix: stop project form from stealing focus back to name during validation"
 type: fix
-status: active
+status: completed
 date: 2026-04-20
 ---
 

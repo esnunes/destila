@@ -35,6 +35,11 @@ const ScrollBottomHook = {
 
 const FocusFirstErrorHook = {
   updated() {
+    // Skip when the user is already typing in a field inside this form, so
+    // phx-change patches don't steal focus back to the first invalid input.
+    let active = document.activeElement
+    if (active && this.el.contains(active) && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return
+
     let el = this.el.querySelector("[aria-invalid='true']")
     if (!el) return
     requestAnimationFrame(() => el.focus())
