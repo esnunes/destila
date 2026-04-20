@@ -343,7 +343,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
   defp compute_separator_targets([], _entry_times, _boundaries, _total), do: %{}
 
   defp compute_separator_targets(items, entry_times, boundaries, total) do
-    initial = %{0 => 1}
+    initial = if Map.has_key?(boundaries, 1), do: %{0 => 1}, else: %{}
 
     Enum.reduce(2..max(total, 1), initial, fn n, acc ->
       case Map.get(boundaries, n - 1) do
@@ -353,7 +353,7 @@ defmodule DestilaWeb.AiSessionDetailLive do
               acc
 
             idx ->
-              if idx > 0 and not Map.has_key?(acc, idx), do: Map.put(acc, idx, n), else: acc
+              if Map.has_key?(acc, idx), do: acc, else: Map.put(acc, idx, n)
           end
 
         _ ->
