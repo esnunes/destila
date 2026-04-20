@@ -10,7 +10,7 @@ Feature: Session Deletion
     When I click the "Delete" button
     And I confirm the browser prompt
     Then the session should be soft-deleted
-    And I should be redirected to the page I came from, falling back to the crafting board
+    And I should be redirected to the crafting board
     And I should see a flash message confirming the session was deleted
 
   Scenario: Cancel the delete confirmation dialog
@@ -46,6 +46,7 @@ Feature: Session Deletion
     When I click the "Delete" button
     And I confirm the browser prompt
     Then the session should be soft-deleted
+    And I should be redirected to the crafting board
     And it should no longer appear on the archived sessions page
 
   # --- Cleanup on delete ---
