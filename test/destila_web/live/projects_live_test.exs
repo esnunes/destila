@@ -153,7 +153,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
              )
 
       assert has_element?(view, "input[name=name][aria-invalid='true']")
-      refute html =~ ~s(name="git_repo_url"[^>]*phx-mounted)
+      refute html =~ ~r(name="git_repo_url"[^>]*phx-mounted)
     end
   end
 
