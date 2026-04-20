@@ -30,6 +30,140 @@ defmodule DestilaWeb.AiSessionDebugComponents do
   }
 
   alias ClaudeCode.History.SessionMessage
+  alias Destila.Workflows
+
+  attr :workflow_session, :any, required: true
+  attr :usage_by_phase, :map, required: true
+  attr :phase_wall_clocks, :map, required: true
+  attr :clickable_phases, :any, required: true
+
+  def phase_stepper(assigns) do
+    total = Workflows.total_phases(assigns.workflow_session.workflow_type)
+    assigns = assign(assigns, :phases, Enum.to_list(1..total))
+
+    ~H"""
+    <div
+      id="ai-session-phase-stepper"
+      class="flex items-center gap-1 overflow-x-auto px-4 py-2 border-b border-base-300 bg-base-100 shrink-0"
+    >
+      <%= for n <- @phases do %>
+        <.phase_step
+          phase={n}
+          phase_name={Workflows.phase_name(@workflow_session.workflow_type, n)}
+          active?={n == @workflow_session.current_phase}
+          clickable?={MapSet.member?(@clickable_phases, n)}
+          totals={Map.get(@usage_by_phase, n)}
+          wall_clock_ms={Map.get(@phase_wall_clocks, n)}
+        />
+      <% end %>
+    </div>
+    """
+  end
+
+  attr :phase, :integer, required: true
+  attr :phase_name, :string, required: true
+  attr :active?, :boolean, required: true
+  attr :clickable?, :boolean, required: true
+  attr :totals, :any, required: true
+  attr :wall_clock_ms, :any, required: true
+
+  defp phase_step(%{clickable?: true} = assigns) do
+    ~H"""
+    <a
+      id={"phase-step-#{@phase}"}
+      href={"#phase-separator-#{@phase}"}
+      data-phase={@phase}
+      data-active={to_string(@active?)}
+      class={[
+        "flex flex-col gap-0.5 rounded-md border px-3 py-1.5 text-xs shrink-0 transition-colors",
+        if(@active?,
+          do: "border-primary/60 bg-primary/10 text-primary",
+          else: "border-base-300 bg-base-100 text-base-content/70 hover:border-base-content/30"
+        )
+      ]}
+    >
+      <span class="font-semibold">
+        <span class="text-[10px] uppercase tracking-wider opacity-60">
+          Phase {@phase}
+        </span>
+        · {@phase_name}
+      </span>
+      <.phase_stats :if={@totals} totals={@totals} wall_clock_ms={@wall_clock_ms} />
+    </a>
+    """
+  end
+
+  defp phase_step(assigns) do
+    ~H"""
+    <span
+      id={"phase-step-#{@phase}"}
+      data-phase={@phase}
+      data-active={to_string(@active?)}
+      class={[
+        "flex flex-col gap-0.5 rounded-md border px-3 py-1.5 text-xs shrink-0 opacity-50",
+        if(@active?,
+          do: "border-primary/60 bg-primary/10 text-primary",
+          else: "border-base-300 bg-base-100 text-base-content/60"
+        )
+      ]}
+    >
+      <span class="font-semibold">
+        <span class="text-[10px] uppercase tracking-wider opacity-60">
+          Phase {@phase}
+        </span>
+        · {@phase_name}
+      </span>
+      <.phase_stats :if={@totals} totals={@totals} wall_clock_ms={@wall_clock_ms} />
+    </span>
+    """
+  end
+
+  attr :totals, :map, required: true
+  attr :wall_clock_ms, :any, required: true
+
+  defp phase_stats(assigns) do
+    ~H"""
+    <span class="flex items-center gap-1 text-[10px] font-mono text-base-content/60">
+      <span data-phase-turns>{@totals.turns} {pluralize(@totals.turns, "turn", "turns")}</span>
+      <span class="text-base-content/30">·</span>
+      <span data-phase-in>in {@totals.input_tokens}</span>
+      <span class="text-base-content/30">·</span>
+      <span data-phase-out>out {@totals.output_tokens}</span>
+      <%= if @totals.total_cost_usd > 0 do %>
+        <span class="text-base-content/30">·</span>
+        <span data-phase-cost>{format_cost(@totals.total_cost_usd)}</span>
+      <% end %>
+      <%= if @totals.duration_ms > 0 do %>
+        <span class="text-base-content/30">·</span>
+        <span data-phase-duration>{format_duration_ms(@totals.duration_ms)}</span>
+      <% end %>
+      <%= if is_integer(@wall_clock_ms) and @wall_clock_ms > 0 do %>
+        <span class="text-base-content/30">·</span>
+        <span data-phase-wall>{format_duration_ms(@wall_clock_ms)}</span>
+      <% end %>
+    </span>
+    """
+  end
+
+  defp pluralize(1, singular, _plural), do: singular
+  defp pluralize(_, _singular, plural), do: plural
+
+  defp format_cost(usd) when is_number(usd) do
+    :erlang.float_to_binary(usd * 1.0, decimals: 4) |> then(&("$" <> &1))
+  end
+
+  defp format_cost(_), do: "$0.0000"
+
+  defp format_duration_ms(ms) when is_number(ms) do
+    seconds = round(ms / 1000)
+
+    cond do
+      seconds < 60 -> "#{seconds}s"
+      true -> "#{div(seconds, 60)}m #{rem(seconds, 60)}s"
+    end
+  end
+
+  defp format_duration_ms(_), do: "0s"
 
   attr :items, :list, required: true
   attr :tool_index, :map, default: %{}
@@ -83,6 +217,30 @@ defmodule DestilaWeb.AiSessionDebugComponents do
     >
       <.role_header role="assistant" usage={@usage} />
       <.content_list content={@content} tool_index={@tool_index} idx={@idx} />
+    </div>
+    """
+  end
+
+  defp session_item(%{item: {:separator, phase_num, phase_name}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:phase_num, phase_num)
+      |> assign(:phase_name, phase_name)
+
+    ~H"""
+    <div
+      id={"phase-separator-#{@phase_num}"}
+      data-phase-separator={@phase_num}
+      class="flex items-center gap-3 py-1 scroll-mt-4"
+    >
+      <div class="flex-1 h-px bg-primary/30"></div>
+      <div class="flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1">
+        <.icon name="hero-flag-micro" class="size-3 text-primary" />
+        <span class="text-[10px] font-semibold uppercase tracking-wider text-primary">
+          Phase {@phase_num} · {@phase_name}
+        </span>
+      </div>
+      <div class="flex-1 h-px bg-primary/30"></div>
     </div>
     """
   end

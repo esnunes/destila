@@ -62,16 +62,19 @@ defmodule DestilaWeb.AiSessionDetailLive do
 
     {history_state, loaded_count} = load_history(ai_session)
 
-    {:ok,
-     socket
-     |> assign(:workflow_session, ws)
-     |> assign(:ai_session, ai_session)
-     |> assign(:alive?, AlivenessTracker.alive_ai?(ai_session.id))
-     |> assign(:history_state, history_state)
-     |> assign(:loaded_count, loaded_count)
-     |> assign(:reload_scheduled?, false)
-     |> assign(:usage_totals, AI.aggregate_usage_for_ai_session(ai_session.id))
-     |> assign(:page_title, "AI Session — #{ws.title}")}
+    socket =
+      socket
+      |> assign(:workflow_session, ws)
+      |> assign(:ai_session, ai_session)
+      |> assign(:alive?, AlivenessTracker.alive_ai?(ai_session.id))
+      |> assign(:history_state, history_state)
+      |> assign(:loaded_count, loaded_count)
+      |> assign(:reload_scheduled?, false)
+      |> assign(:usage_totals, AI.aggregate_usage_for_ai_session(ai_session.id))
+      |> assign(:page_title, "AI Session — #{ws.title}")
+      |> assign_phase_state()
+
+    {:ok, socket}
   end
 
   @impl true
@@ -93,7 +96,12 @@ defmodule DestilaWeb.AiSessionDetailLive do
 
   def handle_info({:message_added, %Destila.AI.Message{ai_session_id: ai_id}}, socket) do
     if socket.assigns.ai_session.id == ai_id do
-      {:noreply, assign(socket, :usage_totals, AI.aggregate_usage_for_ai_session(ai_id))}
+      socket =
+        socket
+        |> assign(:usage_totals, AI.aggregate_usage_for_ai_session(ai_id))
+        |> assign_phase_state()
+
+      {:noreply, socket}
     else
       {:noreply, socket}
     end
@@ -124,11 +132,13 @@ defmodule DestilaWeb.AiSessionDetailLive do
       {:ok, entries} when length(entries) > loaded ->
         new_entries = Enum.drop(entries, loaded)
         normalized = Enum.map(new_entries, &normalize_entry/1)
-        history_state = append_entries(socket.assigns.history_state, normalized)
+        new_times = Enum.map(new_entries, &parse_entry_timestamp/1)
+        history_state = append_entries(socket.assigns.history_state, normalized, new_times)
 
         socket
         |> assign(:history_state, history_state)
         |> assign(:loaded_count, length(entries))
+        |> assign_phase_state()
 
       {:ok, _} ->
         socket
@@ -140,12 +150,13 @@ defmodule DestilaWeb.AiSessionDetailLive do
     end
   end
 
-  defp append_entries({:loaded, existing, tool_index}, new_items) do
-    {:loaded, existing ++ new_items, Map.merge(tool_index, build_tool_index(new_items))}
+  defp append_entries({:loaded, existing, tool_index, entry_times}, new_items, new_times) do
+    {:loaded, existing ++ new_items, Map.merge(tool_index, build_tool_index(new_items)),
+     entry_times ++ new_times}
   end
 
-  defp append_entries(_state, new_items) do
-    {:loaded, new_items, build_tool_index(new_items)}
+  defp append_entries(_state, new_items, new_times) do
+    {:loaded, new_items, build_tool_index(new_items), new_times}
   end
 
   defp load_history(%AI.Session{claude_session_id: nil}), do: {:missing, 0}
@@ -157,7 +168,9 @@ defmodule DestilaWeb.AiSessionDetailLive do
 
       {:ok, entries} ->
         normalized = Enum.map(entries, &normalize_entry/1)
-        {{:loaded, normalized, build_tool_index(normalized)}, length(entries)}
+        entry_times = Enum.map(entries, &parse_entry_timestamp/1)
+
+        {{:loaded, normalized, build_tool_index(normalized), entry_times}, length(entries)}
 
       {:error, reason} ->
         Logger.warning("Failed to load AI history for #{claude_session_id}: #{inspect(reason)}")
@@ -173,6 +186,23 @@ defmodule DestilaWeb.AiSessionDetailLive do
       _ -> {:meta, entry}
     end
   end
+
+  defp parse_entry_timestamp(%_{} = _struct), do: nil
+
+  defp parse_entry_timestamp(entry) when is_map(entry) do
+    case Map.get(entry, "timestamp") do
+      ts when is_binary(ts) ->
+        case DateTime.from_iso8601(ts) do
+          {:ok, dt, _} -> dt
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp parse_entry_timestamp(_), do: nil
 
   defp build_tool_index(items) do
     Enum.reduce(items, %{}, fn
@@ -245,7 +275,14 @@ defmodule DestilaWeb.AiSessionDetailLive do
           </div>
         </div>
 
-        <div class="flex-1 min-h-0 overflow-y-auto">
+        <.phase_stepper
+          workflow_session={@workflow_session}
+          usage_by_phase={@usage_by_phase}
+          phase_wall_clocks={@phase_wall_clocks}
+          clickable_phases={@clickable_phases}
+        />
+
+        <div class="flex-1 min-h-0 overflow-y-auto scroll-smooth">
           <div id="ai-session-conversation" class="max-w-3xl mx-auto py-6 px-4 space-y-4">
             <%= case @history_state do %>
               <% :missing -> %>
@@ -266,14 +303,133 @@ defmodule DestilaWeb.AiSessionDetailLive do
                   title="Unable to read conversation history"
                   detail="See server logs for details."
                 />
-              <% {:loaded, items, tool_index} -> %>
-                <.session_history items={items} tool_index={tool_index} />
+              <% {:loaded, items, tool_index, _entry_times} -> %>
+                <.session_history
+                  items={merge_separators(items, @separator_targets, @workflow_session.workflow_type)}
+                  tool_index={tool_index}
+                />
             <% end %>
           </div>
         </div>
       </div>
     </Layouts.app>
     """
+  end
+
+  defp assign_phase_state(socket) do
+    ai_id = socket.assigns.ai_session.id
+    workflow_type = socket.assigns.workflow_session.workflow_type
+    total = Workflows.total_phases(workflow_type)
+
+    usage_by_phase = AI.aggregate_usage_by_phase(ai_id)
+    boundaries = AI.phase_boundaries_for_ai_session(ai_id)
+
+    {items, entry_times} = items_and_times(socket.assigns.history_state)
+
+    separator_targets = compute_separator_targets(items, entry_times, boundaries, total)
+    phase_wall_clocks = compute_phase_wall_clocks(items, entry_times, separator_targets)
+    clickable_phases = separator_targets |> Map.values() |> MapSet.new()
+
+    socket
+    |> assign(:usage_by_phase, usage_by_phase)
+    |> assign(:separator_targets, separator_targets)
+    |> assign(:phase_wall_clocks, phase_wall_clocks)
+    |> assign(:clickable_phases, clickable_phases)
+  end
+
+  defp items_and_times({:loaded, items, _tool_index, entry_times}), do: {items, entry_times}
+  defp items_and_times(_), do: {[], []}
+
+  defp compute_separator_targets([], _entry_times, _boundaries, _total), do: %{}
+
+  defp compute_separator_targets(items, entry_times, boundaries, _total) do
+    populated = boundaries |> Map.keys() |> Enum.sort()
+
+    targets =
+      Enum.reduce(populated, %{}, fn phase, acc ->
+        idx =
+          case prev_populated_phase(populated, phase) do
+            nil -> 0
+            prev -> first_idx_after(entry_times, Map.fetch!(boundaries, prev))
+          end
+
+        case idx do
+          nil -> acc
+          idx -> Map.put_new(acc, idx, phase)
+        end
+      end)
+
+    if items == [], do: %{}, else: targets
+  end
+
+  defp prev_populated_phase(populated, phase) do
+    populated |> Enum.filter(&(&1 < phase)) |> Enum.max(fn -> nil end)
+  end
+
+  defp first_idx_after(entry_times, boundary) do
+    entry_times
+    |> Enum.with_index()
+    |> Enum.find_value(fn
+      {%DateTime{} = dt, idx} ->
+        if DateTime.compare(dt, boundary) == :gt, do: idx, else: nil
+
+      _ ->
+        nil
+    end)
+  end
+
+  defp compute_phase_wall_clocks(_items, _entry_times, separator_targets)
+       when map_size(separator_targets) == 0,
+       do: %{}
+
+  defp compute_phase_wall_clocks(items, entry_times, separator_targets) do
+    sorted = Enum.sort_by(separator_targets, fn {idx, _phase} -> idx end)
+    total_items = length(items)
+
+    sorted
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {{start_idx, phase}, i}, acc ->
+      end_idx =
+        case Enum.at(sorted, i + 1) do
+          {next_idx, _} -> next_idx - 1
+          nil -> total_items - 1
+        end
+
+      times =
+        entry_times
+        |> Enum.slice(start_idx..end_idx)
+        |> Enum.reject(&is_nil/1)
+
+      case times do
+        [_, _ | _] ->
+          first = Enum.min_by(times, &DateTime.to_unix(&1, :millisecond))
+          last = Enum.max_by(times, &DateTime.to_unix(&1, :millisecond))
+          diff = DateTime.diff(last, first, :millisecond)
+          Map.put(acc, phase, diff)
+
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  defp merge_separators(items, separator_targets, _workflow_type)
+       when map_size(separator_targets) == 0,
+       do: items
+
+  defp merge_separators(items, separator_targets, workflow_type) do
+    items
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {item, idx} ->
+      case Map.get(separator_targets, idx) do
+        nil ->
+          [item]
+
+        phase ->
+          phase_name = Workflows.phase_name(workflow_type, phase)
+          [{:separator, phase, phase_name}, item]
+      end
+    end)
   end
 
   attr :icon, :string, required: true

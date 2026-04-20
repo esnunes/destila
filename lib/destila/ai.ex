@@ -97,9 +97,47 @@ defmodule Destila.AI do
   Returns zeros when no usage has been recorded yet.
   """
   def aggregate_usage_for_ai_session(ai_session_id) do
-    ai_session_id
-    |> list_messages_for_ai_session()
-    |> Enum.reduce(empty_usage_totals(), &add_message_usage/2)
+    {_prev, totals} =
+      ai_session_id
+      |> list_messages_for_ai_session()
+      |> Enum.reduce({0.0, empty_usage_totals()}, &accumulate_usage/2)
+
+    totals
+  end
+
+  @doc """
+  Groups stored per-turn usage by `Destila.AI.Message.phase` for an AI session.
+
+  Returns `%{phase_number => totals_map}` where each `totals_map` has the same
+  shape as `aggregate_usage_for_ai_session/1`. Phases with no messages are
+  absent from the map.
+  """
+  def aggregate_usage_by_phase(ai_session_id) do
+    {_prev, by_phase} =
+      ai_session_id
+      |> list_messages_for_ai_session()
+      |> Enum.reduce({0.0, %{}}, fn msg, {prev_cost, acc} ->
+        bucket = Map.get(acc, msg.phase, empty_usage_totals())
+        {next_prev, updated} = accumulate_usage(msg, {prev_cost, bucket})
+        {next_prev, Map.put(acc, msg.phase, updated)}
+      end)
+
+    by_phase
+  end
+
+  @doc """
+  Returns `%{phase_number => %DateTime{}}` mapping each phase to its latest
+  `inserted_at` for the given AI session. Phases with no messages are absent.
+  """
+  def phase_boundaries_for_ai_session(ai_session_id) do
+    Repo.all(
+      from(m in Message,
+        where: m.ai_session_id == ^ai_session_id,
+        group_by: m.phase,
+        select: {m.phase, max(m.inserted_at)}
+      )
+    )
+    |> Map.new()
   end
 
   defp empty_usage_totals do
@@ -114,23 +152,30 @@ defmodule Destila.AI do
     }
   end
 
-  defp add_message_usage(%Message{raw_response: raw}, acc) when is_map(raw) do
+  # ClaudeCode reports `total_cost_usd` as a cumulative session running total on
+  # each turn's result message. We sum per-turn *deltas* so per-phase and
+  # session totals reflect actual spend instead of N × cumulative sums.
+  defp accumulate_usage(%Message{raw_response: raw}, {prev_cost, acc}) when is_map(raw) do
     usage = Map.get(raw, "usage") || %{}
+    curr_cost = read_float(raw, "total_cost_usd")
+    delta_cost = max(curr_cost - prev_cost, 0.0)
 
-    %{
+    updated = %{
       input_tokens: acc.input_tokens + read_int(usage, "input_tokens"),
       output_tokens: acc.output_tokens + read_int(usage, "output_tokens"),
       cache_read_input_tokens:
         acc.cache_read_input_tokens + read_int(usage, "cache_read_input_tokens"),
       cache_creation_input_tokens:
         acc.cache_creation_input_tokens + read_int(usage, "cache_creation_input_tokens"),
-      total_cost_usd: acc.total_cost_usd + read_float(raw, "total_cost_usd"),
+      total_cost_usd: acc.total_cost_usd + delta_cost,
       duration_ms: acc.duration_ms + read_float(raw, "duration_ms"),
       turns: acc.turns + if(usage == %{}, do: 0, else: 1)
     }
+
+    {max(curr_cost, prev_cost), updated}
   end
 
-  defp add_message_usage(_msg, acc), do: acc
+  defp accumulate_usage(_msg, {prev_cost, acc}), do: {prev_cost, acc}
 
   defp read_int(map, key) do
     case Map.get(map, key) do
