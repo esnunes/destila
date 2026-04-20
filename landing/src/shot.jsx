@@ -1,7 +1,7 @@
 // Shared screenshot helpers for all variations
 // Screenshots are already macOS browser windows — don't re-frame them.
 
-function Shot({ src, caption, shadow = true, style = {} }) {
+function Shot({ src, caption, style = {} }) {
   return (
     <figure style={{margin:0, ...style}}>
       <img
@@ -11,8 +11,7 @@ function Shot({ src, caption, shadow = true, style = {} }) {
         decoding="async"
         style={{
           display:'block', width:'100%', height:'auto',
-          borderRadius:10,
-          boxShadow: shadow ? '0 30px 60px -20px rgba(0,0,0,.35), 0 12px 24px -12px rgba(0,0,0,.25)' : 'none'
+          borderRadius:10
         }}
       />
       {caption && (
