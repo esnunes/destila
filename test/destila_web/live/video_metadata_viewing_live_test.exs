@@ -98,6 +98,18 @@ defmodule DestilaWeb.VideoMetadataViewingLiveTest do
       html = render(view)
       assert html =~ "Demo Video"
     end
+
+    @tag feature: "exported_metadata",
+         scenario: "Video metadata appears as inline chat message"
+    test "file-type export with .mp4 renders as inline video card", %{conn: conn} do
+      ws = create_session_with_video_export()
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, "[id^='export-video-']")
+      assert has_element?(view, "video")
+      assert has_element?(view, "source[type='video/mp4']")
+      refute has_element?(view, "video[autoplay]")
+    end
   end
 
   describe "sidebar play button" do

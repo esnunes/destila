@@ -1050,73 +1050,47 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                       <%= for meta <- @exported_metadata do %>
                         <%= cond do %>
                           <% file_path = meta.value["file"] -> %>
-                            <%= case Workflows.file_kind(file_path) do %>
-                              <% :video -> %>
-                                <button
-                                  id={"metadata-entry-#{meta.id}"}
-                                  phx-click="open_video_modal"
-                                  phx-value-id={meta.id}
-                                  class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
-                                  aria-label={"Play #{humanize_key(meta.key)}"}
-                                >
-                                  <span class="size-5 rounded flex items-center justify-center bg-error/10 shrink-0">
-                                    <.icon
-                                      name="hero-film-micro"
-                                      class="size-3 text-error/70"
-                                    />
-                                  </span>
-                                  <span class="text-sm text-base-content/60 truncate flex-1 text-left">
-                                    {humanize_key(meta.key)}
-                                  </span>
+                            <%= if Workflows.file_kind(file_path) == :video do %>
+                              <button
+                                id={"metadata-entry-#{meta.id}"}
+                                phx-click="open_video_modal"
+                                phx-value-id={meta.id}
+                                class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                                aria-label={"Play #{humanize_key(meta.key)}"}
+                              >
+                                <span class="size-5 rounded flex items-center justify-center bg-error/10 shrink-0">
+                                  <.icon name="hero-film-micro" class="size-3 text-error/70" />
+                                </span>
+                                <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                                  {humanize_key(meta.key)}
+                                </span>
+                                <.icon
+                                  name="hero-play-micro"
+                                  class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                                />
+                              </button>
+                            <% else %>
+                              <button
+                                id={"metadata-entry-#{meta.id}"}
+                                phx-click="open_text_modal"
+                                phx-value-id={meta.id}
+                                class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                                aria-label={"View #{humanize_key(meta.key)}"}
+                              >
+                                <span class="size-5 rounded flex items-center justify-center bg-success/10 shrink-0">
                                   <.icon
-                                    name="hero-play-micro"
-                                    class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                                    name="hero-document-text-micro"
+                                    class="size-3 text-success/70"
                                   />
-                                </button>
-                              <% :markdown -> %>
-                                <button
-                                  id={"metadata-entry-#{meta.id}"}
-                                  phx-click="open_text_modal"
-                                  phx-value-id={meta.id}
-                                  class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
-                                  aria-label={"View #{humanize_key(meta.key)}"}
-                                >
-                                  <span class="size-5 rounded flex items-center justify-center bg-success/10 shrink-0">
-                                    <.icon
-                                      name="hero-document-text-micro"
-                                      class="size-3 text-success/70"
-                                    />
-                                  </span>
-                                  <span class="text-sm text-base-content/60 truncate flex-1 text-left">
-                                    {humanize_key(meta.key)}
-                                  </span>
-                                  <.icon
-                                    name="hero-eye-micro"
-                                    class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
-                                  />
-                                </button>
-                              <% _ -> %>
-                                <button
-                                  id={"metadata-entry-#{meta.id}"}
-                                  phx-click="open_text_modal"
-                                  phx-value-id={meta.id}
-                                  class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
-                                  aria-label={"View #{humanize_key(meta.key)}"}
-                                >
-                                  <span class="size-5 rounded flex items-center justify-center bg-success/10 shrink-0">
-                                    <.icon
-                                      name="hero-document-text-micro"
-                                      class="size-3 text-success/70"
-                                    />
-                                  </span>
-                                  <span class="text-sm text-base-content/60 truncate flex-1 text-left">
-                                    {humanize_key(meta.key)}
-                                  </span>
-                                  <.icon
-                                    name="hero-eye-micro"
-                                    class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
-                                  />
-                                </button>
+                                </span>
+                                <span class="text-sm text-base-content/60 truncate flex-1 text-left">
+                                  {humanize_key(meta.key)}
+                                </span>
+                                <.icon
+                                  name="hero-eye-micro"
+                                  class="size-3.5 text-base-content/30 group-hover:text-primary transition-colors"
+                                />
+                              </button>
                             <% end %>
                           <% Map.has_key?(meta.value, "markdown") -> %>
                             <button
