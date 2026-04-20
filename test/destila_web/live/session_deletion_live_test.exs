@@ -81,104 +81,99 @@ defmodule DestilaWeb.SessionDeletionLiveTest do
     end
 
     @tag feature: @feature, scenario: "Delete a session from the session detail page"
-    test "redirects to referer captured from the Referer header", %{conn: conn, project: project} do
-      ws = create_session(%{title: "Fix login bug", project_id: project.id})
-      seed_welcome_message(ws)
-
-      conn = Plug.Conn.put_req_header(conn, "referer", "/")
-
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      view |> element("#delete-btn") |> render_click()
-
-      {path, _flash} = assert_redirect(view)
-      assert path == "/"
-    end
-
-    @tag feature: @feature, scenario: "Delete a session from the session detail page"
-    test "falls back to /crafting when referer points back to same session", %{
+    test "redirects to /crafting after deleting an active session", %{
       conn: conn,
       project: project
     } do
       ws = create_session(%{project_id: project.id})
       seed_welcome_message(ws)
 
-      conn =
-        Plug.Conn.put_req_header(conn, "referer", "http://localhost/sessions/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("#delete-btn") |> render_click()
+
+      {path, flash} = assert_redirect(view)
+      assert path == "/crafting"
+      assert flash["info"] == "Session deleted"
+    end
+
+    @tag feature: @feature, scenario: "Delete a session from the session detail page"
+    test "redirects to /crafting even when a Referer header is present", %{
+      conn: conn,
+      project: project
+    } do
+      ws = create_session(%{project_id: project.id})
+      other_ws = create_session(%{project_id: project.id})
+      seed_welcome_message(ws)
+
+      conn = Plug.Conn.put_req_header(conn, "referer", "/sessions/#{other_ws.id}")
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       view |> element("#delete-btn") |> render_click()
 
-      {path, _flash} = assert_redirect(view)
+      {path, flash} = assert_redirect(view)
       assert path == "/crafting"
+      assert flash["info"] == "Session deleted"
     end
 
     @tag feature: @feature, scenario: "Delete a session from the session detail page"
-    test "falls back to /crafting when referer points under same session path", %{
+    test "redirects to /crafting after deleting a done session", %{conn: conn, project: project} do
+      ws = create_session(%{project_id: project.id})
+      {:ok, ws} = Destila.Workflows.update_workflow_session(ws, %{done_at: DateTime.utc_now()})
+      seed_welcome_message(ws)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("#delete-btn") |> render_click()
+
+      {path, flash} = assert_redirect(view)
+      assert path == "/crafting"
+      assert flash["info"] == "Session deleted"
+    end
+
+    @tag feature: @feature, scenario: "Delete a session from the session detail page"
+    test "redirects to /crafting after deleting a processing session", %{
+      conn: conn,
+      project: project
+    } do
+      {:ok, ws} =
+        Destila.Workflows.insert_workflow_session(%{
+          title: "Processing Session",
+          workflow_type: :brainstorm_idea,
+          current_phase: 1,
+          total_phases: 4,
+          project_id: project.id
+        })
+
+      {:ok, _pe} = Destila.Executions.create_phase_execution(ws, 1, %{status: :processing})
+      seed_welcome_message(ws)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      view |> element("#delete-btn") |> render_click()
+
+      {path, flash} = assert_redirect(view)
+      assert path == "/crafting"
+      assert flash["info"] == "Session deleted"
+    end
+
+    @tag feature: @feature, scenario: "Delete an archived session"
+    test "redirects to /crafting after deleting an archived session", %{
       conn: conn,
       project: project
     } do
       ws = create_session(%{project_id: project.id})
       seed_welcome_message(ws)
+      {:ok, archived} = Destila.Workflows.archive_workflow_session(ws)
 
-      conn = Plug.Conn.put_req_header(conn, "referer", "/sessions/#{ws.id}/terminal")
-
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      view |> element("#delete-btn") |> render_click()
-
-      {path, _flash} = assert_redirect(view)
-      assert path == "/crafting"
-    end
-
-    @tag feature: @feature, scenario: "Delete a session from the session detail page"
-    test "falls back to /crafting when no referer is present", %{conn: conn, project: project} do
-      ws = create_session(%{project_id: project.id})
-      seed_welcome_message(ws)
-
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{archived.id}")
 
       view |> element("#delete-btn") |> render_click()
 
-      {path, _flash} = assert_redirect(view)
+      {path, flash} = assert_redirect(view)
       assert path == "/crafting"
-    end
-
-    @tag feature: @feature, scenario: "Delete a session from the session detail page"
-    test "falls back to /crafting when referer is a cross-origin absolute URL", %{
-      conn: conn,
-      project: project
-    } do
-      ws = create_session(%{project_id: project.id})
-      seed_welcome_message(ws)
-
-      conn = Plug.Conn.put_req_header(conn, "referer", "https://evil.example/steal")
-
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      view |> element("#delete-btn") |> render_click()
-
-      {path, _flash} = assert_redirect(view)
-      assert path == "/crafting"
-    end
-
-    @tag feature: @feature, scenario: "Delete a session from the session detail page"
-    test "redirects to referer path when referer is a same-origin absolute URL", %{
-      conn: conn,
-      project: project
-    } do
-      ws = create_session(%{project_id: project.id})
-      seed_welcome_message(ws)
-
-      conn = Plug.Conn.put_req_header(conn, "referer", "http://localhost/crafting")
-
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      view |> element("#delete-btn") |> render_click()
-
-      {path, _flash} = assert_redirect(view)
-      assert path == "/crafting"
+      assert flash["info"] == "Session deleted"
     end
   end
 

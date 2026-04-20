@@ -25,16 +25,14 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   alias Destila.Workflows.Session
 
   @impl true
-  def mount(%{"id" => id}, session, socket) do
-    mount_session(id, session, socket)
+  def mount(%{"id" => id}, _session, socket) do
+    mount_session(id, socket)
   end
 
-  defp mount_session(id, session, socket) do
+  defp mount_session(id, socket) do
     workflow_session = Workflows.get_workflow_session(id)
 
     if workflow_session do
-      post_delete_redirect = post_delete_redirect(session, id)
-
       alive_session =
         if connected?(socket) do
           Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
@@ -58,7 +56,6 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:view, :running)
        |> assign(:workflow_type, workflow_type)
        |> assign(:workflow_session, workflow_session)
-       |> assign(:post_delete_redirect, post_delete_redirect)
        |> assign(:project, project)
        |> assign(:phases, phases)
        |> assign(:editing_title, false)
@@ -122,7 +119,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         {:noreply,
          socket
          |> put_flash(:info, "Session deleted")
-         |> push_navigate(to: socket.assigns.post_delete_redirect)}
+         |> push_navigate(to: ~p"/crafting")}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not delete session")}
@@ -1449,37 +1446,4 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   defp format_duration(_), do: "0s"
-
-  defp post_delete_redirect(session, session_id) do
-    case local_path(Map.get(session, "session_detail_referer")) do
-      nil -> ~p"/crafting"
-      path -> if points_to_session?(path, session_id), do: ~p"/crafting", else: path
-    end
-  end
-
-  defp local_path(referer) when is_binary(referer) and referer != "" do
-    uri = URI.parse(referer)
-
-    if local_uri?(uri) and is_binary(uri.path) and String.starts_with?(uri.path, "/") do
-      case uri.query do
-        nil -> uri.path
-        query -> uri.path <> "?" <> query
-      end
-    end
-  end
-
-  defp local_path(_), do: nil
-
-  defp local_uri?(%URI{host: nil, scheme: nil}), do: true
-
-  defp local_uri?(%URI{host: host}) do
-    app_host = Application.get_env(:destila, DestilaWeb.Endpoint, [])[:url][:host]
-    is_binary(host) and host == app_host
-  end
-
-  defp points_to_session?(path, session_id) when is_binary(path) do
-    path == "/sessions/#{session_id}" or
-      String.starts_with?(path, "/sessions/#{session_id}/") or
-      String.starts_with?(path, "/sessions/#{session_id}?")
-  end
 end
