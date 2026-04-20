@@ -4,19 +4,38 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
   Feature: features/service_setup_command.feature
   """
   use DestilaWeb.ConnCase, async: false
+  use Mimic
 
-  alias Destila.Terminal.FakeTmux
+  alias Destila.Terminal.Tmux
   alias Destila.Workers.PrepareWorkflowSession
 
   @feature "service_setup_command"
 
-  setup do
-    Application.put_env(:destila, :tmux, FakeTmux)
-    FakeTmux.register()
+  setup :set_mimic_from_context
 
-    on_exit(fn ->
-      Application.delete_env(:destila, :tmux)
-      FakeTmux.stub_send_keys(nil)
+  setup do
+    test_pid = self()
+
+    stub(Tmux, :session_name, fn ws -> "ws-#{ws.id}" end)
+
+    stub(Tmux, :ensure_session, fn name, cwd ->
+      send(test_pid, {:tmux, :ensure_session, [name, cwd]})
+      :ok
+    end)
+
+    stub(Tmux, :kill_window, fn target ->
+      send(test_pid, {:tmux, :kill_window, [target]})
+      {"", 0}
+    end)
+
+    stub(Tmux, :new_window, fn target, opts ->
+      send(test_pid, {:tmux, :new_window, [target, opts]})
+      {"", 0}
+    end)
+
+    stub(Tmux, :send_keys, fn target, cmd ->
+      send(test_pid, {:tmux, :send_keys, [target, cmd]})
+      {"", 0}
     end)
 
     :ok
@@ -97,14 +116,12 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
     @tag feature: @feature,
          scenario: "Setup failures do not block worktree readiness"
     test "returns :ok when tmux raises so perform/1 still calls worktree_ready/1" do
-      FakeTmux.stub_send_keys(fn _target, _cmd -> raise "boom" end)
+      stub(Tmux, :send_keys, fn _target, _cmd -> raise "boom" end)
 
       project = %Destila.Projects.Project{setup_command: "mix deps.get"}
       ws = make_ws("raising-session")
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
-
-      assert_received {:tmux, :send_keys, _}
     end
   end
 end

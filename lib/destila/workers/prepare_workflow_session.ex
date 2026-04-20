@@ -5,6 +5,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
 
   alias Destila.{AI, Git, Workflows}
   alias Destila.Sessions.SessionProcess
+  alias Destila.Terminal.Tmux
   import Destila.StringHelper, only: [blank?: 1]
 
   @service_window 9
@@ -34,14 +35,13 @@ defmodule Destila.Workers.PrepareWorkflowSession do
       :ok
     else
       try do
-        tmux = tmux_impl()
-        session = tmux.session_name(ws)
+        session = Tmux.session_name(ws)
         target = "#{session}:#{@service_window}"
 
-        tmux.ensure_session(session, worktree_path)
-        tmux.kill_window(target)
-        tmux.new_window(target, cwd: worktree_path)
-        tmux.send_keys(target, project.setup_command)
+        Tmux.ensure_session(session, worktree_path)
+        Tmux.kill_window(target)
+        Tmux.new_window(target, cwd: worktree_path)
+        Tmux.send_keys(target, project.setup_command)
         :ok
       rescue
         e ->
@@ -54,8 +54,6 @@ defmodule Destila.Workers.PrepareWorkflowSession do
       end
     end
   end
-
-  defp tmux_impl, do: Application.get_env(:destila, :tmux, Destila.Terminal.Tmux)
 
   defp sync_repo(nil), do: :ok
 
