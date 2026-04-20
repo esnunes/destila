@@ -28,9 +28,20 @@ import TerminalPanel from "./hooks/terminal_panel"
 import LocalTime from "./hooks/local_time"
 import DraftsBoard from "./hooks/drafts_board"
 
+const AT_BOTTOM_THRESHOLD_PX = 24
+
 const ScrollBottomHook = {
-  mounted() { this.el.scrollTop = this.el.scrollHeight },
-  updated() { this.el.scrollTop = this.el.scrollHeight },
+  mounted() {
+    this.el.scrollTop = this.el.scrollHeight
+    this._wasAtBottom = true
+  },
+  beforeUpdate() {
+    const distance = this.el.scrollHeight - this.el.scrollTop - this.el.clientHeight
+    this._wasAtBottom = distance <= AT_BOTTOM_THRESHOLD_PX
+  },
+  updated() {
+    if (this._wasAtBottom) this.el.scrollTop = this.el.scrollHeight
+  },
 }
 
 const FocusFirstErrorHook = {
