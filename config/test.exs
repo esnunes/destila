@@ -26,6 +26,10 @@ config :phoenix_live_view,
 # Use test adapter for ClaudeCode
 config :claude_code, adapter: {ClaudeCode.Test, ClaudeCode}
 
+# Skip Claude plugin registration in tests — each CLI call takes ~500ms and
+# contributes the majority of ClaudeSession test time.
+config :destila, :setup_claude_plugins, false
+
 # Stub the history reader in tests so we don't touch ~/.claude/projects.
 config :destila, :ai_history_module, Destila.AI.FakeHistory
 
