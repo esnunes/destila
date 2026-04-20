@@ -7,7 +7,9 @@ Feature: AI Session Debug Detail Page
   ClaudeCode (text, thinking, tool usage, tool results, server tool usage, MCP
   tool usage, images, documents, redacted thinking, container uploads,
   compaction markers) renders without crashing the page, with an inspect/2
-  fallback for unknown block shapes.
+  fallback for unknown block shapes. A horizontal phase stepper sits above the
+  conversation, with per-phase aggregated stats and clickable steps that scroll
+  to inline `#phase-separator-{N}` dividers inside the transcript.
 
   Scenario: Header shows creation date and Claude session id
     Given I open the AI Session Debug Detail page for a valid AI session
@@ -173,3 +175,49 @@ Feature: AI Session Debug Detail Page
     Given I am on the AI Session Debug Detail page
     When a new system message with usage is inserted for this AI session
     Then the totals strip should refresh to include the new turn without a reload
+
+  Scenario: Phase stepper lists all workflow phases in order
+    Given I open the AI Session Debug Detail page for a valid AI session
+    Then the page should render a phase stepper with one step per workflow phase
+    And each step should carry a stable DOM id keyed by phase number
+
+  Scenario: Current workflow phase is highlighted in the stepper
+    Given the workflow session is in phase 2
+    When I open the AI Session Debug Detail page
+    Then the phase 2 step should be marked as active
+    And every other step should be marked as non-active
+
+  Scenario: Phase step shows per-phase aggregated stats
+    Given the AI session has messages recorded in phase 1 and phase 2
+    When I open the AI Session Debug Detail page
+    Then the phase 1 step should display input tokens, output tokens, turn count, and cost for phase 1
+    And the phase 2 step should display input tokens, output tokens, turn count, and cost for phase 2
+
+  Scenario: Empty phase step renders without stats and is not clickable
+    Given the AI session has no messages in phase 3
+    When I open the AI Session Debug Detail page
+    Then the phase 3 step should render without aggregated stats
+    And the phase 3 step should not be wrapped in an anchor element
+
+  Scenario: Phase separator divider precedes the first message of each phase
+    Given the AI session has messages in phase 1 and phase 2 and JSONL entries whose timestamps straddle the phase boundary
+    When I open the AI Session Debug Detail page
+    Then a phase separator should render before the first JSONL entry of each phase
+    And the separator should carry a stable DOM id keyed by phase number
+
+  Scenario: Clicking a non-empty phase step scrolls to its separator
+    Given the AI session has messages in phase 1 and phase 2
+    When I open the AI Session Debug Detail page
+    Then the phase 2 step should be rendered as an anchor whose href points at the phase 2 separator
+    And the scrollable conversation container should use smooth scrolling
+
+  Scenario: Phase stepper updates live when new turns are recorded
+    Given I am on the AI Session Debug Detail page with no phase 2 messages
+    When a new system message with phase 2 is broadcast for this AI session
+    Then the phase 2 step should become clickable without a reload
+    And the phase 2 step should display a turn count of 1
+
+  Scenario: Wall-clock time spans first to last message of the phase
+    Given the AI session has phase 1 messages and two JSONL entries 90 seconds apart in phase 2
+    When I open the AI Session Debug Detail page
+    Then the phase 2 step should display a wall-clock duration reflecting 90 seconds

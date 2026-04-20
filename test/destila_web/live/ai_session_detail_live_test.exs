@@ -868,4 +868,266 @@ defmodule DestilaWeb.AiSessionDetailLiveTest do
       assert has_element?(view, "[data-totals-cost]", "$0.0005")
     end
   end
+
+  describe "phase stepper" do
+    defp create_session_with_phase(current_phase) do
+      {:ok, ws} =
+        Destila.Workflows.insert_workflow_session(%{
+          title: "Phase Session",
+          workflow_type: :brainstorm_idea,
+          project_id: nil,
+          done_at: DateTime.utc_now(),
+          current_phase: current_phase,
+          total_phases: 4
+        })
+
+      ws
+    end
+
+    defp insert_phase_message(ai, ws, phase, opts) do
+      raw =
+        %{
+          "usage" => %{
+            "input_tokens" => Keyword.get(opts, :input, 0),
+            "output_tokens" => Keyword.get(opts, :output, 0)
+          },
+          "total_cost_usd" => Keyword.get(opts, :cost, 0.0),
+          "duration_ms" => Keyword.get(opts, :duration, 0.0)
+        }
+
+      {:ok, msg} =
+        AI.create_message(ai.id, %{
+          role: :system,
+          content: "ok",
+          phase: phase,
+          workflow_session_id: ws.id,
+          raw_response: raw
+        })
+
+      case Keyword.get(opts, :inserted_at) do
+        nil ->
+          msg
+
+        %DateTime{} = dt ->
+          import Ecto.Query
+
+          Destila.Repo.update_all(
+            from(m in Destila.AI.Message, where: m.id == ^msg.id),
+            set: [inserted_at: dt]
+          )
+
+          %{msg | inserted_at: dt}
+      end
+    end
+
+    defp raw_entry(type, iso_timestamp) do
+      base = %{
+        "type" => type,
+        "uuid" => Ecto.UUID.generate(),
+        "sessionId" => "s1",
+        "timestamp" => iso_timestamp
+      }
+
+      case type do
+        "user" ->
+          Map.put(base, "message", %{"role" => "user", "content" => "hi"})
+
+        "assistant" ->
+          Map.put(base, "message", %{
+            "role" => "assistant",
+            "content" => [%{"type" => "text", "text" => "hi back"}]
+          })
+      end
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Phase stepper lists all workflow phases in order"
+    test "renders one step per workflow phase with stable ids", %{conn: conn} do
+      ws = create_session_with_phase(1)
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, "#ai-session-phase-stepper")
+      assert has_element?(view, "#phase-step-1")
+      assert has_element?(view, "#phase-step-2")
+      assert has_element?(view, "#phase-step-3")
+      assert has_element?(view, "#phase-step-4")
+      refute has_element?(view, "#phase-step-5")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Current workflow phase is highlighted in the stepper"
+    test "marks the current phase step as active", %{conn: conn} do
+      ws = create_session_with_phase(2)
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, ~s|#phase-step-2[data-active="true"]|)
+      assert has_element?(view, ~s|#phase-step-1[data-active="false"]|)
+      assert has_element?(view, ~s|#phase-step-3[data-active="false"]|)
+      assert has_element?(view, ~s|#phase-step-4[data-active="false"]|)
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Phase step shows per-phase aggregated stats"
+    test "renders phase-specific stats from aggregate_usage_by_phase", %{conn: conn} do
+      ws = create_session_with_phase(2)
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      insert_phase_message(ai, ws, 1, input: 100, output: 50, cost: 0.002)
+      insert_phase_message(ai, ws, 2, input: 40, output: 10, cost: 0.001)
+      insert_phase_message(ai, ws, 2, input: 10, output: 5, cost: 0.0005)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, "#phase-step-1 [data-phase-turns]", "1 turn")
+      assert has_element?(view, "#phase-step-1 [data-phase-in]", "in 100")
+      assert has_element?(view, "#phase-step-1 [data-phase-out]", "out 50")
+      assert has_element?(view, "#phase-step-1 [data-phase-cost]", "$0.0020")
+
+      assert has_element?(view, "#phase-step-2 [data-phase-turns]", "2 turns")
+      assert has_element?(view, "#phase-step-2 [data-phase-in]", "in 50")
+      assert has_element?(view, "#phase-step-2 [data-phase-out]", "out 15")
+      assert has_element?(view, "#phase-step-2 [data-phase-cost]", "$0.0015")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Empty phase step renders without stats and is not clickable"
+    test "renders empty phases as spans without stats", %{conn: conn} do
+      ws = create_session_with_phase(1)
+      ai = create_ai_session(ws)
+      FakeHistory.stub(ai.claude_session_id, {:ok, []})
+
+      insert_phase_message(ai, ws, 1, input: 10, output: 5, cost: 0.001)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      refute has_element?(view, "#phase-step-3 [data-phase-turns]")
+      refute has_element?(view, ~s|a#phase-step-3|)
+      assert has_element?(view, ~s|span#phase-step-3|)
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Phase separator divider precedes the first message of each phase"
+    test "renders phase separators at phase boundaries", %{conn: conn} do
+      ws = create_session_with_phase(2)
+      ai = create_ai_session(ws)
+
+      t_boundary_phase1 = ~U[2026-01-01 00:00:00.000000Z]
+
+      insert_phase_message(ai, ws, 1,
+        input: 10,
+        output: 5,
+        cost: 0.0,
+        inserted_at: t_boundary_phase1
+      )
+
+      insert_phase_message(ai, ws, 2, input: 20, output: 10, cost: 0.0)
+
+      entries = [
+        raw_entry("user", "2025-12-31T23:59:00Z"),
+        raw_entry("assistant", "2026-01-01T00:00:30Z"),
+        raw_entry("user", "2026-01-01T00:01:00Z")
+      ]
+
+      FakeHistory.stub_raw(ai.claude_session_id, {:ok, entries})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, "#phase-separator-1")
+      assert has_element?(view, "#phase-separator-2")
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Clicking a non-empty phase step scrolls to its separator"
+    test "phase step anchor points at matching separator and container scrolls smoothly",
+         %{conn: conn} do
+      ws = create_session_with_phase(2)
+      ai = create_ai_session(ws)
+
+      insert_phase_message(ai, ws, 1,
+        input: 1,
+        output: 1,
+        cost: 0.0,
+        inserted_at: ~U[2026-01-01 00:00:00.000000Z]
+      )
+
+      insert_phase_message(ai, ws, 2, input: 1, output: 1, cost: 0.0)
+
+      entries = [
+        raw_entry("user", "2025-12-31T23:59:00Z"),
+        raw_entry("assistant", "2026-01-01T00:01:00Z")
+      ]
+
+      FakeHistory.stub_raw(ai.claude_session_id, {:ok, entries})
+
+      {:ok, view, html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, ~s|a#phase-step-2[href="#phase-separator-2"]|)
+      assert html =~ "scroll-smooth"
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Phase stepper updates live when new turns are recorded"
+    test "phase step becomes clickable after a new message is broadcast", %{conn: conn} do
+      ws = create_session_with_phase(2)
+      ai = create_ai_session(ws)
+
+      insert_phase_message(ai, ws, 1,
+        input: 1,
+        output: 1,
+        cost: 0.0,
+        inserted_at: ~U[2026-01-01 00:00:00.000000Z]
+      )
+
+      entries = [
+        raw_entry("user", "2025-12-31T23:59:00Z"),
+        raw_entry("assistant", "2026-01-01T00:01:00Z")
+      ]
+
+      FakeHistory.stub_raw(ai.claude_session_id, {:ok, entries})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      refute has_element?(view, "#phase-step-2 [data-phase-turns]")
+
+      insert_phase_message(ai, ws, 2, input: 3, output: 7, cost: 0.0)
+
+      assert has_element?(view, "#phase-step-2 [data-phase-turns]", "1 turn")
+      assert has_element?(view, ~s|a#phase-step-2[href="#phase-separator-2"]|)
+    end
+
+    @tag feature: "ai_session_detail",
+         scenario: "Wall-clock time spans first to last message of the phase"
+    test "phase 2 wall clock reflects 90 seconds between first and last entry", %{conn: conn} do
+      ws = create_session_with_phase(2)
+      ai = create_ai_session(ws)
+
+      insert_phase_message(ai, ws, 1,
+        input: 1,
+        output: 1,
+        cost: 0.0,
+        inserted_at: ~U[2026-01-01 00:00:00.000000Z]
+      )
+
+      insert_phase_message(ai, ws, 2, input: 1, output: 1, cost: 0.0)
+
+      entries = [
+        raw_entry("user", "2025-12-31T23:59:00Z"),
+        raw_entry("user", "2026-01-01T00:00:30Z"),
+        raw_entry("assistant", "2026-01-01T00:02:00Z")
+      ]
+
+      FakeHistory.stub_raw(ai.claude_session_id, {:ok, entries})
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}/ai/#{ai.id}")
+
+      assert has_element?(view, "#phase-step-2 [data-phase-wall]", "1m 30s")
+    end
+  end
 end

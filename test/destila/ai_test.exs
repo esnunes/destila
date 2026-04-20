@@ -1,5 +1,159 @@
 defmodule Destila.AITest do
-  use ExUnit.Case, async: true
+  use DestilaWeb.ConnCase, async: false
+
+  alias Destila.AI
+
+  defp create_ws do
+    {:ok, ws} =
+      Destila.Workflows.insert_workflow_session(%{
+        title: "Test",
+        workflow_type: :brainstorm_idea,
+        current_phase: 1,
+        total_phases: 4
+      })
+
+    ws
+  end
+
+  defp create_ai(ws) do
+    {:ok, ai} =
+      AI.create_ai_session(%{
+        workflow_session_id: ws.id,
+        worktree_path: System.tmp_dir!(),
+        claude_session_id: Ecto.UUID.generate()
+      })
+
+    ai
+  end
+
+  defp insert_msg(ai, ws, phase, opts) do
+    raw =
+      case Keyword.get(opts, :usage) do
+        nil ->
+          nil
+
+        {input, output, cost} ->
+          %{
+            "usage" => %{"input_tokens" => input, "output_tokens" => output},
+            "total_cost_usd" => cost,
+            "duration_ms" => Keyword.get(opts, :duration, 0.0)
+          }
+      end
+
+    {:ok, msg} =
+      AI.create_message(ai.id, %{
+        role: :system,
+        content: "ok",
+        phase: phase,
+        workflow_session_id: ws.id,
+        raw_response: raw
+      })
+
+    case Keyword.get(opts, :inserted_at) do
+      nil ->
+        msg
+
+      %DateTime{} = dt ->
+        import Ecto.Query
+
+        Destila.Repo.update_all(
+          from(m in Destila.AI.Message, where: m.id == ^msg.id),
+          set: [inserted_at: dt]
+        )
+
+        %{msg | inserted_at: dt}
+    end
+  end
+
+  describe "aggregate_usage_by_phase/1" do
+    test "groups totals by phase and omits phases with no messages" do
+      ws = create_ws()
+      ai = create_ai(ws)
+
+      insert_msg(ai, ws, 1, usage: {100, 50, 0.002})
+      insert_msg(ai, ws, 2, usage: {10, 5, 0.0005})
+      insert_msg(ai, ws, 2, usage: {40, 20, 0.001})
+      insert_msg(ai, ws, 4, usage: {7, 3, 0.0}, duration: 5.0)
+
+      totals = AI.aggregate_usage_by_phase(ai.id)
+
+      assert Map.keys(totals) |> Enum.sort() == [1, 2, 4]
+      assert totals[1].input_tokens == 100
+      assert totals[1].output_tokens == 50
+      assert totals[1].turns == 1
+      assert totals[2].input_tokens == 50
+      assert totals[2].output_tokens == 25
+      assert totals[2].turns == 2
+      assert totals[4].duration_ms == 5.0
+    end
+
+    test "returns empty map when session has no messages" do
+      ws = create_ws()
+      ai = create_ai(ws)
+
+      assert AI.aggregate_usage_by_phase(ai.id) == %{}
+    end
+
+    test "messages without a usage map contribute zero turns" do
+      ws = create_ws()
+      ai = create_ai(ws)
+
+      insert_msg(ai, ws, 1, [])
+
+      totals = AI.aggregate_usage_by_phase(ai.id)
+      assert totals[1].turns == 0
+      assert totals[1].input_tokens == 0
+      assert totals[1].output_tokens == 0
+    end
+
+    test "sum across phases equals aggregate_usage_for_ai_session/1" do
+      ws = create_ws()
+      ai = create_ai(ws)
+
+      insert_msg(ai, ws, 1, usage: {100, 50, 0.002})
+      insert_msg(ai, ws, 2, usage: {40, 10, 0.001})
+      insert_msg(ai, ws, 3, usage: {5, 2, 0.0005})
+
+      per_phase = AI.aggregate_usage_by_phase(ai.id)
+      total = AI.aggregate_usage_for_ai_session(ai.id)
+
+      summed_in =
+        per_phase |> Map.values() |> Enum.reduce(0, &(&2 + &1.input_tokens))
+
+      summed_out =
+        per_phase |> Map.values() |> Enum.reduce(0, &(&2 + &1.output_tokens))
+
+      assert summed_in == total.input_tokens
+      assert summed_out == total.output_tokens
+    end
+  end
+
+  describe "phase_boundaries_for_ai_session/1" do
+    test "returns max inserted_at per phase" do
+      ws = create_ws()
+      ai = create_ai(ws)
+
+      t1 = ~U[2026-01-01 00:00:00.000000Z]
+      t2 = ~U[2026-01-01 00:01:00.000000Z]
+      t3 = ~U[2026-01-01 00:02:00.000000Z]
+
+      insert_msg(ai, ws, 1, usage: {1, 1, 0.0}, inserted_at: t1)
+      insert_msg(ai, ws, 1, usage: {1, 1, 0.0}, inserted_at: t2)
+      insert_msg(ai, ws, 2, usage: {1, 1, 0.0}, inserted_at: t3)
+
+      boundaries = AI.phase_boundaries_for_ai_session(ai.id)
+
+      assert DateTime.compare(boundaries[1], t2) == :eq
+      assert DateTime.compare(boundaries[2], t3) == :eq
+    end
+
+    test "returns empty map when session has no messages" do
+      ws = create_ws()
+      ai = create_ai(ws)
+
+      assert AI.phase_boundaries_for_ai_session(ai.id) == %{}
+    end
+  end
 
   describe "generate_title/2 (one-off, no session)" do
     test "returns title for a brainstorm idea" do

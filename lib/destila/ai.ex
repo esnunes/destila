@@ -102,6 +102,38 @@ defmodule Destila.AI do
     |> Enum.reduce(empty_usage_totals(), &add_message_usage/2)
   end
 
+  @doc """
+  Groups stored per-turn usage by `Destila.AI.Message.phase` for an AI session.
+
+  Returns `%{phase_number => totals_map}` where each `totals_map` has the same
+  shape as `aggregate_usage_for_ai_session/1`. Phases with no messages are
+  absent from the map.
+  """
+  def aggregate_usage_by_phase(ai_session_id) do
+    ai_session_id
+    |> list_messages_for_ai_session()
+    |> Enum.group_by(& &1.phase)
+    |> Map.new(fn {phase, messages} ->
+      totals = Enum.reduce(messages, empty_usage_totals(), &add_message_usage/2)
+      {phase, totals}
+    end)
+  end
+
+  @doc """
+  Returns `%{phase_number => %DateTime{}}` mapping each phase to its latest
+  `inserted_at` for the given AI session. Phases with no messages are absent.
+  """
+  def phase_boundaries_for_ai_session(ai_session_id) do
+    Repo.all(
+      from(m in Message,
+        where: m.ai_session_id == ^ai_session_id,
+        group_by: m.phase,
+        select: {m.phase, max(m.inserted_at)}
+      )
+    )
+    |> Map.new()
+  end
+
   defp empty_usage_totals do
     %{
       input_tokens: 0,
