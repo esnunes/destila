@@ -30,6 +30,9 @@ defmodule Destila.AI.Conversation do
     handle_session_strategy(ws, phase_number)
     session = ensure_ai_session(ws)
     phase_prompt = prompt_fn.(ws)
+    wrapped_prompt = "<initial-prompt>\n#{phase_prompt}\n</initial-prompt>"
+
+    AI.CompactHookSetup.install(session.worktree_path, wrapped_prompt)
 
     # Auto-add non_interactive skill for autonomous phases
     all_skills =
@@ -58,7 +61,7 @@ defmodule Destila.AI.Conversation do
         if(tool_section != "", do: "# Tools\n\n#{tool_section}"),
         if(skill_section != "", do: "# Skills\n\n#{skill_section}"),
         service_section,
-        "# Prompt\n\n#{phase_prompt}"
+        "# Prompt\n\n#{wrapped_prompt}"
       ]
 
     query = sections |> Enum.reject(&is_nil/1) |> Enum.join("\n\n")

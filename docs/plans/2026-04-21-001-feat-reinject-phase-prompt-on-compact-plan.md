@@ -1,7 +1,7 @@
 ---
 title: "feat: Re-inject phase prompt around compaction via Claude Code hook"
 type: feat
-status: active
+status: completed
 date: 2026-04-21
 ---
 
@@ -182,7 +182,7 @@ This plan restores that context around the compaction boundary by:
 
 ## Implementation Units
 
-- [ ] **Unit 1: Wrap phase prompt in `<initial-prompt>` tag at phase start**
+- [x] **Unit 1: Wrap phase prompt in `<initial-prompt>` tag at phase start**
 
 **Goal:** The `# Prompt` section sent to Claude at phase start contains the
 phase prompt wrapped in `<initial-prompt>...</initial-prompt>` tags.
@@ -225,7 +225,7 @@ phase prompt wrapped in `<initial-prompt>...</initial-prompt>` tags.
 
 ---
 
-- [ ] **Unit 2: Persist wrapped phase prompt to per-worktree file**
+- [x] **Unit 2: Persist wrapped phase prompt to per-worktree file**
 
 **Goal:** On phase start, write the wrapped phase prompt to
 `<worktree_path>/.claude/destila/initial_prompt.txt` so a hook can read it.
@@ -279,7 +279,7 @@ phase prompt wrapped in `<initial-prompt>...</initial-prompt>` tags.
 
 ---
 
-- [ ] **Unit 3: Ship the hook shell script and install it into worktrees**
+- [x] **Unit 3: Ship the hook shell script and install it into worktrees**
 
 **Goal:** A small POSIX shell script exists in `priv/hooks/` and is copied
 into each worktree's `.claude/hooks/` directory. The script reads the
@@ -332,7 +332,7 @@ initial-prompt file and prints it followed by the reference sentence.
 
 ---
 
-- [ ] **Unit 4: Write `.claude/settings.json` declaring the SessionStart(compact) hook**
+- [x] **Unit 4: Write `.claude/settings.json` declaring the SessionStart(compact) hook**
 
 **Goal:** Each worktree contains a `.claude/settings.json` that registers
 the shipped script as a `SessionStart` hook for matcher `compact`.
@@ -398,7 +398,7 @@ the shipped script as a `SessionStart` hook for matcher `compact`.
 
 ---
 
-- [ ] **Unit 5: End-to-end integration wiring and existing-test audit**
+- [x] **Unit 5: End-to-end integration wiring and existing-test audit**
 
 **Goal:** `Conversation.phase_start/1` calls `CompactHookSetup.install/2`
 with the worktree path and wrapped phase prompt. Existing tests continue

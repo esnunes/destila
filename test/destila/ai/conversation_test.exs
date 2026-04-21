@@ -248,4 +248,121 @@ defmodule Destila.AI.ConversationTest do
       assert :awaiting_input == AI.Conversation.handle_ai_result(ws, ok_result())
     end
   end
+
+  describe "phase_start/1 initial-prompt wrapping and hook install" do
+    defp create_session_with_worktree(tmp, attrs \\ %{}) do
+      base = %{
+        title: "Wrap test",
+        workflow_type: :brainstorm_idea,
+        current_phase: 1,
+        total_phases: 4
+      }
+
+      {:ok, ws} = Workflows.insert_workflow_session(Map.merge(base, attrs))
+      {:ok, _ai_session} = AI.create_ai_session(%{workflow_session_id: ws.id, worktree_path: tmp})
+      ws
+    end
+
+    defp tmp_worktree do
+      path =
+        Path.join(
+          System.tmp_dir!(),
+          "conversation_phase_start_#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(path)
+      on_exit(fn -> File.rm_rf!(path) end)
+      path
+    end
+
+    test "enqueued Oban query wraps the phase prompt in <initial-prompt> tags" do
+      tmp = tmp_worktree()
+      ws = create_session_with_worktree(tmp)
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        assert :processing == AI.Conversation.phase_start(ws)
+
+        assert_enqueued(
+          worker: Destila.Workers.AiQueryWorker,
+          args: %{"workflow_session_id" => ws.id}
+        )
+
+        [job] = all_enqueued(worker: Destila.Workers.AiQueryWorker)
+        query = job.args["query"]
+
+        assert query =~ "# Prompt\n\n<initial-prompt>\n"
+        assert query =~ "\n</initial-prompt>"
+      end)
+    end
+
+    test "writes wrapped prompt, hook script, and settings.json into the worktree" do
+      tmp = tmp_worktree()
+      ws = create_session_with_worktree(tmp)
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        AI.Conversation.phase_start(ws)
+
+        [job] = all_enqueued(worker: Destila.Workers.AiQueryWorker)
+        query = job.args["query"]
+
+        # 1. prompt file matches the wrapped block present in the query
+        prompt_path = Path.join(tmp, ".claude/destila/initial_prompt.txt")
+        assert File.exists?(prompt_path)
+        file_contents = File.read!(prompt_path)
+        assert String.contains?(query, file_contents)
+        assert file_contents =~ "<initial-prompt>"
+        assert file_contents =~ "</initial-prompt>"
+
+        # 2. hook script shipped and executable
+        hook_path = Path.join(tmp, ".claude/hooks/reinject_initial_prompt.sh")
+        assert File.exists?(hook_path)
+        %File.Stat{mode: mode} = File.stat!(hook_path)
+        assert Bitwise.band(mode, 0o100) == 0o100
+
+        # 3. settings.json parses and declares the SessionStart compact hook
+        settings = Jason.decode!(File.read!(Path.join(tmp, ".claude/settings.json")))
+        assert [entry] = settings["hooks"]["SessionStart"]
+        assert entry["matcher"] == "compact"
+        assert [%{"command" => ".claude/hooks/reinject_initial_prompt.sh"}] = entry["hooks"]
+      end)
+    end
+
+    test "works without a worktree_path (no files created, still enqueues)" do
+      base = %{
+        title: "No worktree",
+        workflow_type: :brainstorm_idea,
+        current_phase: 1,
+        total_phases: 4
+      }
+
+      {:ok, ws} = Workflows.insert_workflow_session(base)
+      {:ok, _ai_session} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        assert :processing == AI.Conversation.phase_start(ws)
+
+        assert_enqueued(
+          worker: Destila.Workers.AiQueryWorker,
+          args: %{"workflow_session_id" => ws.id}
+        )
+      end)
+    end
+
+    test "second phase_start overwrites the prompt file with the current phase's prompt" do
+      tmp = tmp_worktree()
+      ws1 = create_session_with_worktree(tmp, %{current_phase: 1})
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        AI.Conversation.phase_start(ws1)
+        first = File.read!(Path.join(tmp, ".claude/destila/initial_prompt.txt"))
+
+        ws2 = %{ws1 | current_phase: 2}
+        AI.Conversation.phase_start(ws2)
+        second = File.read!(Path.join(tmp, ".claude/destila/initial_prompt.txt"))
+
+        refute first == second
+        assert second =~ "<initial-prompt>"
+      end)
+    end
+  end
 end
