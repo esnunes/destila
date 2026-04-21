@@ -19,9 +19,8 @@ defmodule Destila.AI.CompactHookSetup do
   require Logger
 
   @prompt_subpath ".claude/destila/initial_prompt.txt"
-  @hook_subpath ".claude/hooks/reinject_initial_prompt.sh"
+  @hook_path ".claude/hooks/reinject_initial_prompt.sh"
   @settings_subpath ".claude/settings.json"
-  @hook_command ".claude/hooks/reinject_initial_prompt.sh"
   @hook_script_name "reinject_initial_prompt.sh"
 
   @doc """
@@ -60,8 +59,17 @@ defmodule Destila.AI.CompactHookSetup do
   def merge_settings(existing, hook_entry \\ default_hook_entry())
 
   def merge_settings(existing, hook_entry) when is_map(existing) do
-    hooks = Map.get(existing, "hooks", %{})
-    session_start = Map.get(hooks, "SessionStart", [])
+    hooks =
+      case Map.get(existing, "hooks", %{}) do
+        map when is_map(map) -> map
+        _ -> %{}
+      end
+
+    session_start =
+      case Map.get(hooks, "SessionStart", []) do
+        list when is_list(list) -> list
+        _ -> []
+      end
 
     session_start =
       if contains_hook_entry?(session_start, hook_entry) do
@@ -88,7 +96,7 @@ defmodule Destila.AI.CompactHookSetup do
   def default_hook_entry do
     %{
       "matcher" => "compact",
-      "hooks" => [%{"type" => "command", "command" => @hook_command}]
+      "hooks" => [%{"type" => "command", "command" => @hook_path}]
     }
   end
 
@@ -101,9 +109,9 @@ defmodule Destila.AI.CompactHookSetup do
   end
 
   defp install_hook_script!(worktree_path) do
-    dest = Path.join(worktree_path, @hook_subpath)
+    dest = Path.join(worktree_path, @hook_path)
     File.mkdir_p!(Path.dirname(dest))
-    File.cp!(source_script_path(), dest)
+    File.cp!(source_script_path!(), dest)
     File.chmod!(dest, 0o755)
   end
 
@@ -151,7 +159,13 @@ defmodule Destila.AI.CompactHookSetup do
     end)
   end
 
-  defp source_script_path do
-    Path.join([:code.priv_dir(:destila), "hooks", @hook_script_name])
+  defp source_script_path! do
+    case :code.priv_dir(:destila) do
+      {:error, :bad_name} ->
+        raise "CompactHookSetup: :destila application priv directory not found"
+
+      priv_dir ->
+        Path.join([priv_dir, "hooks", @hook_script_name])
+    end
   end
 end

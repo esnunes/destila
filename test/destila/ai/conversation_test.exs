@@ -364,5 +364,84 @@ defmodule Destila.AI.ConversationTest do
         assert second =~ "<initial-prompt>"
       end)
     end
+
+    test "phase prompts containing literal angle-bracket tags are wrapped intact" do
+      tmp = tmp_worktree()
+
+      # Embed `<example>` tags via the brainstorm_idea phase-1 prompt,
+      # which interpolates `workflow_session.user_prompt` verbatim. The
+      # outer `<initial-prompt>` wrapping must appear exactly once around
+      # the full content and must not be disturbed by the inner tags.
+      user_prompt_with_tags =
+        "Build a todo app.\n<example>A task with title and due_date</example>\nBe concise."
+
+      ws =
+        create_session_with_worktree(tmp, %{
+          user_prompt: user_prompt_with_tags,
+          workflow_type: :brainstorm_idea,
+          current_phase: 1,
+          total_phases: 4
+        })
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        assert :processing == AI.Conversation.phase_start(ws)
+
+        [job] = all_enqueued(worker: Destila.Workers.AiQueryWorker)
+        query = job.args["query"]
+
+        file_contents =
+          File.read!(Path.join(tmp, ".claude/destila/initial_prompt.txt"))
+
+        # Inner tags survive verbatim.
+        assert file_contents =~ "<example>A task with title and due_date</example>"
+        assert query =~ "<example>A task with title and due_date</example>"
+
+        # Outer wrapping appears exactly once in both query and file.
+        assert length(Regex.scan(~r/<initial-prompt>/, file_contents)) == 1
+        assert length(Regex.scan(~r|</initial-prompt>|, file_contents)) == 1
+        assert String.starts_with?(file_contents, "<initial-prompt>\n")
+        assert String.ends_with?(file_contents, "\n</initial-prompt>")
+      end)
+    end
+  end
+
+  describe "send_message/2 initial-prompt scope" do
+    test "does not wrap user messages in <initial-prompt> tags and does not write hook files" do
+      tmp =
+        Path.join(
+          System.tmp_dir!(),
+          "conversation_send_message_#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(tmp)
+      on_exit(fn -> File.rm_rf!(tmp) end)
+
+      base = %{
+        title: "Send message scope",
+        workflow_type: :brainstorm_idea,
+        current_phase: 1,
+        total_phases: 4
+      }
+
+      {:ok, ws} = Workflows.insert_workflow_session(base)
+      {:ok, _ai_session} = AI.create_ai_session(%{workflow_session_id: ws.id, worktree_path: tmp})
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        assert :processing == AI.Conversation.send_message(ws, "hello from the user")
+
+        [job] = all_enqueued(worker: Destila.Workers.AiQueryWorker)
+        query = job.args["query"]
+
+        refute query =~ "<initial-prompt>"
+        refute query =~ "</initial-prompt>"
+        assert query == "hello from the user"
+
+        # send_message/2 must not touch the hook install side-effects —
+        # those are scoped to phase_start/1.
+        refute File.exists?(Path.join(tmp, ".claude/destila/initial_prompt.txt"))
+        refute File.exists?(Path.join(tmp, ".claude/hooks/reinject_initial_prompt.sh"))
+        refute File.exists?(Path.join(tmp, ".claude/settings.json"))
+      end)
+    end
   end
 end
