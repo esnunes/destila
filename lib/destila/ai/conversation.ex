@@ -27,10 +27,7 @@ defmodule Destila.AI.Conversation do
       non_interactive: non_interactive
     } = get_phase(ws, phase_number)
 
-    group =
-      Workflows.group_for_phase(ws.workflow_type, phase_number) ||
-        raise ArgumentError,
-              "no AI session group for #{inspect(ws.workflow_type)} phase #{phase_number}"
+    group = Workflows.group_for_phase(ws.workflow_type, phase_number)
 
     maybe_cut_group_boundary(ws, phase_number, group)
     ensure_ai_session(ws)
