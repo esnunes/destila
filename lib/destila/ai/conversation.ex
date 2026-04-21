@@ -27,7 +27,10 @@ defmodule Destila.AI.Conversation do
       non_interactive: non_interactive
     } = get_phase(ws, phase_number)
 
-    group = Workflows.group_for_phase(ws.workflow_type, phase_number)
+    group =
+      Workflows.group_for_phase(ws.workflow_type, phase_number) ||
+        raise ArgumentError,
+              "no AI session group for #{inspect(ws.workflow_type)} phase #{phase_number}"
 
     maybe_cut_group_boundary(ws, phase_number, group)
     ensure_ai_session(ws)
@@ -231,12 +234,17 @@ defmodule Destila.AI.Conversation do
       current_session = AI.get_ai_session_for_workflow(ws.id)
       worktree_path = current_session && current_session.worktree_path
 
-      AI.ClaudeSession.stop_for_workflow_session(ws.id)
+      # Create the fresh AI.Session before stopping the old ClaudeSession so a
+      # failed insert leaves the previous session intact instead of a half-cut
+      # state (ClaudeSession stopped, DB still pointing at the stale row).
+      {:ok, _session} =
+        AI.create_ai_session(%{
+          workflow_session_id: ws.id,
+          worktree_path: worktree_path
+        })
 
-      AI.create_ai_session(%{
-        workflow_session_id: ws.id,
-        worktree_path: worktree_path
-      })
+      AI.ClaudeSession.stop_for_workflow_session(ws.id)
+      :ok
     else
       :ok
     end
