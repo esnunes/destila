@@ -29,8 +29,23 @@ import LocalTime from "./hooks/local_time"
 import DraftsBoard from "./hooks/drafts_board"
 
 const ScrollBottomHook = {
-  mounted() { this.el.scrollTop = this.el.scrollHeight },
-  updated() { this.el.scrollTop = this.el.scrollHeight },
+  mounted() {
+    this.shouldScroll = true
+    this.el.scrollTop = this.el.scrollHeight
+
+    const sentinel = this.el.querySelector("#bottom-sentinel")
+    this.observer = new IntersectionObserver(
+      ([entry]) => { this.shouldScroll = entry.isIntersecting },
+      { root: this.el }
+    )
+    this.observer.observe(sentinel)
+  },
+  updated() {
+    if (this.shouldScroll) this.el.scrollTop = this.el.scrollHeight
+  },
+  destroyed() {
+    this.observer?.disconnect()
+  },
 }
 
 const FocusFirstErrorHook = {
