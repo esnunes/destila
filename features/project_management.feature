@@ -49,6 +49,14 @@ Feature: Project Management
     And I click "Create"
     Then I should see an error indicating a name is required
 
+  Scenario: Typing in git repository URL preserves focus after validation errors
+    When I navigate to the projects page
+    And I click "New Project"
+    And I submit the form without filling in any fields
+    Then I should see an error indicating a name is required
+    When I type a git repository URL in the git repository URL field
+    Then the git repository URL field should remain focused while I type
+
   Scenario: Edit an existing project
     Given there is an existing project
     When I navigate to the projects page
