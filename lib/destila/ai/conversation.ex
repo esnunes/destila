@@ -8,58 +8,44 @@ defmodule Destila.AI.Conversation do
   """
 
   alias Destila.{AI, Workflows}
-  alias Destila.AI.{ResponseProcessor, Tools}
+  alias Destila.AI.ResponseProcessor
   alias Destila.Workflows.Skills
 
   @doc """
-  Starts a phase by reading the system prompt, handling session strategy,
-  ensuring an AI session exists, and enqueuing the AI worker.
+  Starts a phase by cutting a new AI session when the phase crosses an
+  `AISessionGroup` boundary, ensuring an AI session exists, assembling the
+  kickoff body, and enqueuing the AI worker.
 
-  Returns `:processing` or `:awaiting_input`.
+  Returns `:processing`.
   """
   def phase_start(ws) do
     phase_number = ws.current_phase
 
     %{
-      system_prompt: prompt_fn,
+      initial_prompt: prompt_fn,
       skills: phase_skills,
-      non_interactive: non_interactive,
-      allowed_tools: allowed_tools
+      non_interactive: non_interactive
     } = get_phase(ws, phase_number)
 
-    handle_session_strategy(ws, phase_number)
-    session = ensure_ai_session(ws)
+    group = Workflows.group_for_phase(ws.workflow_type, phase_number)
+
+    maybe_cut_group_boundary(ws, phase_number, group)
+    ensure_ai_session(ws)
     phase_prompt = prompt_fn.(ws)
 
-    # Auto-add non_interactive skill for autonomous phases
-    all_skills =
-      if non_interactive do
-        Enum.uniq(["non_interactive" | phase_skills])
-      else
-        phase_skills
-      end
+    body_skills =
+      if non_interactive,
+        do: Enum.uniq(["non_interactive" | phase_skills]),
+        else: phase_skills
 
-    # Assemble: tools + skills + phase prompt
-    # Tool descriptions are only injected on the first prompt of a new AI session
-    tool_section =
-      if is_nil(session.claude_session_id) do
-        tools = if allowed_tools == [], do: Tools.described_tool_names(), else: allowed_tools
-        Tools.tool_descriptions(tools)
-      else
-        ""
-      end
-
-    skill_section = Skills.assemble_skills(all_skills)
-
+    skills_extra = Skills.assemble_skills_excluding(body_skills, group.skills)
     service_section = build_service_section(ws)
 
-    sections =
-      [
-        if(tool_section != "", do: "# Tools\n\n#{tool_section}"),
-        if(skill_section != "", do: "# Skills\n\n#{skill_section}"),
-        service_section,
-        "# Prompt\n\n#{phase_prompt}"
-      ]
+    sections = [
+      service_section,
+      if(skills_extra != "", do: "# Skills (additional)\n\n#{skills_extra}"),
+      "# Prompt\n\n#{phase_prompt}"
+    ]
 
     query = sections |> Enum.reject(&is_nil/1) |> Enum.join("\n\n")
 
@@ -229,34 +215,32 @@ defmodule Destila.AI.Conversation do
   defp extract_error_text(reason) when is_binary(reason), do: reason
   defp extract_error_text(_), do: ""
 
-  @doc """
-  Handles session strategy for a given phase.
+  # --- Private ---
 
-  For `:new` -- stops the existing ClaudeSession and creates a fresh AI session.
-  For `:resume` -- no-op.
+  # When `phase_number > 1` and the current phase's group differs from the
+  # previous phase's group, stop the current ClaudeSession and create a fresh
+  # AI.Session (carrying the worktree_path forward). On phase 1, leave
+  # bootstrap to `ensure_ai_session/1` so the first run doesn't fire a
+  # redundant cut.
+  defp maybe_cut_group_boundary(_ws, 1, _group), do: :ok
 
-  Called by `phase_start/1` before starting the phase.
-  """
-  def handle_session_strategy(ws, phase_number) do
-    case get_phase(ws, phase_number) do
-      %{session_strategy: :new} ->
-        AI.ClaudeSession.stop_for_workflow_session(ws.id)
+  defp maybe_cut_group_boundary(ws, phase_number, group) do
+    prev_group = Workflows.group_for_phase(ws.workflow_type, phase_number - 1)
 
-        # Read worktree_path from the CURRENT AI session before creating a new one
-        current_session = AI.get_ai_session_for_workflow(ws.id)
-        worktree_path = current_session && current_session.worktree_path
+    if group != prev_group do
+      current_session = AI.get_ai_session_for_workflow(ws.id)
+      worktree_path = current_session && current_session.worktree_path
 
-        AI.create_ai_session(%{
-          workflow_session_id: ws.id,
-          worktree_path: worktree_path
-        })
+      AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
-      _ ->
-        :ok
+      AI.create_ai_session(%{
+        workflow_session_id: ws.id,
+        worktree_path: worktree_path
+      })
+    else
+      :ok
     end
   end
-
-  # --- Private ---
 
   defp build_service_section(%{service_state: nil}), do: nil
 

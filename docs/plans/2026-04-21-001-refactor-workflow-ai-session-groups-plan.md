@@ -1,7 +1,7 @@
 ---
 title: Restructure workflows around AI session groups
 type: refactor
-status: active
+status: completed
 date: 2026-04-21
 ---
 

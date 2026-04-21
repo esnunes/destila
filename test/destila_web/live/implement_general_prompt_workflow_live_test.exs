@@ -273,24 +273,27 @@ defmodule DestilaWeb.ImplementGeneralPromptWorkflowLiveTest do
     end
   end
 
-  # --- Session strategy ---
+  # --- AI session group boundaries ---
 
-  describe "Session strategy" do
+  describe "AI session groups" do
     @tag feature: @feature,
          scenario: "Phase 3 - AI starts a new session for implementation"
-    test "session strategy returns :new for phase 3" do
-      work_phase = Enum.at(Destila.Workflows.ImplementGeneralPromptWorkflow.phases(), 2)
-      assert work_phase.session_strategy == :new
+    test "phase 3 belongs to a different group than phase 2" do
+      planning = Destila.Workflows.group_for_phase(:implement_general_prompt, 2)
+      implementation = Destila.Workflows.group_for_phase(:implement_general_prompt, 3)
+
+      assert planning.name == "Planning"
+      assert implementation.name == "Implementation"
+      refute planning == implementation
     end
 
     @tag feature: @feature,
          scenario: "Phase 3 - AI starts a new session for implementation"
-    test "session strategy returns :resume for other phases" do
-      phases = Destila.Workflows.ImplementGeneralPromptWorkflow.phases()
-
-      for idx <- [0, 1, 3, 4, 5, 6] do
-        phase = Enum.at(phases, idx)
-        assert phase.session_strategy == :resume
+    test "phases within the same group share an AI session" do
+      # Phases 1-2 are the Planning group; 3-7 are the Implementation group.
+      for {a, b} <- [{1, 2}, {3, 4}, {4, 5}, {5, 6}, {6, 7}] do
+        assert Destila.Workflows.group_for_phase(:implement_general_prompt, a) ==
+                 Destila.Workflows.group_for_phase(:implement_general_prompt, b)
       end
     end
   end

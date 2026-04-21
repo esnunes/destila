@@ -4,6 +4,15 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
   and implements it end-to-end through AI-driven planning, coding, reviewing,
   testing, and video recording.
 
+  Two AI session groups:
+
+  - **Planning** (phases 1-2): Generate Plan, Deepen Plan
+  - **Implementation** (phases 3-7): Work, Review, Browser Tests, Feature
+    Video, Adjustments
+
+  Advancing from phase 2 to phase 3 crosses a group boundary, so the runtime
+  starts a fresh AI session (carrying the worktree forward).
+
   Phases:
   1. Generate Plan — AI creates an implementation plan (non-interactive)
   2. Deepen Plan — AI evaluates and optionally deepens the plan (non-interactive)
@@ -32,53 +41,57 @@ defmodule Destila.Workflows.ImplementGeneralPromptWorkflow do
 
   use Destila.Workflows.Workflow
 
-  alias Destila.Workflows.Phase
+  alias Destila.Workflows.{AISessionGroup, Phase}
 
-  def phases do
+  def groups do
     [
-      %Phase{
-        name: "Generate Plan",
-        system_prompt: &plan_prompt/1,
-        non_interactive: true,
+      %AISessionGroup{
+        name: "Planning",
+        skills: ["code_quality"],
         allowed_tools: @implementation_tools,
-        skills: ["code_quality"]
+        phases: [
+          %Phase{
+            name: "Generate Plan",
+            initial_prompt: &plan_prompt/1,
+            non_interactive: true
+          },
+          %Phase{
+            name: "Deepen Plan",
+            initial_prompt: &deepen_plan_prompt/1,
+            non_interactive: true
+          }
+        ]
       },
-      %Phase{
-        name: "Deepen Plan",
-        system_prompt: &deepen_plan_prompt/1,
-        non_interactive: true,
-        allowed_tools: @implementation_tools
-      },
-      %Phase{
-        name: "Work",
-        system_prompt: &work_prompt/1,
-        non_interactive: true,
+      %AISessionGroup{
+        name: "Implementation",
+        skills: ["code_quality"],
         allowed_tools: @implementation_tools,
-        session_strategy: :new,
-        skills: ["code_quality"]
-      },
-      %Phase{
-        name: "Review",
-        system_prompt: &review_prompt/1,
-        non_interactive: true,
-        allowed_tools: @implementation_tools
-      },
-      %Phase{
-        name: "Browser Tests",
-        system_prompt: &browser_tests_prompt/1,
-        non_interactive: true,
-        allowed_tools: @implementation_tools
-      },
-      %Phase{
-        name: "Feature Video",
-        system_prompt: &feature_video_prompt/1,
-        non_interactive: true,
-        allowed_tools: @implementation_tools
-      },
-      %Phase{
-        name: "Adjustments",
-        system_prompt: &adjustments_prompt/1,
-        allowed_tools: @implementation_tools
+        phases: [
+          %Phase{
+            name: "Work",
+            initial_prompt: &work_prompt/1,
+            non_interactive: true
+          },
+          %Phase{
+            name: "Review",
+            initial_prompt: &review_prompt/1,
+            non_interactive: true
+          },
+          %Phase{
+            name: "Browser Tests",
+            initial_prompt: &browser_tests_prompt/1,
+            non_interactive: true
+          },
+          %Phase{
+            name: "Feature Video",
+            initial_prompt: &feature_video_prompt/1,
+            non_interactive: true
+          },
+          %Phase{
+            name: "Adjustments",
+            initial_prompt: &adjustments_prompt/1
+          }
+        ]
       }
     ]
   end

@@ -40,6 +40,26 @@ defmodule Destila.Workflows.Skills do
   end
 
   @doc """
+  Like `assemble_skills/1`, but drops any resolved skill whose identifier is in
+  `exclude_identifiers` — used to avoid redundantly re-rendering skills the
+  AI session's group-level system prompt already covers.
+
+  Returns an empty string when no skills remain after exclusion.
+  """
+  def assemble_skills_excluding(phase_skills, exclude_identifiers) do
+    skills = always_included() ++ by_identifiers(phase_skills)
+
+    skills =
+      skills
+      |> Enum.uniq_by(& &1.identifier)
+      |> Enum.reject(&(&1.identifier in exclude_identifiers))
+
+    Enum.map_join(skills, "\n\n", fn skill ->
+      "## #{skill.name}\n\n#{skill.body}"
+    end)
+  end
+
+  @doc """
   Returns all parsed skills from priv/skills/.
   """
   def all_skills do

@@ -1,9 +1,12 @@
 defmodule Destila.AI.ConversationTest do
   use DestilaWeb.ConnCase, async: false
 
-  alias Destila.{AI, Workflows}
+  import Ecto.Query
 
-  defp create_session(attrs \\ %{}) do
+  alias Destila.{AI, Repo, Workflows}
+  alias Destila.AI.Session, as: AISession
+
+  defp create_session(attrs \\ %{}, opts \\ []) do
     base = %{
       title: "Test",
       workflow_type: :brainstorm_idea,
@@ -12,8 +15,25 @@ defmodule Destila.AI.ConversationTest do
     }
 
     {:ok, ws} = Workflows.insert_workflow_session(Map.merge(base, attrs))
-    {:ok, _ai_session} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+    unless opts[:skip_ai_session] do
+      {:ok, _ai_session} = AI.create_ai_session(%{workflow_session_id: ws.id})
+    end
+
     ws
+  end
+
+  defp phase_start_query(ws) do
+    Oban.Testing.with_testing_mode(:manual, fn ->
+      assert :processing == AI.Conversation.phase_start(ws)
+    end)
+
+    [job] = all_enqueued(worker: Destila.Workers.AiQueryWorker)
+    job.args["query"]
+  end
+
+  defp count_ai_sessions(ws_id) do
+    Repo.aggregate(from(s in AISession, where: s.workflow_session_id == ^ws_id), :count)
   end
 
   defp ok_result(opts \\ []) do
@@ -246,6 +266,115 @@ defmodule Destila.AI.ConversationTest do
         })
 
       assert :awaiting_input == AI.Conversation.handle_ai_result(ws, ok_result())
+    end
+  end
+
+  describe "phase_start/1 kickoff body" do
+    test "brainstorm_idea phase 1 has a Prompt section and no Tools/Skills sections" do
+      ws = create_session()
+
+      query = phase_start_query(ws)
+      assert query =~ "# Prompt\n\n"
+      refute query =~ "# Tools"
+      refute query =~ "# Skills\n\n"
+      refute query =~ "# Skills (additional)"
+    end
+
+    test "code_chat phase 1 body omits # Skills (additional) (group already covers code_quality)" do
+      ws = create_session(%{workflow_type: :code_chat, total_phases: 1})
+
+      query = phase_start_query(ws)
+      refute query =~ "# Skills (additional)"
+      refute query =~ "# Tools"
+    end
+
+    test "implement_general_prompt phase 1 body renders Non-Interactive skill, not Code Quality" do
+      ws =
+        create_session(%{
+          workflow_type: :implement_general_prompt,
+          current_phase: 1,
+          total_phases: 7
+        })
+
+      query = phase_start_query(ws)
+      assert query =~ "# Skills (additional)"
+      assert query =~ "## Non-Interactive Phase"
+      refute query =~ "## Code Quality"
+    end
+  end
+
+  describe "phase_start/1 group boundary" do
+    test "phase 3 (Work) crosses a group boundary and creates a new AI session" do
+      ws =
+        create_session(%{
+          workflow_type: :implement_general_prompt,
+          current_phase: 3,
+          total_phases: 7
+        })
+
+      ai_session = AI.get_ai_session_for_workflow!(ws.id)
+
+      {:ok, _} =
+        AI.update_ai_session(ai_session, %{
+          worktree_path: "/tmp/wt",
+          claude_session_id: "claude-abc"
+        })
+
+      assert count_ai_sessions(ws.id) == 1
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        assert :processing == AI.Conversation.phase_start(ws)
+      end)
+
+      assert count_ai_sessions(ws.id) == 2
+
+      # The new AI session carries the worktree forward and has no claude_session_id
+      [_, newest] =
+        from(s in AISession,
+          where: s.workflow_session_id == ^ws.id,
+          order_by: s.inserted_at
+        )
+        |> Repo.all()
+
+      assert newest.worktree_path == "/tmp/wt"
+      assert newest.claude_session_id == nil
+    end
+
+    test "advancing within the same group does not create a new AI session" do
+      ws =
+        create_session(%{
+          workflow_type: :implement_general_prompt,
+          current_phase: 2,
+          total_phases: 7
+        })
+
+      assert count_ai_sessions(ws.id) == 1
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        assert :processing == AI.Conversation.phase_start(ws)
+      end)
+
+      assert count_ai_sessions(ws.id) == 1
+    end
+
+    test "phase 1 on a brand-new workflow session bootstraps exactly one AI session" do
+      ws =
+        create_session(
+          %{
+            workflow_type: :implement_general_prompt,
+            current_phase: 1,
+            total_phases: 7
+          },
+          skip_ai_session: true
+        )
+
+      assert count_ai_sessions(ws.id) == 0
+
+      Oban.Testing.with_testing_mode(:manual, fn ->
+        assert :processing == AI.Conversation.phase_start(ws)
+      end)
+
+      assert count_ai_sessions(ws.id) == 1
     end
   end
 end

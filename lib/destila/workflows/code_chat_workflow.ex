@@ -9,7 +9,7 @@ defmodule Destila.Workflows.CodeChatWorkflow do
 
   use Destila.Workflows.Workflow
 
-  alias Destila.Workflows.Phase
+  alias Destila.Workflows.{AISessionGroup, Phase}
 
   @chat_tools [
     "Read",
@@ -25,13 +25,15 @@ defmodule Destila.Workflows.CodeChatWorkflow do
     "mcp__destila__service"
   ]
 
-  def phases do
+  def groups do
     [
-      %Phase{
+      %AISessionGroup{
         name: "Chat",
-        system_prompt: &chat_prompt/1,
+        skills: ["code_quality"],
         allowed_tools: @chat_tools,
-        skills: ["code_quality"]
+        phases: [
+          %Phase{name: "Chat", initial_prompt: &chat_prompt/1}
+        ]
       }
     ]
   end

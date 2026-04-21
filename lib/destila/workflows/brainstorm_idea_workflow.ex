@@ -15,23 +15,28 @@ defmodule Destila.Workflows.BrainstormIdeaWorkflow do
 
   use Destila.Workflows.Workflow
 
-  alias Destila.Workflows.Phase
+  alias Destila.Workflows.{AISessionGroup, Phase}
 
-  def phases do
+  def groups do
     [
-      %Phase{
-        name: "Task Description",
-        system_prompt: &task_description_prompt/1
-      },
-      %Phase{
-        name: "Gherkin Review",
-        system_prompt: &gherkin_review_prompt/1
-      },
-      %Phase{
-        name: "Technical Concerns",
-        system_prompt: &technical_concerns_prompt/1
-      },
-      %Phase{name: "Prompt Generation", system_prompt: &prompt_generation_prompt/1}
+      %AISessionGroup{
+        name: "Brainstorm",
+        phases: [
+          %Phase{
+            name: "Task Description",
+            initial_prompt: &task_description_prompt/1
+          },
+          %Phase{
+            name: "Gherkin Review",
+            initial_prompt: &gherkin_review_prompt/1
+          },
+          %Phase{
+            name: "Technical Concerns",
+            initial_prompt: &technical_concerns_prompt/1
+          },
+          %Phase{name: "Prompt Generation", initial_prompt: &prompt_generation_prompt/1}
+        ]
+      }
     ]
   end
 
