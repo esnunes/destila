@@ -153,6 +153,7 @@ defmodule DestilaWeb.ChatComponents do
             />
           </div>
         </div>
+        <div id="bottom-sentinel" aria-hidden="true" />
       </div>
 
       <%!-- Non-interactive: retry/cancel controls --%>
