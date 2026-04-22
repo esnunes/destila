@@ -568,12 +568,19 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_info(:archive_only, socket) do
-    {:ok, _ws} = Workflows.archive_workflow_session(socket.assigns.workflow_session)
+    case Workflows.archive_workflow_session(socket.assigns.workflow_session) do
+      {:ok, _ws} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Session archived")
+         |> push_navigate(to: ~p"/crafting")}
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Session archived")
-     |> push_navigate(to: ~p"/crafting")}
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> assign(:follow_up_modal_open?, false)
+         |> put_flash(:error, "Could not archive session")}
+    end
   end
 
   def handle_info({:start_follow_up, workflow_type}, socket) do
@@ -588,14 +595,15 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       project_id: ws.project_id
     }
 
-    case Workflows.create_workflow_session(params) do
-      {:ok, new_ws} ->
-        {:ok, _archived} = Workflows.archive_workflow_session(ws)
-
-        {:noreply, push_navigate(socket, to: ~p"/sessions/#{new_ws.id}")}
-
+    with {:ok, new_ws} <- Workflows.create_workflow_session(params),
+         {:ok, _archived} <- Workflows.archive_workflow_session(ws) do
+      {:noreply, push_navigate(socket, to: ~p"/sessions/#{new_ws.id}")}
+    else
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Could not start follow-up workflow")}
+        {:noreply,
+         socket
+         |> assign(:follow_up_modal_open?, false)
+         |> put_flash(:error, "Could not start follow-up workflow")}
     end
   end
 
@@ -604,15 +612,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   defp find_exported_value(exported_metadata, key) do
     case Enum.find(exported_metadata, &(&1.key == key)) do
       nil -> nil
-      %{value: value} -> extract_exported_text(value)
+      %{value: value} -> Workflows.extract_metadata_text(value)
     end
   end
-
-  defp extract_exported_text(value) when is_map(value) do
-    Enum.find_value(Workflows.valid_metadata_types(), fn type -> value[type] end)
-  end
-
-  defp extract_exported_text(_), do: nil
 
   defp extract_intermediate_entry(%ClaudeCode.Message.AssistantMessage{message: message}) do
     text =

@@ -245,9 +245,15 @@ defmodule Destila.Workflows do
     |> Enum.reject(fn {_ws, text} -> is_nil(text) || text == "" end)
   end
 
-  defp extract_metadata_text(value) do
+  @doc """
+  Extracts the first renderable text from an exported metadata value map,
+  checking each type in `valid_metadata_types/0` in order.
+  """
+  def extract_metadata_text(value) when is_map(value) do
     Enum.find_value(@valid_metadata_types, fn type -> value[type] end)
   end
+
+  def extract_metadata_text(_), do: nil
 
   def count_by_project(project_id) do
     Repo.aggregate(

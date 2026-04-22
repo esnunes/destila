@@ -143,6 +143,7 @@ defmodule DestilaWeb.PostCompletionFollowupLiveTest do
       assert new_ws.workflow_type == :implement_general_prompt
       assert new_ws.project_id == project.id
       assert new_ws.user_prompt == "Build a login form"
+      assert new_ws.source_session_id == ws.id
 
       archived = Workflows.get_workflow_session!(ws.id)
       refute is_nil(archived.archived_at)
