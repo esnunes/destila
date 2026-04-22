@@ -148,7 +148,7 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
 
-      assert_received {:system, :cmd, ["mise", ["trust", "-y", "/tmp/wt"], opts]}
+      assert_received {:system, :cmd, ["mise", ["trust", "-y", "--all", "-C", "/tmp/wt"], opts]}
       assert Keyword.get(opts, :stderr_to_stdout) == true
 
       assert_received {:tmux, :send_keys, ["ws-mise-with-setup:9", "mix deps.get"]}
@@ -166,7 +166,7 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
 
-      assert_received {:system, :cmd, ["mise", ["trust", "-y", "/tmp/wt"], _opts]}
+      assert_received {:system, :cmd, ["mise", ["trust", "-y", "--all", "-C", "/tmp/wt"], _opts]}
       refute_received {:tmux, :send_keys, _}
     end
 
@@ -191,7 +191,7 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
     test "non-zero mise exit is logged at warning level and setup still runs" do
       test_pid = self()
 
-      stub(System, :cmd, fn "mise", ["trust", "-y", "/tmp/wt"], _opts ->
+      stub(System, :cmd, fn "mise", ["trust", "-y", "--all", "-C", "/tmp/wt"], _opts ->
         send(test_pid, :mise_called)
         {"failed to trust\n", 1}
       end)
@@ -218,7 +218,7 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
     @tag feature: @mise_feature,
          scenario: "A missing mise binary is logged and does not block setup"
     test "rescues a raised error from System.cmd (missing binary) and still runs setup" do
-      stub(System, :cmd, fn "mise", ["trust", "-y", "/tmp/wt"], _opts ->
+      stub(System, :cmd, fn "mise", ["trust", "-y", "--all", "-C", "/tmp/wt"], _opts ->
         :erlang.error(:enoent)
       end)
 

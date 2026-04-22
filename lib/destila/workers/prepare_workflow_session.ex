@@ -59,11 +59,11 @@ defmodule Destila.Workers.PrepareWorkflowSession do
 
   defp maybe_run_mise_trust(%{mise_auto_trust: true} = project, worktree_path, ws) do
     {output, status} =
-      System.cmd("mise", ["trust", "-y", worktree_path], stderr_to_stdout: true)
+      System.cmd("mise", ["trust", "-y", "--all", "-C", worktree_path], stderr_to_stdout: true)
 
     if status != 0 do
       Logger.warning(
-        "mise trust -y #{worktree_path} exited #{status} for project #{project.id} session #{ws.id}: #{output}"
+        "mise trust -y --all -C #{worktree_path} exited #{status} for project #{project.id} session #{ws.id}: #{output}"
       )
     end
 
@@ -71,7 +71,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
   rescue
     e ->
       Logger.warning(
-        "mise trust -y failed for session #{ws.id}: " <>
+        "mise trust failed for session #{ws.id}: " <>
           Exception.format(:error, e, __STACKTRACE__)
       )
 
