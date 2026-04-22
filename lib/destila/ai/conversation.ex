@@ -29,8 +29,7 @@ defmodule Destila.AI.Conversation do
 
     group = Workflows.group_for_phase(ws.workflow_type, phase_number)
 
-    maybe_cut_group_boundary(ws, phase_number, group)
-    ensure_ai_session(ws)
+    ensure_ai_session(ws, phase_number, group)
     phase_prompt = prompt_fn.(ws)
 
     body_skills =
@@ -217,34 +216,33 @@ defmodule Destila.AI.Conversation do
 
   # --- Private ---
 
-  # When `phase_number > 1` and the current phase's group differs from the
-  # previous phase's group, stop the current ClaudeSession and create a fresh
-  # AI.Session (carrying the worktree_path forward). On phase 1, leave
-  # bootstrap to `ensure_ai_session/1` so the first run doesn't fire a
-  # redundant cut.
-  defp maybe_cut_group_boundary(_ws, 1, _group), do: :ok
+  # Ensures the workflow session has a live `AI.Session` for the current
+  # phase's group. Creates a fresh session on the first phase_start (bootstrap)
+  # and when the phase crosses into a new group (carrying worktree_path forward
+  # and stopping any stale ClaudeSession). Otherwise the existing session is
+  # reused, which keeps phase-1 retries and same-group advances idempotent.
+  defp ensure_ai_session(ws, phase_number, group) do
+    current_session = AI.get_ai_session_for_workflow(ws.id)
 
-  defp maybe_cut_group_boundary(ws, phase_number, group) do
-    prev_group = Workflows.group_for_phase(ws.workflow_type, phase_number - 1)
+    prev_group =
+      if phase_number > 1 do
+        Workflows.group_for_phase(ws.workflow_type, phase_number - 1)
+      end
 
-    if group != prev_group do
-      current_session = AI.get_ai_session_for_workflow(ws.id)
-      worktree_path = current_session && current_session.worktree_path
-
+    if is_nil(current_session) or (phase_number > 1 and group != prev_group) do
       # Create the fresh AI.Session before stopping the old ClaudeSession so a
       # failed insert leaves the previous session intact instead of a half-cut
       # state (ClaudeSession stopped, DB still pointing at the stale row).
       {:ok, _session} =
         AI.create_ai_session(%{
           workflow_session_id: ws.id,
-          worktree_path: worktree_path
+          worktree_path: current_session && current_session.worktree_path
         })
 
       AI.ClaudeSession.stop_for_workflow_session(ws.id)
-      :ok
-    else
-      :ok
     end
+
+    :ok
   end
 
   defp build_service_section(%{service_state: nil}), do: nil
@@ -263,11 +261,6 @@ defmodule Destila.AI.Conversation do
 
   defp get_phase(ws, phase_number) do
     Enum.at(Workflows.phases(ws.workflow_type), phase_number - 1)
-  end
-
-  defp ensure_ai_session(ws) do
-    {:ok, session} = AI.get_or_create_ai_session(ws.id, %{})
-    session
   end
 
   defp enqueue_ai_worker(ws, phase, query) do
