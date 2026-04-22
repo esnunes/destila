@@ -1,8 +1,9 @@
 ---
 title: "Evaluate erlexec as a replacement for expty"
 type: refactor
-status: active
+status: partial
 date: 2026-04-21
+decision: docs/solutions/2026-04-21-erlexec-vs-expty-evaluation.md
 ---
 
 # Evaluate erlexec as a replacement for expty
@@ -167,7 +168,7 @@ Notes on the exit message shape (needed because the two backends surface differe
 
 ## Implementation Units
 
-- [ ] **Unit 1: Introduce `Destila.Terminal.PTY` wrapper over the existing expty backend**
+- [x] **Unit 1: Introduce `Destila.Terminal.PTY` wrapper over the existing expty backend**
 
 **Goal:** Land the wrapper module as a no-op refactor: `Destila.Terminal.Server` calls the wrapper, the wrapper calls `ExPTY`, behavior and broadcast shape are unchanged. Baseline for the swap.
 
@@ -208,7 +209,7 @@ Notes on the exit message shape (needed because the two backends surface differe
 - `mix precommit` is green.
 - Manual smoke test: open the in-browser terminal panel, type, resize the panel, observe colored tmux output.
 
-- [ ] **Unit 2: Time-boxed erlexec spike (throwaway branch)**
+- [~] **Unit 2: Time-boxed erlexec spike (throwaway branch)** — automated portion complete; manual smoke (tmux, browser, Ctrl-C, orphan-check on Linux) deferred to a human. Evidence captured in `docs/solutions/2026-04-21-erlexec-vs-expty-evaluation.md`.
 
 **Goal:** Empirically verify all four evaluation gates (Capability parity, Build/deploy, Teardown hygiene, Test parity) against `erlexec` without committing the app to the swap.
 
@@ -243,7 +244,7 @@ Notes on the exit message shape (needed because the two backends surface differe
 - Each gate is marked pass or fail in Unit 3's decision record, with the evidence captured (log excerpts, `ps` output, build-time numbers).
 - Spike branch is discarded regardless of outcome; code lands only in Unit 4 (if all gates pass).
 
-- [ ] **Unit 3: Write decision record and choose a path**
+- [x] **Unit 3: Write decision record and choose a path** — `docs/solutions/2026-04-21-erlexec-vs-expty-evaluation.md`. Decision: land wrapper, defer backend swap pending manual smoke.
 
 **Goal:** Produce a concrete, permanent decision record that either green-lights the swap or documents why we stay on `expty`. Either outcome is acceptable and is the actual deliverable of the evaluation.
 
@@ -270,7 +271,7 @@ Notes on the exit message shape (needed because the two backends surface differe
 **Verification:**
 - File exists, is linked from this plan, and contains an unambiguous decision sentence. Reviewer can understand the decision without re-running the spike.
 
-- [ ] **Unit 4: Swap the wrapper's backend from expty to erlexec (conditional on Unit 3 passing all gates)**
+- [ ] **Unit 4: Swap the wrapper's backend from expty to erlexec (conditional on Unit 3 passing all gates)** — blocked on manual smoke (see decision record). Not performed in this pass.
 
 **Goal:** Replace `expty` with `erlexec` behind the wrapper introduced in Unit 1, keeping `Destila.Terminal.Server` and the PubSub contract unchanged.
 
