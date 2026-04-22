@@ -110,4 +110,20 @@ defmodule Destila.Terminal.ServerTest do
     stop_supervised!(Server)
     assert_receive {:pty_kill, 15}, 1_000
   end
+
+  test "stops without re-killing the PTY when {:EXIT, pty, _} arrives", %{
+    fake_handle: fake_handle
+  } do
+    topic = "terminal:test-#{System.unique_integer([:positive])}"
+
+    {:ok, pid} = start_supervised({Server, cwd: System.tmp_dir!(), topic: topic})
+
+    assert_receive {:pty_spawned, ^pid, _opts, ^fake_handle}, 1_000
+
+    ref = Process.monitor(pid)
+    send(pid, {:EXIT, fake_handle, :normal})
+    assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1_000
+
+    refute_received {:pty_kill, _}
+  end
 end
