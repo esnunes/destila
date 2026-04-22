@@ -80,43 +80,6 @@ defmodule Destila.AI.SessionConfigTest do
 
       refute Keyword.has_key?(opts, :session_strategy)
     end
-
-    test "registers the PreCompact hook" do
-      ws = create_session()
-      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
-
-      opts = SessionConfig.session_opts_for_workflow(ws, 1)
-
-      assert opts[:hooks] == %{PreCompact: [Destila.AI.Hooks.PreCompact]}
-    end
-
-    test ":hooks coexists with the existing session options" do
-      ws = create_session()
-
-      {:ok, _} =
-        AI.create_ai_session(%{
-          workflow_session_id: ws.id,
-          claude_session_id: "claude-xyz",
-          worktree_path: "/tmp/wt"
-        })
-
-      opts = SessionConfig.session_opts_for_workflow(ws, 1)
-
-      assert Keyword.has_key?(opts, :hooks)
-      assert opts[:resume] == "claude-xyz"
-      assert opts[:cwd] == "/tmp/wt"
-      assert Keyword.has_key?(opts, :ai_session_id)
-    end
-
-    test "put_hooks overwrites any base_opts :hooks entry" do
-      ws = create_session()
-      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
-
-      opts =
-        SessionConfig.session_opts_for_workflow(ws, 1, hooks: %{PreToolUse: [SomeOther]})
-
-      assert opts[:hooks] == %{PreCompact: [Destila.AI.Hooks.PreCompact]}
-    end
   end
 
   describe "session_opts_for_workflow/3 for code_chat" do

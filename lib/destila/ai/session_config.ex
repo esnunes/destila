@@ -6,11 +6,8 @@ defmodule Destila.AI.SessionConfig do
   `allowed_tools` descriptions as `:append_system_prompt` (appended to Claude
   Code's built-in system prompt), and its `allowed_tools` list as
   `:allowed_tools`. The AI session record contributes `:resume` and `:cwd`.
-  Every workflow-backed session also registers the `PreCompact` hook so the
-  phase's initial prompt survives context compaction.
   """
 
-  alias Destila.AI.Hooks
   alias Destila.AI.Tools
   alias Destila.Workflows
   alias Destila.Workflows.Skills
@@ -34,7 +31,6 @@ defmodule Destila.AI.SessionConfig do
     |> put_ai_session(ai_session)
     |> put_resume(ai_session)
     |> put_cwd(ai_session)
-    |> put_hooks()
   end
 
   defp put_append_system_prompt(opts, %{skills: skills, allowed_tools: tools}) do
@@ -67,6 +63,4 @@ defmodule Destila.AI.SessionConfig do
     do: Keyword.put(opts, :cwd, path)
 
   defp put_cwd(opts, _), do: opts
-
-  defp put_hooks(opts), do: Keyword.put(opts, :hooks, %{PreCompact: [Hooks.PreCompact]})
 end
