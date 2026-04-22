@@ -1,7 +1,7 @@
 defmodule Destila.Terminal.Server do
   use GenServer
 
-  alias Destila.Terminal.Tmux
+  alias Destila.Terminal.{PTY, Tmux}
 
   defstruct [:pty, :topic, :cols, :rows]
 
@@ -29,40 +29,39 @@ defmodule Destila.Terminal.Server do
     attach_cmd = "tmux attach -t #{Tmux.escape_shell(session_name)}"
 
     {:ok, pty} =
-      ExPTY.spawn(
-        "/usr/bin/env",
-        ["TERM=xterm-256color", "COLORTERM=truecolor", "/bin/sh", "-c", attach_cmd],
+      PTY.spawn(self(),
+        cmd: "/usr/bin/env",
+        args: ["TERM=xterm-256color", "COLORTERM=truecolor", "/bin/sh", "-c", attach_cmd],
         cwd: cwd,
         cols: cols,
-        rows: rows,
-        closeFDs: true
+        rows: rows
       )
-
-    Process.link(pty)
-
-    ExPTY.on_data(pty, fn _pty, _pid, data ->
-      Phoenix.PubSub.broadcast(Destila.PubSub, topic, {:terminal_output, data})
-    end)
-
-    ExPTY.on_exit(pty, fn _pty, _pid, _exit_code, _signal ->
-      Phoenix.PubSub.broadcast(Destila.PubSub, topic, :terminal_exited)
-    end)
 
     {:ok, %__MODULE__{pty: pty, topic: topic, cols: cols, rows: rows}}
   end
 
   @impl true
   def handle_cast({:write, data}, state) do
-    ExPTY.write(state.pty, data)
+    PTY.write(state.pty, data)
     {:noreply, state}
   end
 
   def handle_cast({:resize, cols, rows}, state) do
-    ExPTY.resize(state.pty, cols, rows)
+    PTY.resize(state.pty, cols, rows)
     {:noreply, %{state | cols: cols, rows: rows}}
   end
 
   @impl true
+  def handle_info({:pty_output, pty, data}, %{pty: pty} = state) do
+    Phoenix.PubSub.broadcast(Destila.PubSub, state.topic, {:terminal_output, data})
+    {:noreply, state}
+  end
+
+  def handle_info({:pty_exit, pty, _reason}, %{pty: pty} = state) do
+    Phoenix.PubSub.broadcast(Destila.PubSub, state.topic, :terminal_exited)
+    {:noreply, state}
+  end
+
   def handle_info({:EXIT, pty, _reason}, %{pty: pty} = state) do
     {:stop, :normal, %{state | pty: nil}}
   end
@@ -71,9 +70,11 @@ defmodule Destila.Terminal.Server do
     {:noreply, state}
   end
 
+  def handle_info(_msg, state), do: {:noreply, state}
+
   @impl true
   def terminate(_reason, state) do
-    if state.pty, do: ExPTY.kill(state.pty, 15)
+    if state.pty, do: PTY.kill(state.pty, 15)
     :ok
   end
 
