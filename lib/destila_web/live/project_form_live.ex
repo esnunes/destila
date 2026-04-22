@@ -41,7 +41,7 @@ defmodule DestilaWeb.ProjectFormLive do
       setup_command: non_blank(params["setup_command"]),
       run_command: non_blank(params["run_command"]),
       service_env_var: non_blank(params["service_env_var"]),
-      mise_auto_trust: checkbox_bool(params["mise_auto_trust"])
+      mise_auto_trust: to_bool(params["mise_auto_trust"])
     }
 
     result =
@@ -67,13 +67,10 @@ defmodule DestilaWeb.ProjectFormLive do
   defp non_blank(""), do: nil
   defp non_blank(str), do: str
 
-  defp checkbox_bool("true"), do: true
-  defp checkbox_bool(true), do: true
-  defp checkbox_bool(_), do: false
-
-  defp mise_auto_trust_checked?(true), do: true
-  defp mise_auto_trust_checked?("true"), do: true
-  defp mise_auto_trust_checked?(_), do: false
+  defp to_bool(true), do: true
+  defp to_bool("true"), do: true
+  defp to_bool(list) when is_list(list), do: to_bool(List.last(list))
+  defp to_bool(_), do: false
 
   defp changeset_to_errors(%Ecto.Changeset{} = changeset) do
     Enum.reduce(changeset.errors, %{}, fn
@@ -199,7 +196,7 @@ defmodule DestilaWeb.ProjectFormLive do
               id={"#{@id}-mise-auto-trust"}
               name="mise_auto_trust"
               value="true"
-              checked={mise_auto_trust_checked?(@form["mise_auto_trust"].value)}
+              checked={to_bool(@form["mise_auto_trust"].value)}
               class="checkbox checkbox-sm"
             />
             <span>Auto-trust mise</span>

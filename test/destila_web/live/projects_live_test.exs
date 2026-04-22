@@ -497,6 +497,27 @@ defmodule DestilaWeb.ProjectsLiveTest do
       assert reloaded.mise_auto_trust == true
     end
 
+    @tag feature: @feature, scenario: "Edit a project to toggle mise auto-trust"
+    test "edits a project to disable mise auto-trust", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Untoggle Mise Project",
+          git_repo_url: "https://github.com/test/untoggle",
+          mise_auto_trust: true
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      view
+      |> form("#project-form-#{project.id}-form", %{"mise_auto_trust" => "false"})
+      |> render_submit()
+
+      reloaded = Destila.Projects.get_project(project.id)
+      assert reloaded.mise_auto_trust == false
+    end
+
     @tag feature: "mise_auto_trust",
          scenario: "The project card shows an auto-trust indicator when the flag is on"
     test "card shows auto-trust row when mise_auto_trust is true", %{conn: conn} do
