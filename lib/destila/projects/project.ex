@@ -12,6 +12,7 @@ defmodule Destila.Projects.Project do
     field(:run_command, :string)
     field(:setup_command, :string)
     field(:service_env_var, :string)
+    field(:mise_auto_trust, :boolean, default: false)
     field(:archived_at, :utc_datetime)
 
     has_many(:workflow_sessions, Destila.Workflows.Session)
@@ -28,6 +29,7 @@ defmodule Destila.Projects.Project do
       :run_command,
       :setup_command,
       :service_env_var,
+      :mise_auto_trust,
       :archived_at
     ])
     |> validate_required([:name])

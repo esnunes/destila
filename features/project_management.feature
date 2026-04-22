@@ -1,10 +1,13 @@
 Feature: Project Management
   Users can manage projects independently from sessions. A project has a name,
   an optional git repository URL, an optional local folder path, an optional
-  setup command, an optional run command, and an optional service env var name.
-  At least one of git repository URL or local folder must be provided. When a
+  setup command, an optional run command, an optional service env var name,
+  and an optional `mise_auto_trust` boolean flag that defaults to off. At
+  least one of git repository URL or local folder must be provided. When a
   project has both a run command and a service env var name it is treated as a
-  webservice. Projects can be shared across multiple sessions.
+  webservice. When `mise_auto_trust` is on, the worktree-preparation worker
+  runs `mise trust -y` inside each new worktree before the setup command.
+  Projects can be shared across multiple sessions.
 
   Scenario: View list of projects
     Given there are existing projects
@@ -135,3 +138,27 @@ Feature: Project Management
     When I update the setup command
     And I click "Save"
     Then the project should be updated with the new setup command
+
+  Scenario: Create a project with mise auto-trust enabled
+    When I navigate to the projects page
+    And I click "New Project"
+    When I fill in the name and a git repository URL
+    And I check the "Auto-trust mise" checkbox
+    And I click "Create"
+    Then the project should be created with mise_auto_trust set to true
+
+  Scenario: Create a project without touching mise auto-trust
+    When I navigate to the projects page
+    And I click "New Project"
+    When I fill in the name and a git repository URL
+    And I leave the "Auto-trust mise" checkbox unchecked
+    And I click "Create"
+    Then the project should be created with mise_auto_trust set to false
+
+  Scenario: Edit a project to toggle mise auto-trust
+    Given there is an existing project with mise auto-trust disabled
+    When I navigate to the projects page
+    And I click edit on the project
+    And I check the "Auto-trust mise" checkbox
+    And I click "Save"
+    Then the project should be updated with mise_auto_trust set to true

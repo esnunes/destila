@@ -21,7 +21,8 @@ defmodule DestilaWeb.ProjectFormLive do
          "local_folder" => project.local_folder || "",
          "setup_command" => project.setup_command || "",
          "run_command" => project.run_command || "",
-         "service_env_var" => project.service_env_var || ""
+         "service_env_var" => project.service_env_var || "",
+         "mise_auto_trust" => project.mise_auto_trust || false
        })
      end)
      |> assign_new(:errors, fn -> %{} end)
@@ -39,7 +40,8 @@ defmodule DestilaWeb.ProjectFormLive do
       local_folder: non_blank(params["local_folder"]),
       setup_command: non_blank(params["setup_command"]),
       run_command: non_blank(params["run_command"]),
-      service_env_var: non_blank(params["service_env_var"])
+      service_env_var: non_blank(params["service_env_var"]),
+      mise_auto_trust: to_bool(params["mise_auto_trust"])
     }
 
     result =
@@ -64,6 +66,11 @@ defmodule DestilaWeb.ProjectFormLive do
   defp non_blank(nil), do: nil
   defp non_blank(""), do: nil
   defp non_blank(str), do: str
+
+  defp to_bool(true), do: true
+  defp to_bool("true"), do: true
+  defp to_bool(list) when is_list(list), do: to_bool(List.last(list))
+  defp to_bool(_), do: false
 
   defp changeset_to_errors(%Ecto.Changeset{} = changeset) do
     Enum.reduce(changeset.errors, %{}, fn
@@ -176,6 +183,28 @@ defmodule DestilaWeb.ProjectFormLive do
             placeholder="mix deps.get && mix assets.build"
             class="input input-bordered w-full input-sm"
           />
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <input type="hidden" name="mise_auto_trust" value="false" />
+          <label
+            class="fieldset-label text-xs font-medium flex items-center gap-2 cursor-pointer"
+            for={"#{@id}-mise-auto-trust"}
+          >
+            <input
+              type="checkbox"
+              id={"#{@id}-mise-auto-trust"}
+              name="mise_auto_trust"
+              value="true"
+              checked={to_bool(@form["mise_auto_trust"].value)}
+              class="checkbox checkbox-sm"
+            />
+            <span>Auto-trust mise</span>
+          </label>
+          <p class="text-xs text-base-content/50 mt-1">
+            Run <code class="font-mono" phx-no-curly-interpolation>mise trust -y</code>
+            in each new worktree before the setup command so mise-managed tools are available.
+          </p>
         </fieldset>
 
         <fieldset class="fieldset">

@@ -413,6 +413,144 @@ defmodule DestilaWeb.ProjectsLiveTest do
     end
   end
 
+  describe "mise auto-trust" do
+    @tag feature: @feature, scenario: "Create a project with mise auto-trust enabled"
+    test "creates a project with the auto-trust flag enabled", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+      assert has_element?(view, "#project-form-create-mise-auto-trust")
+
+      view
+      |> form("#project-form-create-form", %{
+        "name" => "Mise Project",
+        "git_repo_url" => "https://github.com/test/mise",
+        "mise_auto_trust" => "true"
+      })
+      |> render_submit()
+
+      [project] = Destila.Projects.list_projects()
+      assert project.mise_auto_trust == true
+    end
+
+    @tag feature: @feature, scenario: "Create a project without touching mise auto-trust"
+    test "defaults mise_auto_trust to false when the checkbox is left unchecked", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      view
+      |> form("#project-form-create-form", %{
+        "name" => "Default Mise Project",
+        "git_repo_url" => "https://github.com/test/default-mise"
+      })
+      |> render_submit()
+
+      [project] = Destila.Projects.list_projects()
+      assert project.mise_auto_trust == false
+    end
+
+    @tag feature: @feature, scenario: "Edit a project to toggle mise auto-trust"
+    test "edits a project to enable mise auto-trust", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Toggle Mise Project",
+          git_repo_url: "https://github.com/test/toggle",
+          mise_auto_trust: false
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      view
+      |> form("#project-form-#{project.id}-form", %{"mise_auto_trust" => "true"})
+      |> render_submit()
+
+      reloaded = Destila.Projects.get_project(project.id)
+      assert reloaded.mise_auto_trust == true
+    end
+
+    @tag feature: @feature, scenario: "Edit a project to toggle mise auto-trust"
+    test "editing a project with auto-trust on preserves the value when not touched", %{
+      conn: conn
+    } do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Preserve Mise Project",
+          git_repo_url: "https://github.com/test/preserve",
+          mise_auto_trust: true
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      view
+      |> form("#project-form-#{project.id}-form", %{
+        "name" => "Preserve Mise Project",
+        "mise_auto_trust" => "true"
+      })
+      |> render_submit()
+
+      reloaded = Destila.Projects.get_project(project.id)
+      assert reloaded.mise_auto_trust == true
+    end
+
+    @tag feature: @feature, scenario: "Edit a project to toggle mise auto-trust"
+    test "edits a project to disable mise auto-trust", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Untoggle Mise Project",
+          git_repo_url: "https://github.com/test/untoggle",
+          mise_auto_trust: true
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      view
+      |> form("#project-form-#{project.id}-form", %{"mise_auto_trust" => "false"})
+      |> render_submit()
+
+      reloaded = Destila.Projects.get_project(project.id)
+      assert reloaded.mise_auto_trust == false
+    end
+
+    @tag feature: "mise_auto_trust",
+         scenario: "The project card shows an auto-trust indicator when the flag is on"
+    test "card shows auto-trust row when mise_auto_trust is true", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Card On Project",
+          git_repo_url: "https://github.com/test/card-on",
+          mise_auto_trust: true
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      assert has_element?(view, "#mise-auto-trust-#{project.id}")
+      assert render(view) =~ "auto-trust mise"
+    end
+
+    @tag feature: "mise_auto_trust",
+         scenario: "The project card hides the auto-trust indicator when the flag is off"
+    test "card omits auto-trust row when mise_auto_trust is false", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Card Off Project",
+          git_repo_url: "https://github.com/test/card-off",
+          mise_auto_trust: false
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      refute has_element?(view, "#mise-auto-trust-#{project.id}")
+      refute render(view) =~ "auto-trust mise"
+    end
+  end
+
   describe "delete project" do
     @tag feature: @feature, scenario: "Delete a project not linked to any sessions"
     test "deletes a project not linked to sessions", %{conn: conn} do

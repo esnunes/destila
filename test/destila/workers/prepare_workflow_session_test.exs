@@ -2,9 +2,12 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
   @moduledoc """
   Tests for the post-worktree setup hook.
   Feature: features/service_setup_command.feature
+  Feature: features/mise_auto_trust.feature
   """
   use DestilaWeb.ConnCase, async: false
   use Mimic
+
+  import ExUnit.CaptureLog
 
   alias Destila.Terminal.Tmux
   alias Destila.Workers.PrepareWorkflowSession
@@ -35,6 +38,11 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
 
     stub(Tmux, :send_keys, fn target, cmd ->
       send(test_pid, {:tmux, :send_keys, [target, cmd]})
+      {"", 0}
+    end)
+
+    stub(System, :cmd, fn cmd, args, opts ->
+      send(test_pid, {:system, :cmd, [cmd, args, opts]})
       {"", 0}
     end)
 
@@ -122,6 +130,114 @@ defmodule Destila.Workers.PrepareWorkflowSessionTest do
       ws = make_ws("raising-session")
 
       assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
+    end
+  end
+
+  describe "run_post_worktree_setup/3 with mise_auto_trust" do
+    @mise_feature "mise_auto_trust"
+
+    @tag feature: @mise_feature,
+         scenario: "Worktree preparation runs mise trust before the setup command"
+    test "runs `mise trust -y` before the setup command when flag is on" do
+      project = %Destila.Projects.Project{
+        mise_auto_trust: true,
+        setup_command: "mix deps.get"
+      }
+
+      ws = make_ws("mise-with-setup")
+
+      assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
+
+      assert_received {:system, :cmd, ["mise", ["trust", "-y", "--all", "-C", "/tmp/wt"], opts]}
+      assert Keyword.get(opts, :stderr_to_stdout) == true
+
+      assert_received {:tmux, :send_keys, ["ws-mise-with-setup:9", "mix deps.get"]}
+    end
+
+    @tag feature: @mise_feature,
+         scenario: "Worktree preparation runs mise trust even without a setup command"
+    test "runs `mise trust -y` even when setup_command is blank" do
+      project = %Destila.Projects.Project{
+        mise_auto_trust: true,
+        setup_command: nil
+      }
+
+      ws = make_ws("mise-no-setup")
+
+      assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
+
+      assert_received {:system, :cmd, ["mise", ["trust", "-y", "--all", "-C", "/tmp/wt"], _opts]}
+      refute_received {:tmux, :send_keys, _}
+    end
+
+    @tag feature: @mise_feature,
+         scenario: "Worktree preparation skips mise trust when the flag is off"
+    test "does not invoke mise when flag is off, but still runs setup_command" do
+      project = %Destila.Projects.Project{
+        mise_auto_trust: false,
+        setup_command: "mix deps.get"
+      }
+
+      ws = make_ws("no-mise")
+
+      assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
+
+      refute_received {:system, :cmd, ["mise", _, _]}
+      assert_received {:tmux, :send_keys, ["ws-no-mise:9", "mix deps.get"]}
+    end
+
+    @tag feature: @mise_feature,
+         scenario: "A non-zero mise exit is logged and does not block setup"
+    test "non-zero mise exit is logged at warning level and setup still runs" do
+      test_pid = self()
+
+      stub(System, :cmd, fn "mise", ["trust", "-y", "--all", "-C", "/tmp/wt"], _opts ->
+        send(test_pid, :mise_called)
+        {"failed to trust\n", 1}
+      end)
+
+      project = %Destila.Projects.Project{
+        mise_auto_trust: true,
+        setup_command: "mix deps.get"
+      }
+
+      ws = make_ws("mise-exit-1")
+
+      log =
+        capture_log(fn ->
+          assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
+        end)
+
+      assert_received :mise_called
+      assert log =~ "[warning]"
+      assert log =~ "failed to trust"
+
+      assert_received {:tmux, :send_keys, ["ws-mise-exit-1:9", "mix deps.get"]}
+    end
+
+    @tag feature: @mise_feature,
+         scenario: "A missing mise binary is logged and does not block setup"
+    test "rescues a raised error from System.cmd (missing binary) and still runs setup" do
+      stub(System, :cmd, fn "mise", ["trust", "-y", "--all", "-C", "/tmp/wt"], _opts ->
+        :erlang.error(:enoent)
+      end)
+
+      project = %Destila.Projects.Project{
+        mise_auto_trust: true,
+        setup_command: "mix deps.get"
+      }
+
+      ws = make_ws("mise-enoent")
+
+      log =
+        capture_log(fn ->
+          assert :ok = PrepareWorkflowSession.run_post_worktree_setup(project, "/tmp/wt", ws)
+        end)
+
+      assert log =~ "[warning]"
+      assert log =~ "mise"
+
+      assert_received {:tmux, :send_keys, ["ws-mise-enoent:9", "mix deps.get"]}
     end
   end
 end
