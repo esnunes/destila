@@ -304,6 +304,13 @@ defmodule DestilaWeb.ProjectsLive do
                       <.icon name="hero-play-micro" class="size-3.5 inline" />
                       {project.run_command}
                     </span>
+                    <span
+                      :if={project.mise_auto_trust}
+                      class="text-xs text-base-content/40 truncate"
+                      id={"mise-auto-trust-#{project.id}"}
+                    >
+                      <.icon name="hero-shield-check-micro" class="size-3.5 inline" /> auto-trust mise
+                    </span>
                   </div>
                 </div>
 

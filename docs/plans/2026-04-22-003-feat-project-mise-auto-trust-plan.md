@@ -1,7 +1,7 @@
 ---
 title: Add per-project mise auto-trust on worktree creation
 type: feat
-status: active
+status: completed
 date: 2026-04-22
 ---
 
