@@ -21,6 +21,13 @@ defmodule Destila.AI.ClaudeSession do
     "mcp__destila__service"
   ]
 
+  @doc """
+  Returns the default `allowed_tools` list used when a session starts without
+  an explicit list. Exposed so callers assembling the system prompt can reflect
+  the tools the agent will actually have access to.
+  """
+  def default_allowed_tools, do: @default_allowed_tools
+
   # Client API
 
   @doc """

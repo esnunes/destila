@@ -12,7 +12,7 @@ defmodule Destila.AI.SessionConfig do
   into the agent's context after a compaction (`source: "compact"`).
   """
 
-  alias Destila.AI.{Hooks, Tools}
+  alias Destila.AI.{ClaudeSession, Hooks, Tools}
   alias Destila.Workflows
   alias Destila.Workflows.Skills
 
@@ -40,8 +40,14 @@ defmodule Destila.AI.SessionConfig do
   end
 
   defp put_append_system_prompt(opts, %{skills: skills, allowed_tools: tools}) do
+    effective_tools =
+      case tools do
+        [] -> ClaudeSession.default_allowed_tools()
+        list -> list
+      end
+
     sections =
-      [Skills.assemble_skills(skills), Tools.tool_descriptions(tools)]
+      [Skills.assemble_skills(skills), Tools.tool_descriptions(effective_tools)]
       |> Enum.reject(&(&1 == ""))
 
     case sections do
