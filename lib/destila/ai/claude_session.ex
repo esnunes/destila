@@ -8,18 +8,6 @@ defmodule Destila.AI.ClaudeSession do
   use GenServer
 
   @default_timeout_ms :timer.minutes(5)
-  @default_allowed_tools [
-    "Read",
-    "Grep",
-    "Glob",
-    "WebFetch",
-    "Skill",
-    "Bash(git log:*)",
-    "Bash(git show:*)",
-    "mcp__destila__ask_user_question",
-    "mcp__destila__session",
-    "mcp__destila__service"
-  ]
 
   # Client API
 
@@ -146,7 +134,6 @@ defmodule Destila.AI.ClaudeSession do
     {timeout_ms, claude_opts} = Keyword.pop(opts, :timeout_ms, @default_timeout_ms)
     {workflow_session_id, claude_opts} = Keyword.pop(claude_opts, :workflow_session_id)
     {ai_session_id, claude_opts} = Keyword.pop(claude_opts, :ai_session_id)
-    claude_opts = Keyword.put_new(claude_opts, :allowed_tools, @default_allowed_tools)
 
     claude_opts =
       Keyword.put_new(claude_opts, :mcp_servers, %{
