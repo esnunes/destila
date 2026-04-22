@@ -69,10 +69,10 @@ defmodule Destila.AI.SessionConfig do
   defp put_append_system_prompt(opts, _), do: opts
 
   defp put_allowed_tools(opts, %{allowed_tools: [_ | _] = tools}),
-    do: Keyword.put(opts, :allowed_tools, tools)
+    do: Keyword.put_new(opts, :allowed_tools, tools)
 
   defp put_allowed_tools(opts, _),
-    do: Keyword.put(opts, :allowed_tools, @default_allowed_tools)
+    do: Keyword.put_new(opts, :allowed_tools, @default_allowed_tools)
 
   defp put_ai_session(opts, %{id: id}), do: Keyword.put(opts, :ai_session_id, id)
   defp put_ai_session(opts, _), do: opts
