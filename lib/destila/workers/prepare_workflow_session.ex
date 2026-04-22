@@ -59,11 +59,11 @@ defmodule Destila.Workers.PrepareWorkflowSession do
 
   defp maybe_run_mise_trust(%{mise_auto_trust: true} = project, worktree_path, ws) do
     {output, status} =
-      System.cmd("mise", ["trust", "-y"], cd: worktree_path, stderr_to_stdout: true)
+      System.cmd("mise", ["trust", "-y", worktree_path], stderr_to_stdout: true)
 
     if status != 0 do
       Logger.warning(
-        "mise trust -y exited #{status} for project #{project.id} session #{ws.id}: #{output}"
+        "mise trust -y #{worktree_path} exited #{status} for project #{project.id} session #{ws.id}: #{output}"
       )
     end
 

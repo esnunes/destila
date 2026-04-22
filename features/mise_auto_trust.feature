@@ -12,13 +12,13 @@ Feature: Mise Auto-Trust
   Scenario: Worktree preparation runs mise trust before the setup command
     Given a project with mise auto-trust enabled and a setup command
     When a new workflow session's worktree is ready
-    Then `mise trust -y` is executed inside the worktree path
+    Then `mise trust -y <worktree path>` is executed so the worktree config itself is trusted
     And the setup command is sent to tmux afterwards
 
   Scenario: Worktree preparation runs mise trust even without a setup command
     Given a project with mise auto-trust enabled and no setup command
     When a new workflow session's worktree is ready
-    Then `mise trust -y` is executed inside the worktree path
+    Then `mise trust -y <worktree path>` is executed so the worktree config itself is trusted
     And no setup command is sent to tmux
 
   Scenario: Worktree preparation skips mise trust when the flag is off
