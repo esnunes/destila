@@ -378,6 +378,96 @@ defmodule Destila.WorkflowsMetadataTest do
     end
   end
 
+  describe "list_follow_up_workflows/1" do
+    test "returns empty list when session has no exported metadata" do
+      ws = create_session()
+      assert Workflows.list_follow_up_workflows(ws) == []
+    end
+
+    test "returns empty list when no exported key matches any workflow's source key" do
+      ws = create_session()
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "some_phase",
+        "random_key",
+        %{"text" => "irrelevant"},
+        exported: true
+      )
+
+      assert Workflows.list_follow_up_workflows(ws) == []
+    end
+
+    test "returns the matching workflow when an exported key matches a source key" do
+      ws = create_session()
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"markdown" => "Build a login form"},
+        exported: true
+      )
+
+      assert Workflows.list_follow_up_workflows(ws) ==
+               [{:implement_general_prompt, "Implement a Prompt", "prompt_generated"}]
+    end
+
+    test "ignores non-exported metadata entries" do
+      ws = create_session()
+
+      Workflows.upsert_metadata(
+        ws.id,
+        "Prompt Generation",
+        "prompt_generated",
+        %{"markdown" => "Private prompt"}
+      )
+
+      assert Workflows.list_follow_up_workflows(ws) == []
+    end
+
+    test "never returns workflows whose source_metadata_key is nil" do
+      ws = create_session()
+
+      # Export any key that a nil-source workflow could conceivably claim.
+      Workflows.upsert_metadata(ws.id, "p", "nil", %{"text" => "v"}, exported: true)
+
+      nil_source_types =
+        for type <- Workflows.workflow_types(),
+            is_nil(Workflows.workflow_module(type).source_metadata_key()),
+            do: type
+
+      # Baseline assumption: at least one workflow has a nil source key today.
+      assert nil_source_types != []
+
+      returned_types = Enum.map(Workflows.list_follow_up_workflows(ws), fn {t, _, _} -> t end)
+
+      for type <- nil_source_types do
+        refute type in returned_types
+      end
+    end
+
+    test "preserves registry insertion order of @workflow_modules" do
+      ws = create_session()
+
+      # Export every non-nil source_metadata_key the registry declares so every
+      # eligible workflow is a candidate.
+      for type <- Workflows.workflow_types() do
+        if key = Workflows.workflow_module(type).source_metadata_key() do
+          Workflows.upsert_metadata(ws.id, "p", key, %{"text" => "v"}, exported: true)
+        end
+      end
+
+      registry_eligible =
+        for type <- Workflows.workflow_types(),
+            is_binary(Workflows.workflow_module(type).source_metadata_key()),
+            do: type
+
+      result_order = Enum.map(Workflows.list_follow_up_workflows(ws), fn {t, _, _} -> t end)
+      assert result_order == registry_eligible
+    end
+  end
+
   describe "valid_metadata_types/0" do
     test "returns exactly text, markdown, file" do
       assert Workflows.valid_metadata_types() == ~w(text markdown file)
