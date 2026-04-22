@@ -2,16 +2,17 @@ defmodule Destila.Workflows.Phase do
   @moduledoc """
   Struct describing a single workflow phase.
 
-  Replaces the `{module, keyword()}` tuples previously used in `phases/0`.
+  Phases live inside an `AISessionGroup`. The group owns the SDK-level system
+  prompt (its `skills`) and tool scope (`allowed_tools`). A phase contributes
+  an `initial_prompt` used as the kickoff message body and optional per-phase
+  `skills` that are rendered as an additional section in the kickoff body.
   """
 
-  @enforce_keys [:name, :system_prompt]
+  @enforce_keys [:name, :initial_prompt]
   defstruct [
     :name,
-    :system_prompt,
+    :initial_prompt,
     non_interactive: false,
-    allowed_tools: [],
-    session_strategy: :resume,
     skills: []
   ]
 end

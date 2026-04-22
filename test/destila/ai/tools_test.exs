@@ -17,7 +17,7 @@ defmodule Destila.AI.ToolsTest do
       assert result =~ "mcp__destila__ask_user_question"
     end
 
-    test "returns descriptions for multiple tools" do
+    test "returns descriptions for multiple tools joined" do
       result =
         Tools.tool_descriptions(["mcp__destila__ask_user_question", "mcp__destila__session"])
 
@@ -34,14 +34,6 @@ defmodule Destila.AI.ToolsTest do
 
     test "returns empty string when no tools have descriptions" do
       assert Tools.tool_descriptions(["Read", "Write", "Bash"]) == ""
-    end
-  end
-
-  describe "described_tool_names/0" do
-    test "returns destila tool names" do
-      names = Tools.described_tool_names()
-      assert "mcp__destila__session" in names
-      assert "mcp__destila__ask_user_question" in names
     end
   end
 

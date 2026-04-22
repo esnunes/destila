@@ -69,11 +69,37 @@ defmodule Destila.Workflows do
   def creation_label(workflow_type), do: workflow_module(workflow_type).creation_label()
 
   def phases(workflow_type), do: workflow_module(workflow_type).phases()
+  def groups(workflow_type), do: workflow_module(workflow_type).groups()
   def total_phases(workflow_type), do: workflow_module(workflow_type).total_phases()
   def phase_name(workflow_type, phase), do: workflow_module(workflow_type).phase_name(phase)
   def phase_columns(workflow_type), do: workflow_module(workflow_type).phase_columns()
   def default_title(workflow_type), do: workflow_module(workflow_type).default_title()
   def completion_message(workflow_type), do: workflow_module(workflow_type).completion_message()
+
+  @doc """
+  Returns the `AISessionGroup` that owns the given 1-based phase number, or
+  `nil` when the phase number is outside the workflow's range.
+  """
+  def group_for_phase(workflow_type, phase_number)
+      when is_integer(phase_number) and phase_number >= 1 do
+    workflow_type
+    |> groups()
+    |> Enum.reduce_while(phase_number, fn group, remaining ->
+      len = length(group.phases)
+
+      if remaining <= len do
+        {:halt, group}
+      else
+        {:cont, remaining - len}
+      end
+    end)
+    |> case do
+      %Destila.Workflows.AISessionGroup{} = group -> group
+      _ -> nil
+    end
+  end
+
+  def group_for_phase(_workflow_type, _phase_number), do: nil
 
   # --- Session CRUD ---
 

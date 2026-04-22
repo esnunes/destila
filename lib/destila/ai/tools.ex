@@ -152,20 +152,6 @@ defmodule Destila.AI.Tools do
     end
   end
 
-  @doc false
-  def service_state_to_output(state) do
-    base = %{
-      "status" => state["status"],
-      "run_command" => state["run_command"],
-      "setup_command" => state["setup_command"]
-    }
-
-    case state["port"] do
-      port when is_integer(port) -> Map.put(base, "url", "http://localhost:#{port}")
-      _ -> base
-    end
-  end
-
   @service_details """
   ## Service Management
 
@@ -192,18 +178,27 @@ defmodule Destila.AI.Tools do
   }
 
   @doc """
-  Returns assembled prompt descriptions for the given tool names.
-  Only includes descriptions for Destila custom tools.
+  Returns assembled prompt descriptions for the given tool names. Only Destila
+  custom tools have descriptions — other tool names are silently skipped.
+  Returns an empty string when no descriptions apply.
   """
   def tool_descriptions(tool_names) do
     tool_names
     |> Enum.filter(&Map.has_key?(@tool_descriptions, &1))
-    |> Enum.map_join("\n", &@tool_descriptions[&1])
+    |> Enum.map_join("\n\n", &@tool_descriptions[&1])
   end
 
-  @doc """
-  Returns the names of all Destila tools that have prompt descriptions.
-  Used as fallback when a phase has no explicit `allowed_tools`.
-  """
-  def described_tool_names, do: Map.keys(@tool_descriptions)
+  @doc false
+  def service_state_to_output(state) do
+    base = %{
+      "status" => state["status"],
+      "run_command" => state["run_command"],
+      "setup_command" => state["setup_command"]
+    }
+
+    case state["port"] do
+      port when is_integer(port) -> Map.put(base, "url", "http://localhost:#{port}")
+      _ -> base
+    end
+  end
 end

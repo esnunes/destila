@@ -73,4 +73,28 @@ defmodule Destila.Workflows.SkillsTest do
       assert result =~ "## Code Quality\n\n"
     end
   end
+
+  describe "assemble_skills_excluding/2" do
+    test "drops excluded identifiers from the rendered output" do
+      result =
+        Skills.assemble_skills_excluding(["code_quality", "non_interactive"], ["code_quality"])
+
+      refute result =~ "## Code Quality"
+      assert result =~ "## Non-Interactive Phase"
+    end
+
+    test "returns empty string when everything is excluded" do
+      assert Skills.assemble_skills_excluding(["code_quality"], ["code_quality"]) == ""
+    end
+
+    test "returns empty string for empty phase_skills" do
+      assert Skills.assemble_skills_excluding([], []) == ""
+      assert Skills.assemble_skills_excluding([], ["code_quality"]) == ""
+    end
+
+    test "behaves like assemble_skills/1 when exclusion list is empty" do
+      assert Skills.assemble_skills_excluding(["code_quality"], []) ==
+               Skills.assemble_skills(["code_quality"])
+    end
+  end
 end
