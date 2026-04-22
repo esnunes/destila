@@ -76,11 +76,6 @@ defmodule Destila.AI.Conversation do
   Processes an AI result for the current phase.
 
   Returns `:awaiting_input`, `:phase_complete`, or `:suggest_phase_complete`.
-
-  For non-interactive phases, a completed turn with no explicit session action
-  auto-advances to `:phase_complete`. This avoids getting stuck when context
-  compaction hides the original phase prompt (which describes how to signal
-  completion) from the agent.
   """
   def handle_ai_result(ws, result) do
     phase_number = ws.current_phase
