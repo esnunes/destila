@@ -88,7 +88,7 @@ defmodule Destila.MixProject do
         "assets.build",
         "git.hooks"
       ],
-      "ecto.setup": ["ecto.create --quiet", "ecto.migrate --quiet"],
+      "ecto.setup": ["ecto.create --quiet", "ecto.migrate --quiet", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       "git.hooks": ["cmd git config core.hooksPath .githooks"],
       "assets.setup": [
