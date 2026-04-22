@@ -2,21 +2,22 @@ defmodule Destila.AI.SessionConfig do
   @moduledoc """
   Resolves ClaudeCode session options for a workflow session and phase.
 
-  The phase's `AISessionGroup` contributes its assembled `skills` as an
-  `:append_system_prompt` (appended to Claude Code's built-in system prompt)
-  and its `allowed_tools` as `:allowed_tools`. The AI session record
-  contributes `:resume` and `:cwd`.
+  The phase's `AISessionGroup` contributes its assembled `skills` and its
+  `allowed_tools` descriptions as `:append_system_prompt` (appended to Claude
+  Code's built-in system prompt), and its `allowed_tools` list as
+  `:allowed_tools`. The AI session record contributes `:resume` and `:cwd`.
   """
 
+  alias Destila.AI.Tools
   alias Destila.Workflows
   alias Destila.Workflows.Skills
 
   @doc """
   Builds ClaudeCode session options for a workflow session and phase.
 
-  Adds `:append_system_prompt` (assembled group skills) and `:allowed_tools`
-  (group's tools) from the phase's AI session group, plus `:ai_session_id`,
-  `:resume`, and `:cwd` from the AI session record.
+  Adds `:append_system_prompt` (assembled group skills + tool descriptions) and
+  `:allowed_tools` (group's tools) from the phase's AI session group, plus
+  `:ai_session_id`, `:resume`, and `:cwd` from the AI session record.
 
   Additional base options (e.g. `timeout_ms`) can be passed and will be included.
   """
@@ -32,10 +33,14 @@ defmodule Destila.AI.SessionConfig do
     |> put_cwd(ai_session)
   end
 
-  defp put_append_system_prompt(opts, %{skills: skills}) do
-    case Skills.assemble_skills(skills) do
-      "" -> opts
-      rendered -> Keyword.put(opts, :append_system_prompt, rendered)
+  defp put_append_system_prompt(opts, %{skills: skills, allowed_tools: tools}) do
+    sections =
+      [Skills.assemble_skills(skills), Tools.tool_descriptions(tools)]
+      |> Enum.reject(&(&1 == ""))
+
+    case sections do
+      [] -> opts
+      parts -> Keyword.put(opts, :append_system_prompt, Enum.join(parts, "\n\n"))
     end
   end
 

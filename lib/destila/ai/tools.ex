@@ -38,6 +38,25 @@ defmodule Destila.AI.Tools do
     end
   end
 
+  @ask_user_question_details """
+  ## Asking Questions
+
+  When asking questions with clear, discrete options, use the \
+  `mcp__destila__ask_user_question` tool to present structured choices. \
+  The tool accepts a `questions` array — batch all your independent questions \
+  in a single call. The user will see clickable buttons for each question. \
+  An 'Other' free-text input is always available automatically — do not include it.
+
+  You may batch multiple independent questions in a single response when their answers \
+  do not depend on each other. Never batch questions where the answer to one would change \
+  the options of another.
+
+  For open-ended questions without clear options, just ask in plain text.
+
+  IMPORTANT: Never call `mcp__destila__ask_user_question` with a phase transition \
+  action in the same response.
+  """
+
   tool :session do
     description(
       "Signal a phase transition or export metadata in the workflow session. Call this tool to advance phases or store key-value outputs."
@@ -76,6 +95,34 @@ defmodule Destila.AI.Tools do
     end
   end
 
+  @session_details """
+  ## Phase Transitions
+
+  When you believe the current phase's work is complete, call the \
+  `mcp__destila__session` tool. Use the `message` parameter to explain your reasoning.
+
+  - Use `action: "suggest_phase_complete"` when you have enough information and want the \
+  user to confirm moving to the next phase.
+  - Use `action: "phase_complete"` when the phase is definitively not applicable or already \
+  satisfied (e.g., no Gherkin scenarios needed). This auto-advances without user confirmation.
+
+  IMPORTANT: Never call `mcp__destila__session` with a phase transition action in the same \
+  response as unanswered questions. If you still need information from the user, ask your \
+  questions and wait for their answers before signaling phase completion.
+
+  ## Exporting Data
+
+  To store a key-value pair as session metadata, call `mcp__destila__session` with \
+  `action: "export"`, a `key` string, and a `value` string. You may call export \
+  multiple times in a single response and may combine it with a phase transition action.
+
+  You can optionally specify a `type` string to indicate how the value should be \
+  interpreted: `text` (default), `markdown` (markdown content), or `file` \
+  (absolute path to a file). When `type: "file"` is used, the file is rendered \
+  based on its extension — `.md`/`.markdown` open in the markdown viewer, `.mp4` \
+  plays as a video, and any other extension is shown as plain text.
+  """
+
   tool :service do
     description(
       "Manage the project's development service lifecycle (start/stop/restart/status). Requires the project to be configured as a webservice (a run command and a service env var name)."
@@ -103,6 +150,42 @@ defmodule Destila.AI.Tools do
         e -> {:ok, "Service error: #{Exception.message(e)}"}
       end
     end
+  end
+
+  @service_details """
+  ## Service Management
+
+  Use the `mcp__destila__service` tool to manage the project's development server. \
+  The tool accepts an `action` parameter:
+
+  - `start` — Start the service using the project's configured run command. \
+  Blocks until all reserved ports accept TCP connections (returns state with \
+  `"status": "running"` and the service URL when running), or fails with an error after \
+  a 1-minute timeout — on timeout the service is stopped automatically to \
+  avoid leaving an unreachable process running.
+  - `stop` — Stop the running service gracefully.
+  - `restart` — Stop and restart the service with a fresh port assignment.
+  - `status` — Check the current service status and service URL when running.
+
+  The tool result contains the service state as JSON, including status and \
+  service URL when running. Use the URL when accessing the service.
+  """
+
+  @tool_descriptions %{
+    "mcp__destila__ask_user_question" => @ask_user_question_details,
+    "mcp__destila__session" => @session_details,
+    "mcp__destila__service" => @service_details
+  }
+
+  @doc """
+  Returns assembled prompt descriptions for the given tool names. Only Destila
+  custom tools have descriptions — other tool names are silently skipped.
+  Returns an empty string when no descriptions apply.
+  """
+  def tool_descriptions(tool_names) do
+    tool_names
+    |> Enum.filter(&Map.has_key?(@tool_descriptions, &1))
+    |> Enum.map_join("\n\n", &@tool_descriptions[&1])
   end
 
   @doc false
