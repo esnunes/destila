@@ -17,13 +17,14 @@ defmodule Destila.AI.SessionConfigTest do
   end
 
   describe "session_opts_for_workflow/3 for brainstorm_idea" do
-    test "omits :allowed_tools (group has none) and appends default-tool descriptions" do
+    test "uses default :allowed_tools (group has none) and appends matching tool descriptions" do
       ws = create_session()
       {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
 
       opts = SessionConfig.session_opts_for_workflow(ws, 1)
 
-      refute Keyword.has_key?(opts, :allowed_tools)
+      assert "Read" in opts[:allowed_tools]
+      assert "mcp__destila__ask_user_question" in opts[:allowed_tools]
       assert opts[:append_system_prompt] =~ "## Asking Questions"
       assert opts[:append_system_prompt] =~ "## Phase Transitions"
     end
