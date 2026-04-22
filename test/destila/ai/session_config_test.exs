@@ -93,6 +93,17 @@ defmodule Destila.AI.SessionConfigTest do
       assert "Read" in opts[:allowed_tools]
       assert "mcp__destila__ask_user_question" in opts[:allowed_tools]
     end
+
+    test "appends tool descriptions for the group's allowed_tools" do
+      ws = create_session(%{workflow_type: :code_chat, total_phases: 1})
+      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+      opts = SessionConfig.session_opts_for_workflow(ws, 1)
+
+      assert opts[:append_system_prompt] =~ "## Phase Transitions"
+      assert opts[:append_system_prompt] =~ "## Asking Questions"
+      assert opts[:append_system_prompt] =~ "## Service Management"
+    end
   end
 
   describe "session_opts_for_workflow/3 for implement_general_prompt" do
