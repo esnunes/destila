@@ -33,8 +33,8 @@ defmodule Destila.AI.Hooks.PreCompact do
          ws when not is_nil(ws) <-
            Workflows.get_workflow_session(ai_session.workflow_session_id),
          phase when not is_nil(phase) <- get_phase(ws),
-         {:ok, phase_prompt} <- safely_compute_prompt(phase, ws) do
-      {:ok, custom_instructions: build_instructions(phase_prompt, incoming)}
+         %{initial_prompt: prompt_fn} when is_function(prompt_fn, 1) <- phase do
+      {:ok, custom_instructions: build_instructions(prompt_fn.(ws), incoming)}
     else
       _ -> :ok
     end
@@ -44,26 +44,19 @@ defmodule Destila.AI.Hooks.PreCompact do
       :ok
   end
 
+  # Catch-all for non-PreCompact events or malformed input — hooks are shared
+  # infrastructure and must never block compaction, so we no-op instead of
+  # raising on unexpected shapes.
   def call(_input, _tool_use_id), do: :ok
 
-  defp get_phase(%{workflow_type: workflow_type, current_phase: phase_number}) do
+  defp get_phase(%{workflow_type: workflow_type, current_phase: phase_number})
+       when is_integer(phase_number) and phase_number > 0 do
     workflow_type
     |> Workflows.phases()
     |> Enum.at(phase_number - 1)
   end
 
   defp get_phase(_), do: nil
-
-  defp safely_compute_prompt(%{initial_prompt: prompt_fn}, ws)
-       when is_function(prompt_fn, 1) do
-    {:ok, prompt_fn.(ws)}
-  rescue
-    e ->
-      Logger.warning("PreCompact prompt computation failed: #{Exception.message(e)}")
-      :error
-  end
-
-  defp safely_compute_prompt(_phase, _ws), do: :error
 
   defp build_instructions(phase_prompt, incoming) do
     base = """

@@ -96,10 +96,30 @@ defmodule Destila.AI.Hooks.PreCompactTest do
       input = build_input(%{session_id: "cs-phase-3"})
 
       assert {:ok, custom_instructions: body} = PreCompact.call(input, nil)
-      # Phase 3 for brainstorm_idea is "Technical Concerns" — should mention
-      # technical approach language rather than the phase 1 clarification prompt.
+      # Phase 3 for brainstorm_idea is "Technical Concerns".
       assert body =~ "<initial-prompt>"
+      assert body =~ "exploring technical concerns"
       refute body =~ "Your job is to ask focused questions"
+    end
+  end
+
+  describe "call/2 phase_number guards" do
+    test "returns :ok when workflow's current_phase is zero" do
+      ws = create_ws(%{current_phase: 0, total_phases: 4})
+      _ai = create_ai(ws, "cs-phase-0")
+
+      input = build_input(%{session_id: "cs-phase-0"})
+
+      assert PreCompact.call(input, nil) == :ok
+    end
+
+    test "returns :ok when workflow's current_phase is negative" do
+      ws = create_ws(%{current_phase: -1, total_phases: 4})
+      _ai = create_ai(ws, "cs-phase-negative")
+
+      input = build_input(%{session_id: "cs-phase-negative"})
+
+      assert PreCompact.call(input, nil) == :ok
     end
   end
 
