@@ -10,9 +10,9 @@ defmodule Destila.AI.Hooks.PreCompact do
   verbatim so the agent still sees the original kickoff instructions after
   the conversation is summarized.
 
-  Any resolution failure (unknown session, missing workflow session, phase
-  out of range, prompt function raise) is swallowed to `:ok` so compaction
-  proceeds unchanged.
+  The hook must never block compaction, so any failure (unknown session,
+  missing workflow session, out-of-range phase, raise from the prompt
+  function) falls through to `:ok`.
   """
 
   @behaviour ClaudeCode.Hook
@@ -32,9 +32,8 @@ defmodule Destila.AI.Hooks.PreCompact do
            AI.get_ai_session_by_claude_session_id(session_id),
          ws when not is_nil(ws) <-
            Workflows.get_workflow_session(ai_session.workflow_session_id),
-         phase when not is_nil(phase) <- get_phase(ws),
-         %{initial_prompt: prompt_fn} when is_function(prompt_fn, 1) <- phase do
-      {:ok, custom_instructions: build_instructions(prompt_fn.(ws), incoming)}
+         phase when not is_nil(phase) <- get_phase(ws) do
+      {:ok, custom_instructions: build_instructions(phase.initial_prompt.(ws), incoming)}
     else
       _ -> :ok
     end
@@ -44,9 +43,6 @@ defmodule Destila.AI.Hooks.PreCompact do
       :ok
   end
 
-  # Catch-all for non-PreCompact events or malformed input — hooks are shared
-  # infrastructure and must never block compaction, so we no-op instead of
-  # raising on unexpected shapes.
   def call(_input, _tool_use_id), do: :ok
 
   defp get_phase(%{workflow_type: workflow_type, current_phase: phase_number})
