@@ -8,7 +8,7 @@ case Repo.get_by(Project, name: "destila") do
            name: "destila",
            git_repo_url: "https://github.com/esnunes/destila",
            setup_command: "mise trust -y && mix setup",
-           run_command: "elixir --sname destila-PORT -S mix phx.server",
+           run_command: "elixir --sname destila-{PORT} -S mix phx.server",
            service_env_var: "PORT"
          }) do
       {:ok, _project} ->

@@ -34,7 +34,7 @@ be closed together for the seed to actually run on fresh setup.
   - `name: "destila"`
   - `git_repo_url: "https://github.com/esnunes/destila"`
   - `setup_command: "mise trust -y && mix setup"`
-  - `run_command: "elixir --sname destila-PORT -S mix phx.server"`
+  - `run_command: "elixir --sname destila-{PORT} -S mix phx.server"`
   - `service_env_var: "PORT"`
 - R2. Running the seed repeatedly must not produce duplicate rows or crash
   (idempotent: a second run is a no-op, a modified manual row is not silently
