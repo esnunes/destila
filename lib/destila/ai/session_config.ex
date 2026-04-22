@@ -2,9 +2,10 @@ defmodule Destila.AI.SessionConfig do
   @moduledoc """
   Resolves ClaudeCode session options for a workflow session and phase.
 
-  The phase's `AISessionGroup` owns the SDK-level system prompt (its assembled
-  `skills`) and tool scope (`allowed_tools`). The AI session record contributes
-  `:resume` and `:cwd`.
+  The phase's `AISessionGroup` contributes its assembled `skills` as an
+  `:append_system_prompt` (appended to Claude Code's built-in system prompt)
+  and its `allowed_tools` as `:allowed_tools`. The AI session record
+  contributes `:resume` and `:cwd`.
   """
 
   alias Destila.Workflows
@@ -13,9 +14,9 @@ defmodule Destila.AI.SessionConfig do
   @doc """
   Builds ClaudeCode session options for a workflow session and phase.
 
-  Adds `:system_prompt` (assembled group skills) and `:allowed_tools` (group's
-  tools) from the phase's AI session group, plus `:ai_session_id`, `:resume`,
-  and `:cwd` from the AI session record.
+  Adds `:append_system_prompt` (assembled group skills) and `:allowed_tools`
+  (group's tools) from the phase's AI session group, plus `:ai_session_id`,
+  `:resume`, and `:cwd` from the AI session record.
 
   Additional base options (e.g. `timeout_ms`) can be passed and will be included.
   """
@@ -24,21 +25,21 @@ defmodule Destila.AI.SessionConfig do
     ai_session = Destila.AI.get_ai_session_for_workflow(workflow_session.id)
 
     base_opts
-    |> put_system_prompt(group)
+    |> put_append_system_prompt(group)
     |> put_allowed_tools(group)
     |> put_ai_session(ai_session)
     |> put_resume(ai_session)
     |> put_cwd(ai_session)
   end
 
-  defp put_system_prompt(opts, %{skills: skills}) do
+  defp put_append_system_prompt(opts, %{skills: skills}) do
     case Skills.assemble_skills(skills) do
       "" -> opts
-      rendered -> Keyword.put(opts, :system_prompt, rendered)
+      rendered -> Keyword.put(opts, :append_system_prompt, rendered)
     end
   end
 
-  defp put_system_prompt(opts, _), do: opts
+  defp put_append_system_prompt(opts, _), do: opts
 
   defp put_allowed_tools(opts, %{allowed_tools: [_ | _] = tools}),
     do: Keyword.put(opts, :allowed_tools, tools)
