@@ -156,15 +156,24 @@ defmodule Destila.Services.ServiceManager do
   @doc false
   def build_service_command(setup_command, run_command, env_var, port) do
     env_export = "export #{env_var}=#{port}"
+    run_command_expanded = substitute_port_placeholder(run_command, env_var, port)
 
     body =
       if blank?(setup_command) do
-        run_command
+        run_command_expanded
       else
-        "#{setup_command}; #{run_command}"
+        "#{setup_command}; #{run_command_expanded}"
       end
 
     "#{env_export} && #{body}"
+  end
+
+  defp substitute_port_placeholder(run_command, env_var, port) do
+    if blank?(env_var) do
+      run_command
+    else
+      String.replace(run_command, "{#{env_var}}", Integer.to_string(port))
+    end
   end
 
   defp wait_for_port(port, timeout_ms) do

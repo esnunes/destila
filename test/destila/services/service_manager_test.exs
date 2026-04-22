@@ -51,6 +51,84 @@ defmodule Destila.Services.ServiceManagerTest do
     end
   end
 
+  describe "build_service_command/4 placeholder substitution" do
+    @tag feature: @feature,
+         scenario: "Run command placeholder {ENV_VAR} is substituted with the allocated port"
+    test "substitutes {PORT} in run_command without setup" do
+      assert ServiceManager.build_service_command(
+               nil,
+               "elixir --sname destila-{PORT} -S mix phx.server",
+               "PORT",
+               1234
+             ) ==
+               "export PORT=1234 && elixir --sname destila-1234 -S mix phx.server"
+    end
+
+    @tag feature: @feature,
+         scenario: "Run command placeholder {ENV_VAR} is substituted with the allocated port"
+    test "substitutes {PORT} in run_command while leaving setup untouched" do
+      assert ServiceManager.build_service_command(
+               "mix deps.get",
+               "mix phx.server --port {PORT}",
+               "PORT",
+               4712
+             ) ==
+               "export PORT=4712 && mix deps.get; mix phx.server --port 4712"
+    end
+
+    @tag feature: @feature,
+         scenario: "Run command placeholder {ENV_VAR} is substituted with the allocated port"
+    test "substitutes every occurrence of the placeholder" do
+      assert ServiceManager.build_service_command(nil, "a {PORT} b {PORT} c", "PORT", 9000) ==
+               "export PORT=9000 && a 9000 b 9000 c"
+    end
+
+    @tag feature: @feature,
+         scenario: "Run command placeholder {ENV_VAR} is substituted with the allocated port"
+    test "leaves placeholders with a different identifier untouched" do
+      assert ServiceManager.build_service_command(nil, "app --port {API_PORT}", "PORT", 1234) ==
+               "export PORT=1234 && app --port {API_PORT}"
+    end
+
+    @tag feature: @feature,
+         scenario: "Run command placeholder {ENV_VAR} is substituted with the allocated port"
+    test "substitution is case-sensitive" do
+      assert ServiceManager.build_service_command(nil, "app --port {port}", "PORT", 1234) ==
+               "export PORT=1234 && app --port {port}"
+    end
+
+    @tag feature: @feature,
+         scenario: "Run command placeholder {ENV_VAR} is substituted with the allocated port"
+    test "does not substitute placeholders in setup_command" do
+      assert ServiceManager.build_service_command("setup {PORT}", "run", "PORT", 1234) ==
+               "export PORT=1234 && setup {PORT}; run"
+    end
+
+    @tag feature: @feature,
+         scenario: "Run command placeholder {ENV_VAR} is substituted with the allocated port"
+    test "substitutes placeholders whose identifier contains underscores and digits" do
+      assert ServiceManager.build_service_command(
+               nil,
+               "app --bind 0.0.0.0:{API_PORT}",
+               "API_PORT",
+               8081
+             ) ==
+               "export API_PORT=8081 && app --bind 0.0.0.0:8081"
+    end
+
+    test "leaves placeholders untouched when env_var is nil" do
+      assert ServiceManager.build_service_command(nil, "run {PORT}", nil, 1234) ==
+               "export =1234 && run {PORT}"
+    end
+
+    @tag feature: @feature,
+         scenario: "A project without a setup command keeps its current behavior"
+    test "run_command without placeholder is byte-for-byte unchanged" do
+      assert ServiceManager.build_service_command(nil, "mix phx.server", "PORT", 4712) ==
+               "export PORT=4712 && mix phx.server"
+    end
+  end
+
   describe "reserve_port/0" do
     test "returns an integer port" do
       port = ServiceManager.reserve_port()

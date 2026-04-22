@@ -190,6 +190,10 @@ defmodule DestilaWeb.ProjectFormLive do
             placeholder="mix phx.server"
             class="input input-bordered w-full input-sm"
           />
+          <p class="text-xs text-base-content/50 mt-1">
+            Use <code class="font-mono" phx-no-curly-interpolation>{PORT}</code>
+            (or whatever matches your service env var name) to interpolate the allocated port into the command.
+          </p>
         </fieldset>
 
         <fieldset class="fieldset">

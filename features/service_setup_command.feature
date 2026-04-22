@@ -6,7 +6,9 @@ Feature: Service Setup Command
   (with the project's service env var exported for both setup and run). Setup
   and run are delivered in a single send_keys call chained with ";" so a
   non-zero exit from setup still lets the run command proceed. Setup output
-  stays inside the tmux window and is not surfaced in the web UI.
+  stays inside the tmux window and is not surfaced in the web UI. The run
+  command additionally supports a single {service_env_var} placeholder that
+  is substituted with the allocated port at service start time.
 
   Scenario: Worktree creation triggers setup command in the tmux service window
     Given a project with a setup command
@@ -37,6 +39,14 @@ Feature: Service Setup Command
     When the service is started
     Then a single ephemeral port is reserved
     And the service env var is exported with that port before both setup and run
+
+  Scenario: Run command placeholder {ENV_VAR} is substituted with the allocated port
+    Given a project whose run command contains a {ENV_VAR} placeholder
+    And the project's service env var name matches the placeholder identifier
+    When the service is started
+    Then every occurrence of {ENV_VAR} in the run command is replaced with the allocated port
+    And the run command is still prefixed with the env var export
+    And the setup command is not substituted
 
   Scenario: Empty setup_command behaves like nil
     Given a project whose setup command is an empty string
