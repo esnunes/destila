@@ -80,6 +80,43 @@ defmodule Destila.AI.SessionConfigTest do
 
       refute Keyword.has_key?(opts, :session_strategy)
     end
+
+    test "registers the SessionStart hook" do
+      ws = create_session()
+      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+      opts = SessionConfig.session_opts_for_workflow(ws, 1)
+
+      assert opts[:hooks] == %{SessionStart: [Destila.AI.Hooks.SessionStart]}
+    end
+
+    test ":hooks coexists with the other session options" do
+      ws = create_session()
+
+      {:ok, _} =
+        AI.create_ai_session(%{
+          workflow_session_id: ws.id,
+          claude_session_id: "claude-xyz",
+          worktree_path: "/tmp/wt"
+        })
+
+      opts = SessionConfig.session_opts_for_workflow(ws, 1, timeout_ms: 1234)
+
+      assert opts[:timeout_ms] == 1234
+      assert opts[:resume] == "claude-xyz"
+      assert opts[:cwd] == "/tmp/wt"
+      assert opts[:hooks] == %{SessionStart: [Destila.AI.Hooks.SessionStart]}
+    end
+
+    test "put_hooks overwrites any base_opts :hooks entry" do
+      ws = create_session()
+      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+      opts =
+        SessionConfig.session_opts_for_workflow(ws, 1, hooks: %{Stop: [SomeOtherHook]})
+
+      assert opts[:hooks] == %{SessionStart: [Destila.AI.Hooks.SessionStart]}
+    end
   end
 
   describe "session_opts_for_workflow/3 for code_chat" do

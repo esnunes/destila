@@ -6,9 +6,13 @@ defmodule Destila.AI.SessionConfig do
   `allowed_tools` descriptions as `:append_system_prompt` (appended to Claude
   Code's built-in system prompt), and its `allowed_tools` list as
   `:allowed_tools`. The AI session record contributes `:resume` and `:cwd`.
+
+  Every session also registers `Destila.AI.Hooks.SessionStart` on the
+  `SessionStart` event so the current phase's initial prompt is re-injected
+  into the agent's context after a compaction (`source: "compact"`).
   """
 
-  alias Destila.AI.Tools
+  alias Destila.AI.{Hooks, Tools}
   alias Destila.Workflows
   alias Destila.Workflows.Skills
 
@@ -17,7 +21,8 @@ defmodule Destila.AI.SessionConfig do
 
   Adds `:append_system_prompt` (assembled group skills + tool descriptions) and
   `:allowed_tools` (group's tools) from the phase's AI session group, plus
-  `:ai_session_id`, `:resume`, and `:cwd` from the AI session record.
+  `:ai_session_id`, `:resume`, and `:cwd` from the AI session record. Always
+  registers the `SessionStart` hook.
 
   Additional base options (e.g. `timeout_ms`) can be passed and will be included.
   """
@@ -31,6 +36,7 @@ defmodule Destila.AI.SessionConfig do
     |> put_ai_session(ai_session)
     |> put_resume(ai_session)
     |> put_cwd(ai_session)
+    |> put_hooks()
   end
 
   defp put_append_system_prompt(opts, %{skills: skills, allowed_tools: tools}) do
@@ -63,4 +69,7 @@ defmodule Destila.AI.SessionConfig do
     do: Keyword.put(opts, :cwd, path)
 
   defp put_cwd(opts, _), do: opts
+
+  defp put_hooks(opts),
+    do: Keyword.put(opts, :hooks, %{SessionStart: [Hooks.SessionStart]})
 end

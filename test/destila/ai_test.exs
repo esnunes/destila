@@ -159,6 +159,33 @@ defmodule Destila.AITest do
     end
   end
 
+  describe "get_ai_session_by_claude_session_id/1" do
+    test "returns the AI session matching the claude_session_id" do
+      ws = create_ws()
+
+      {:ok, ai} =
+        AI.create_ai_session(%{
+          workflow_session_id: ws.id,
+          claude_session_id: "claude-abc"
+        })
+
+      assert %{id: found_id} = AI.get_ai_session_by_claude_session_id("claude-abc")
+      assert found_id == ai.id
+    end
+
+    test "returns nil for an unknown claude_session_id" do
+      assert AI.get_ai_session_by_claude_session_id("nope") == nil
+    end
+
+    test "returns nil when given nil" do
+      assert AI.get_ai_session_by_claude_session_id(nil) == nil
+    end
+
+    test "returns nil when given an empty string" do
+      assert AI.get_ai_session_by_claude_session_id("") == nil
+    end
+  end
+
   describe "phase_boundaries_for_ai_session/1" do
     test "returns max inserted_at per phase" do
       ws = create_ws()
