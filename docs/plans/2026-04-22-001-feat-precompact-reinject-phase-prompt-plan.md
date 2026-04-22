@@ -1,7 +1,7 @@
 ---
 title: Re-inject phase prompt on pre-compaction via claude_code hook
 type: feat
-status: active
+status: completed
 date: 2026-04-22
 ---
 

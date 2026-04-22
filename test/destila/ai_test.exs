@@ -65,6 +65,28 @@ defmodule Destila.AITest do
     end
   end
 
+  describe "get_ai_session_by_claude_session_id/1" do
+    test "returns the matching AI session" do
+      ws = create_ws()
+      ai = create_ai(ws)
+
+      assert %AI.Session{id: id} = AI.get_ai_session_by_claude_session_id(ai.claude_session_id)
+      assert id == ai.id
+    end
+
+    test "returns nil for an unknown claude_session_id" do
+      assert AI.get_ai_session_by_claude_session_id("unknown-session-id") == nil
+    end
+
+    test "returns nil for nil" do
+      assert AI.get_ai_session_by_claude_session_id(nil) == nil
+    end
+
+    test "returns nil for empty string" do
+      assert AI.get_ai_session_by_claude_session_id("") == nil
+    end
+  end
+
   describe "aggregate_usage_by_phase/1" do
     test "groups totals by phase and omits phases with no messages" do
       ws = create_ws()

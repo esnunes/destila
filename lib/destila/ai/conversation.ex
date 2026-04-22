@@ -78,9 +78,10 @@ defmodule Destila.AI.Conversation do
   Returns `:awaiting_input`, `:phase_complete`, or `:suggest_phase_complete`.
 
   For non-interactive phases, a completed turn with no explicit session action
-  auto-advances to `:phase_complete`. This avoids getting stuck when context
-  compaction hides the original phase prompt (which describes how to signal
-  completion) from the agent.
+  auto-advances to `:phase_complete`. `Destila.AI.Hooks.PreCompact` now
+  re-injects the phase prompt on compaction so the agent should still know
+  how to signal completion, but this branch remains as a belt-and-suspenders
+  fallback in case the hook doesn't fire or the summarizer drops the block.
   """
   def handle_ai_result(ws, result) do
     phase_number = ws.current_phase

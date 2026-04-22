@@ -34,6 +34,13 @@ defmodule Destila.AI do
     Repo.get(Session, id)
   end
 
+  def get_ai_session_by_claude_session_id(nil), do: nil
+  def get_ai_session_by_claude_session_id(""), do: nil
+
+  def get_ai_session_by_claude_session_id(claude_session_id) when is_binary(claude_session_id) do
+    Repo.get_by(Session, claude_session_id: claude_session_id)
+  end
+
   def get_ai_session_for_workflow!(workflow_session_id) do
     Repo.one!(
       from(s in Session,
