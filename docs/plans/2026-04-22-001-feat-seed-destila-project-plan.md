@@ -1,7 +1,7 @@
 ---
 title: "feat: Seed destila project on database setup"
 type: feat
-status: active
+status: completed
 date: 2026-04-22
 ---
 
@@ -145,7 +145,7 @@ be closed together for the seed to actually run on fresh setup.
 
 ## Implementation Units
 
-- [ ] **Unit 1: Create idempotent seed file for the destila project**
+- [x] **Unit 1: Create idempotent seed file for the destila project**
 
 **Goal:** Add `priv/repo/seeds.exs` that inserts the `destila` project when
 it does not already exist and is a no-op when it does.
@@ -196,7 +196,7 @@ it does not already exist and is a no-op when it does.
 
 ---
 
-- [ ] **Unit 2: Wire seeds into the `ecto.setup` alias**
+- [x] **Unit 2: Wire seeds into the `ecto.setup` alias**
 
 **Goal:** Ensure `mix setup`, `mix ecto.setup`, and `mix ecto.reset` all
 execute the seed file automatically.
