@@ -123,11 +123,39 @@ defmodule Destila.Workflows.CodeRedesignAnalysisWorkflow do
     broad (e.g., "entire application"), prioritize entry points, public \
     interfaces, and core modules.
 
-    Produce a requirements document that captures:
-    - What the current code does (behavior and features)
-    - Key abstractions, modules, and data flows
-    - External interfaces and contracts
-    - Constraints and invariants the code enforces
+    Produce a HIGH-LEVEL requirements document that describes WHAT the feature \
+    does from the perspective of a user or integrator — not HOW it is built. \
+    The goal is to capture the intent of the feature so a future designer can \
+    reimagine the implementation from scratch without being anchored to the \
+    current code.
+
+    Capture:
+    - The user-facing features and behaviors (what can be done, by whom, and \
+      what outcome follows)
+    - The primary user flows and states involved
+    - External interfaces described in behavioral terms (what the feature \
+      accepts, what it returns, what other systems it integrates with)
+    - Business rules, invariants, and constraints the feature must uphold
+    - Non-functional requirements that are observable (e.g., idempotency, \
+      audit trails, real-time updates) when they are part of the feature's \
+      contract
+
+    Do NOT include:
+    - Module, class, function, or file names
+    - Database schema, table names, column names, or SQL
+    - Specific data structures, field names, or type definitions
+    - Framework-specific patterns, library choices, or API signatures
+    - Implementation algorithms, code snippets, or pseudocode
+    - Internal abstractions, design patterns, or architectural decisions
+
+    If a technical detail only exists because of the current implementation \
+    (e.g., "uses Phoenix PubSub", "stored as JSONB", "runs as an Oban job"), \
+    omit it. If a technical detail is part of the feature's external contract \
+    (e.g., "emits a webhook", "publishes a public REST endpoint"), describe it \
+    behaviorally rather than in implementation terms.
+
+    Write the document as if explaining the feature to a product manager who \
+    will hand it to a new engineering team to rebuild from scratch.
 
     Any Write/Edit operations are scratch work for your own benefit only — \
     this worktree is isolated, but do not commit scratch edits.
