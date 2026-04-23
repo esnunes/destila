@@ -9,7 +9,7 @@ defmodule Destila.AI.Tools do
 
   tool :ask_user_question do
     description(
-      "Present one or more structured questions to the user with selectable options. Use this when you want the user to choose from specific options."
+      "Present one or more structured questions to the user with selectable options. Use this when you want the user to choose from specific options. IMPORTANT: Always use this tool — never the built-in `AskUserQuestion` tool — so answers are rendered in the Destila UI and recorded in the workflow session."
     )
 
     field(
@@ -52,6 +52,11 @@ defmodule Destila.AI.Tools do
   the options of another.
 
   For open-ended questions without clear options, just ask in plain text.
+
+  IMPORTANT: Always use `mcp__destila__ask_user_question` — never the built-in \
+  `AskUserQuestion` tool. Only the Destila tool renders the question in the workflow \
+  UI and records the answer in the session; the built-in tool is disabled in this \
+  environment and calling it will fail.
 
   IMPORTANT: Never call `mcp__destila__ask_user_question` with a phase transition \
   action in the same response.
