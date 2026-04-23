@@ -68,9 +68,10 @@ defmodule Destila.Workflows do
 
   @doc """
   Returns the workflow types whose `source_metadata_key/0` matches an exported
-  metadata key on the given session. Each result is
-  `{workflow_type, label, source_metadata_key}` and the list preserves the
-  registry insertion order of `@workflow_modules`.
+  metadata key on the given session. Each result is a map with `:type`,
+  `:label`, `:description`, `:icon`, `:icon_class`, and `:source_metadata_key`
+  so UIs can render a rich card. The list preserves the registry insertion
+  order of `@workflow_modules`.
   """
   def list_follow_up_workflows(%Session{} = session) do
     exported_keys =
@@ -82,7 +83,14 @@ defmodule Destila.Workflows do
         key = mod.source_metadata_key(),
         is_binary(key),
         MapSet.member?(exported_keys, key) do
-      {type, mod.label(), key}
+      %{
+        type: type,
+        label: mod.label(),
+        description: mod.description(),
+        icon: mod.icon(),
+        icon_class: mod.icon_class(),
+        source_metadata_key: key
+      }
     end
   end
 

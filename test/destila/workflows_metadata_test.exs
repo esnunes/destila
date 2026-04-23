@@ -409,8 +409,20 @@ defmodule Destila.WorkflowsMetadataTest do
         exported: true
       )
 
-      assert Workflows.list_follow_up_workflows(ws) ==
-               [{:implement_general_prompt, "Implement a Prompt", "prompt_generated"}]
+      assert [
+               %{
+                 type: :implement_general_prompt,
+                 label: "Implement a Prompt",
+                 source_metadata_key: "prompt_generated",
+                 description: description,
+                 icon: icon,
+                 icon_class: icon_class
+               }
+             ] = Workflows.list_follow_up_workflows(ws)
+
+      assert is_binary(description) and description != ""
+      assert is_binary(icon)
+      assert is_binary(icon_class)
     end
 
     test "ignores non-exported metadata entries" do
@@ -440,7 +452,7 @@ defmodule Destila.WorkflowsMetadataTest do
       # Baseline assumption: at least one workflow has a nil source key today.
       assert nil_source_types != []
 
-      returned_types = Enum.map(Workflows.list_follow_up_workflows(ws), fn {t, _, _} -> t end)
+      returned_types = Enum.map(Workflows.list_follow_up_workflows(ws), & &1.type)
 
       for type <- nil_source_types do
         refute type in returned_types
@@ -463,7 +475,7 @@ defmodule Destila.WorkflowsMetadataTest do
             is_binary(Workflows.workflow_module(type).source_metadata_key()),
             do: type
 
-      result_order = Enum.map(Workflows.list_follow_up_workflows(ws), fn {t, _, _} -> t end)
+      result_order = Enum.map(Workflows.list_follow_up_workflows(ws), & &1.type)
       assert result_order == registry_eligible
     end
   end

@@ -90,15 +90,33 @@ defmodule DestilaWeb.PostCompletionFollowupLiveTest do
       assert Destila.Workflows.Session.done?(Workflows.get_workflow_session!(ws.id))
     end
 
-    @tag feature: @feature, scenario: "Modal lists all compatible follow-up workflows"
-    test "modal shows start, archive only, and close buttons when follow-ups exist",
+    @tag feature: @feature,
+         scenario: "Modal lists all compatible follow-up workflows with details"
+    test "modal shows rich follow-up cards with Start and Start-and-archive actions",
          %{conn: conn, project: project} do
       ws = create_brainstorm_on_last_phase(project)
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
       view |> element("#mark-done-btn") |> render_click()
 
-      assert has_element?(view, "#follow-up-start-implement_general_prompt-btn")
+      assert has_element?(view, "#follow-up-card-implement_general_prompt")
+
+      card_html =
+        view
+        |> element("#follow-up-card-implement_general_prompt")
+        |> render()
+
+      assert card_html =~ "Implement a Prompt"
+      assert card_html =~ Destila.Workflows.ImplementGeneralPromptWorkflow.description()
+
+      assert has_element?(view, "#follow-up-start-implement_general_prompt-btn", "Start")
+
+      assert has_element?(
+               view,
+               "#follow-up-start-implement_general_prompt-archive-btn",
+               "Start and archive"
+             )
+
       assert has_element?(view, "#follow-up-archive-only-btn")
       assert has_element?(view, "#follow-up-close-btn")
     end
@@ -113,7 +131,7 @@ defmodule DestilaWeb.PostCompletionFollowupLiveTest do
 
       assert has_element?(view, "#follow-up-modal")
       assert has_element?(view, "#follow-up-modal-empty-state")
-      refute has_element?(view, "#follow-up-start-implement_general_prompt-btn")
+      refute has_element?(view, "#follow-up-card-implement_general_prompt")
       assert has_element?(view, "#follow-up-archive-only-btn")
       assert has_element?(view, "#follow-up-close-btn")
     end
@@ -123,8 +141,8 @@ defmodule DestilaWeb.PostCompletionFollowupLiveTest do
 
   describe "Follow-up actions" do
     @tag feature: @feature,
-         scenario: "Starting a follow-up auto-creates and navigates to the new session"
-    test "starting follow-up creates new session, archives source, and navigates",
+         scenario: "Starting a follow-up without archiving keeps the source available"
+    test "Start (no archive) creates new session and leaves source done-but-not-archived",
          %{conn: conn, project: project} do
       ws = create_brainstorm_on_last_phase(project)
 
@@ -133,6 +151,33 @@ defmodule DestilaWeb.PostCompletionFollowupLiveTest do
 
       view
       |> element("#follow-up-start-implement_general_prompt-btn")
+      |> render_click()
+
+      {path, _flash} = assert_redirect(view)
+      assert path =~ ~r{^/sessions/}
+
+      "/sessions/" <> new_ws_id = path
+      new_ws = Workflows.get_workflow_session!(new_ws_id)
+      assert new_ws.workflow_type == :implement_general_prompt
+      assert new_ws.project_id == project.id
+      assert new_ws.user_prompt == "Build a login form"
+      assert new_ws.source_session_id == ws.id
+
+      source = Workflows.get_workflow_session!(ws.id)
+      assert Destila.Workflows.Session.done?(source)
+      assert is_nil(source.archived_at)
+    end
+
+    @tag feature: @feature, scenario: "Starting a follow-up and archiving the source"
+    test "Start and archive creates new session, archives source, and navigates",
+         %{conn: conn, project: project} do
+      ws = create_brainstorm_on_last_phase(project)
+
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+      view |> element("#mark-done-btn") |> render_click()
+
+      view
+      |> element("#follow-up-start-implement_general_prompt-archive-btn")
       |> render_click()
 
       {path, _flash} = assert_redirect(view)
@@ -165,7 +210,6 @@ defmodule DestilaWeb.PostCompletionFollowupLiveTest do
       archived = Workflows.get_workflow_session!(ws.id)
       refute is_nil(archived.archived_at)
 
-      # No implement_general_prompt session created
       implement_sessions =
         Workflows.list_workflow_sessions()
         |> Enum.filter(&(&1.workflow_type == :implement_general_prompt))

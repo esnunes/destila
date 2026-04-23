@@ -1,18 +1,19 @@
 defmodule DestilaWeb.FollowUpModalComponent do
   @moduledoc """
   Post-completion follow-up modal. Offers to start a compatible follow-up
-  workflow and archive the current session, archive without starting, or
-  dismiss.
+  workflow (with or without archiving the source), archive without starting,
+  or dismiss.
 
   Receives `:open?` and `:candidates` from the parent LiveView and forwards
   user intent back via `send(self(), ...)`:
 
     * `:close_follow_up_modal`
     * `:archive_only`
-    * `{:start_follow_up, workflow_type}`
+    * `{:start_follow_up, workflow_type, archive_source?}`
 
-  Candidates are `{workflow_type, label, source_metadata_key}` tuples as
-  returned by `Destila.Workflows.list_follow_up_workflows/1`.
+  Each candidate is a map with `:type`, `:label`, `:description`, `:icon`,
+  `:icon_class`, and `:source_metadata_key` as returned by
+  `Destila.Workflows.list_follow_up_workflows/1`.
   """
 
   use DestilaWeb, :live_component
@@ -35,9 +36,14 @@ defmodule DestilaWeb.FollowUpModalComponent do
     {:noreply, socket}
   end
 
-  def handle_event("start_follow_up", %{"workflow_type" => type_str}, socket) do
+  def handle_event(
+        "start_follow_up",
+        %{"workflow_type" => type_str, "archive" => archive_str},
+        socket
+      ) do
     workflow_type = String.to_existing_atom(type_str)
-    send(self(), {:start_follow_up, workflow_type})
+    archive? = archive_str == "true"
+    send(self(), {:start_follow_up, workflow_type, archive?})
     {:noreply, socket}
   end
 
@@ -54,7 +60,7 @@ defmodule DestilaWeb.FollowUpModalComponent do
             phx-click="close_follow_up_modal"
             phx-target={@myself}
           />
-          <div class="relative z-10 w-full max-w-lg mx-4">
+          <div class="relative z-10 w-full max-w-xl mx-4">
             <button
               id="follow-up-modal-close-x"
               phx-click="close_follow_up_modal"
@@ -74,7 +80,7 @@ defmodule DestilaWeb.FollowUpModalComponent do
                 </p>
               </div>
 
-              <div class="px-5 py-4 space-y-2">
+              <div class="px-5 py-4 max-h-[60vh] overflow-y-auto">
                 <%= if @candidates == [] do %>
                   <p
                     id="follow-up-modal-empty-state"
@@ -83,18 +89,44 @@ defmodule DestilaWeb.FollowUpModalComponent do
                     No follow-up workflows are available for this session.
                   </p>
                 <% else %>
-                  <div class="space-y-2">
-                    <button
-                      :for={{type, label, _key} <- @candidates}
-                      id={"follow-up-start-#{type}-btn"}
-                      phx-click="start_follow_up"
-                      phx-target={@myself}
-                      phx-value-workflow_type={type}
-                      class="btn btn-primary btn-block justify-start"
+                  <div class="grid gap-3">
+                    <div
+                      :for={wf <- @candidates}
+                      id={"follow-up-card-#{wf.type}"}
+                      class="card bg-base-100 border-2 border-base-300 hover:border-primary/60 transition-colors"
                     >
-                      <.icon name="hero-rocket-launch-micro" class="size-4" />
-                      Start {label} and archive
-                    </button>
+                      <div class="card-body p-4">
+                        <div class="flex items-start gap-3">
+                          <.icon name={wf.icon} class={["size-8 shrink-0", wf.icon_class]} />
+                          <div class="flex-1 min-w-0">
+                            <h3 class="font-semibold text-sm text-base-content">{wf.label}</h3>
+                            <p class="text-xs text-base-content/60 mt-0.5">{wf.description}</p>
+                          </div>
+                        </div>
+                        <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            id={"follow-up-start-#{wf.type}-btn"}
+                            phx-click="start_follow_up"
+                            phx-target={@myself}
+                            phx-value-workflow_type={wf.type}
+                            phx-value-archive="false"
+                            class="btn btn-primary btn-sm"
+                          >
+                            <.icon name="hero-rocket-launch-micro" class="size-4" /> Start
+                          </button>
+                          <button
+                            id={"follow-up-start-#{wf.type}-archive-btn"}
+                            phx-click="start_follow_up"
+                            phx-target={@myself}
+                            phx-value-workflow_type={wf.type}
+                            phx-value-archive="true"
+                            class="btn btn-soft btn-sm"
+                          >
+                            <.icon name="hero-archive-box-micro" class="size-4" /> Start and archive
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 <% end %>
               </div>

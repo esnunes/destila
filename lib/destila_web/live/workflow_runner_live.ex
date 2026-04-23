@@ -583,7 +583,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
-  def handle_info({:start_follow_up, workflow_type}, socket) do
+  def handle_info({:start_follow_up, workflow_type, archive_source?}, socket) do
     ws = socket.assigns.workflow_session
     source_key = Workflows.workflow_module(workflow_type).source_metadata_key()
     input_text = find_exported_value(socket.assigns.exported_metadata, source_key)
@@ -595,10 +595,23 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       project_id: ws.project_id
     }
 
-    with {:ok, new_ws} <- Workflows.create_workflow_session(params),
-         {:ok, _archived} <- Workflows.archive_workflow_session(ws) do
-      {:noreply, push_navigate(socket, to: ~p"/sessions/#{new_ws.id}")}
-    else
+    case Workflows.create_workflow_session(params) do
+      {:ok, new_ws} ->
+        if archive_source? do
+          case Workflows.archive_workflow_session(ws) do
+            {:ok, _archived} ->
+              {:noreply, push_navigate(socket, to: ~p"/sessions/#{new_ws.id}")}
+
+            {:error, _changeset} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "Started follow-up but could not archive source session")
+               |> push_navigate(to: ~p"/sessions/#{new_ws.id}")}
+          end
+        else
+          {:noreply, push_navigate(socket, to: ~p"/sessions/#{new_ws.id}")}
+        end
+
       {:error, _changeset} ->
         {:noreply,
          socket
