@@ -9,7 +9,7 @@ defmodule Destila.AI.Tools do
 
   tool :ask_user_question do
     description(
-      "Present one or more structured questions to the user with selectable options. Use this when you want the user to choose from specific options. IMPORTANT: Always use this tool — never the built-in `AskUserQuestion` tool — so answers are rendered in the Destila UI and recorded in the workflow session."
+      "Present one or more structured questions to the user with selectable options. Use this when you want the user to choose from specific options."
     )
 
     field(
