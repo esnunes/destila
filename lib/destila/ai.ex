@@ -258,6 +258,8 @@ defmodule Destila.AI do
 
   defp workflow_type_label(:brainstorm_idea), do: "brainstorm idea"
   defp workflow_type_label(:implement_general_prompt), do: "prompt implementation"
+  defp workflow_type_label(:code_chat), do: "code chat"
+  defp workflow_type_label(:code_redesign_analysis), do: "code redesign analysis"
   defp workflow_type_label(other), do: to_string(other)
 
   defdelegate broadcast(result, event), to: Destila.PubSubHelper

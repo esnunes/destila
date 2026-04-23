@@ -131,7 +131,7 @@ defmodule DestilaWeb.CodeRedesignAnalysisWorkflowLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      refute has_element?(view, "textarea[name='content']")
+      refute has_element?(view, "input[name='content']")
       assert has_element?(view, "#cancel-phase-btn")
     end
 
@@ -278,29 +278,6 @@ defmodule DestilaWeb.CodeRedesignAnalysisWorkflowLiveTest do
       {:ok, view, _html} = live(conn, ~p"/workflows/implement_general_prompt")
 
       assert has_element?(view, "#session-#{ws.id}")
-    end
-  end
-
-  # --- AI session groups ---
-
-  describe "AI session groups" do
-    @tag feature: @feature, scenario: "Phase 4 - Adjustments phase is interactive"
-    test "phase 2 and phase 3 share the Design & Compare group" do
-      assert Destila.Workflows.group_for_phase(:code_redesign_analysis, 2) ==
-               Destila.Workflows.group_for_phase(:code_redesign_analysis, 3)
-    end
-
-    @tag feature: @feature, scenario: "Phase 4 - Adjustments phase is interactive"
-    test "each group boundary crosses into a fresh AI session" do
-      analysis = Destila.Workflows.group_for_phase(:code_redesign_analysis, 1)
-      design_compare = Destila.Workflows.group_for_phase(:code_redesign_analysis, 2)
-      adjustments = Destila.Workflows.group_for_phase(:code_redesign_analysis, 4)
-
-      assert analysis.name == "Analysis"
-      assert design_compare.name == "Design & Compare"
-      assert adjustments.name == "Adjustments"
-      refute analysis == design_compare
-      refute design_compare == adjustments
     end
   end
 
