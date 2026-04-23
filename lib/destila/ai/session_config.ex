@@ -32,6 +32,10 @@ defmodule Destila.AI.SessionConfig do
     "mcp__destila__service"
   ]
 
+  # Built-in AskUserQuestion duplicates `mcp__destila__ask_user_question`; denying
+  # it forces the agent to use the Destila tool, which is the one wired into the UI.
+  @default_disallowed_tools ["AskUserQuestion"]
+
   @doc """
   Builds ClaudeCode session options for a workflow session and phase.
 
@@ -48,12 +52,16 @@ defmodule Destila.AI.SessionConfig do
 
     base_opts
     |> put_allowed_tools(group)
+    |> put_disallowed_tools()
     |> put_append_system_prompt(group)
     |> put_ai_session(ai_session)
     |> put_resume(ai_session)
     |> put_cwd(ai_session)
     |> put_hooks()
   end
+
+  defp put_disallowed_tools(opts),
+    do: Keyword.put_new(opts, :disallowed_tools, @default_disallowed_tools)
 
   defp put_append_system_prompt(opts, %{skills: skills}) do
     sections =

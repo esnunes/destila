@@ -29,6 +29,25 @@ defmodule Destila.AI.SessionConfigTest do
       assert opts[:append_system_prompt] =~ "## Phase Transitions"
     end
 
+    test "denies the built-in AskUserQuestion tool by default" do
+      ws = create_session()
+      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+      opts = SessionConfig.session_opts_for_workflow(ws, 1)
+
+      assert "AskUserQuestion" in opts[:disallowed_tools]
+    end
+
+    test "preserves :disallowed_tools from base_opts" do
+      ws = create_session()
+      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+      opts =
+        SessionConfig.session_opts_for_workflow(ws, 1, disallowed_tools: ["SomeOtherTool"])
+
+      assert opts[:disallowed_tools] == ["SomeOtherTool"]
+    end
+
     test "forwards :ai_session_id when an AI session exists" do
       ws = create_session()
       {:ok, ai_session} = AI.create_ai_session(%{workflow_session_id: ws.id})
