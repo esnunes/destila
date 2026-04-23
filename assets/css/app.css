@@ -231,3 +231,27 @@ a, button, .card, .btn, input {
 .sortable-drag {
   opacity: 1;
 }
+
+/* Modal entrance animations */
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .modal-backdrop-enter {
+    animation: modal-backdrop-in 160ms ease-out;
+  }
+  .modal-panel-enter {
+    animation: modal-panel-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}

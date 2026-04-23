@@ -80,42 +80,59 @@ defmodule DestilaWeb.FollowUpModalComponent do
         <div
           id="follow-up-modal"
           class="fixed inset-0 z-50 flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="follow-up-modal-title"
+          phx-window-keydown="close_follow_up_modal"
+          phx-key="escape"
+          phx-target={@myself}
         >
           <div
-            class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            class="modal-backdrop-enter absolute inset-0 bg-black/70 backdrop-blur-sm"
             phx-click="close_follow_up_modal"
             phx-target={@myself}
           />
-          <div class="relative z-10 w-full max-w-xl mx-4">
+          <div class="modal-panel-enter relative z-10 w-full max-w-xl mx-4">
             <button
               id="follow-up-modal-close-x"
               phx-click="close_follow_up_modal"
               phx-target={@myself}
-              class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
+              class="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors focus-visible:outline-none focus-visible:text-white"
               aria-label="Close"
             >
               <.icon name="hero-x-mark" class="size-6" />
             </button>
-            <div class="rounded-xl bg-base-100 shadow-2xl overflow-hidden">
-              <div class="px-5 py-4 border-b border-base-300/60">
-                <h2 class="text-base font-semibold text-base-content">
+            <div class="rounded-xl bg-base-100 shadow-2xl ring-1 ring-base-300/40 overflow-hidden">
+              <div class="px-6 pt-5 pb-4 border-b border-base-300/60">
+                <h2
+                  id="follow-up-modal-title"
+                  class="text-[15px] font-semibold text-base-content tracking-tight"
+                >
                   Workflow complete — what's next?
                 </h2>
-                <p class="text-xs text-base-content/50 mt-0.5">
+                <p class="text-xs text-base-content/60 mt-1 leading-relaxed">
                   Pick a follow-up, archive the session, or close this dialog.
                 </p>
               </div>
 
-              <div class="px-5 py-4 max-h-[60vh] overflow-y-auto">
+              <div class="px-6 py-4 max-h-[60vh] overflow-y-auto">
                 <%= if @candidates == [] do %>
-                  <p
+                  <div
                     id="follow-up-modal-empty-state"
-                    class="text-sm text-base-content/50 py-2"
+                    class="flex flex-col items-center justify-center py-6 text-center"
                   >
-                    No follow-up workflows are available for this session.
-                  </p>
+                    <span class="size-10 rounded-full bg-base-200 flex items-center justify-center mb-3">
+                      <.icon name="hero-inbox-micro" class="size-5 text-base-content/40" />
+                    </span>
+                    <p class="text-sm text-base-content/70 font-medium">
+                      No follow-ups available
+                    </p>
+                    <p class="text-xs text-base-content/50 mt-1">
+                      This session has no exports that match a follow-up workflow.
+                    </p>
+                  </div>
                 <% else %>
-                  <div class="grid gap-3">
+                  <div role="radiogroup" aria-labelledby="follow-up-modal-title" class="grid gap-2.5">
                     <button
                       :for={wf <- @candidates}
                       type="button"
@@ -123,30 +140,42 @@ defmodule DestilaWeb.FollowUpModalComponent do
                       phx-click="select_workflow"
                       phx-target={@myself}
                       phx-value-workflow_type={wf.type}
-                      aria-pressed={to_string(@selected_type == wf.type)}
+                      role="radio"
+                      aria-checked={to_string(@selected_type == wf.type)}
                       class={[
-                        "card bg-base-100 border-2 text-left transition-all cursor-pointer",
+                        "relative rounded-lg border text-left transition-colors duration-150 cursor-pointer",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-base-100",
                         if(@selected_type == wf.type,
-                          do: "border-primary ring-2 ring-primary/30 bg-primary/5",
-                          else: "border-base-300 hover:border-primary/60"
+                          do: "border-primary bg-primary/[0.06]",
+                          else:
+                            "border-base-300 bg-base-100 hover:border-primary/50 hover:bg-base-200/40"
                         )
                       ]}
                     >
-                      <div class="card-body p-4">
-                        <div class="flex items-start gap-3">
-                          <.icon name={wf.icon} class={["size-8 shrink-0", wf.icon_class]} />
-                          <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between gap-2">
-                              <h3 class="font-semibold text-sm text-base-content">{wf.label}</h3>
-                              <span
-                                :if={@selected_type == wf.type}
-                                class="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-primary shrink-0"
-                              >
-                                <.icon name="hero-check-circle-micro" class="size-3.5" /> Selected
-                              </span>
-                            </div>
-                            <p class="text-xs text-base-content/60 mt-0.5">{wf.description}</p>
-                          </div>
+                      <span
+                        :if={@selected_type == wf.type}
+                        class="absolute top-3 right-3 inline-flex size-5 items-center justify-center rounded-full bg-primary text-primary-content"
+                        aria-hidden="true"
+                      >
+                        <.icon name="hero-check-micro" class="size-3.5" />
+                      </span>
+                      <div class="flex items-start gap-3 p-4 pr-11">
+                        <span class={[
+                          "size-9 rounded-lg shrink-0 flex items-center justify-center transition-colors duration-150",
+                          if(@selected_type == wf.type,
+                            do: "bg-primary/15",
+                            else: "bg-base-200"
+                          )
+                        ]}>
+                          <.icon name={wf.icon} class={["size-5", wf.icon_class]} />
+                        </span>
+                        <div class="flex-1 min-w-0">
+                          <h3 class="text-sm font-semibold text-base-content leading-tight">
+                            {wf.label}
+                          </h3>
+                          <p class="text-xs text-base-content/60 mt-1 leading-relaxed">
+                            {wf.description}
+                          </p>
                         </div>
                       </div>
                     </button>
@@ -154,7 +183,7 @@ defmodule DestilaWeb.FollowUpModalComponent do
                 <% end %>
               </div>
 
-              <div class="px-5 py-4 border-t border-base-300/60 flex items-center justify-end gap-2">
+              <div class="px-6 py-4 border-t border-base-300/60 flex flex-wrap items-center justify-end gap-2">
                 <button
                   id="follow-up-close-btn"
                   phx-click="close_follow_up_modal"
