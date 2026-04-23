@@ -15,6 +15,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     only: [workflow_badge: 1, progress_indicator: 1, aliveness_dot: 1]
 
   import DestilaWeb.ChatComponents
+  import DestilaWeb.FollowUpModal, only: [follow_up_modal: 1]
 
   alias Destila.AI
   alias Destila.AI.AlivenessTracker
@@ -73,6 +74,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:markdown_modal_label, nil)
        |> assign(:text_modal_content, nil)
        |> assign(:text_modal_label, nil)
+       |> assign(:follow_up_modal_open?, false)
+       |> assign(:follow_up_candidates, [])
+       |> assign(:follow_up_selected_type, nil)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -168,13 +172,53 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   def handle_event("mark_done", _params, socket) do
     case SessionProcess.mark_done(socket.assigns.workflow_session.id) do
       {:ok, ws} ->
+        candidates = Workflows.list_follow_up_workflows(ws)
+
         {:noreply,
          socket
          |> assign(:workflow_session, ws)
+         |> assign(:follow_up_modal_open?, true)
+         |> assign(:follow_up_candidates, candidates)
+         |> assign(:follow_up_selected_type, default_follow_up_selection(candidates))
          |> assign_ai_state(ws)}
 
       {:error, _} ->
         {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_follow_up_modal", _params, socket) do
+    {:noreply, assign(socket, :follow_up_modal_open?, false)}
+  end
+
+  def handle_event("select_follow_up", %{"workflow_type" => type_str}, socket) do
+    workflow_type = String.to_existing_atom(type_str)
+    {:noreply, assign(socket, :follow_up_selected_type, workflow_type)}
+  end
+
+  def handle_event("archive_only", _params, socket) do
+    case Workflows.archive_workflow_session(socket.assigns.workflow_session) do
+      {:ok, _ws} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Session archived")
+         |> push_navigate(to: ~p"/crafting")}
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> assign(:follow_up_modal_open?, false)
+         |> put_flash(:error, "Could not archive session")}
+    end
+  end
+
+  def handle_event("start_follow_up", %{"archive" => archive_str}, socket) do
+    case socket.assigns.follow_up_selected_type do
+      nil ->
+        {:noreply, socket}
+
+      workflow_type ->
+        start_follow_up(socket, workflow_type, archive_str == "true")
     end
   end
 
@@ -558,6 +602,53 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  defp start_follow_up(socket, workflow_type, archive_source?) do
+    ws = socket.assigns.workflow_session
+    source_key = Workflows.workflow_module(workflow_type).source_metadata_key()
+    input_text = find_exported_value(socket.assigns.exported_metadata, source_key)
+
+    params = %{
+      workflow_type: workflow_type,
+      input_text: input_text,
+      selected_session_id: ws.id,
+      project_id: ws.project_id
+    }
+
+    case Workflows.create_workflow_session(params) do
+      {:ok, new_ws} ->
+        if archive_source? do
+          case Workflows.archive_workflow_session(ws) do
+            {:ok, _archived} ->
+              {:noreply, push_navigate(socket, to: ~p"/sessions/#{new_ws.id}")}
+
+            {:error, _changeset} ->
+              {:noreply,
+               socket
+               |> put_flash(:error, "Started follow-up but could not archive source session")
+               |> push_navigate(to: ~p"/sessions/#{new_ws.id}")}
+          end
+        else
+          {:noreply, push_navigate(socket, to: ~p"/sessions/#{new_ws.id}")}
+        end
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> assign(:follow_up_modal_open?, false)
+         |> put_flash(:error, "Could not start follow-up workflow")}
+    end
+  end
+
+  defp default_follow_up_selection([%{type: type} | _]), do: type
+  defp default_follow_up_selection(_), do: nil
+
+  defp find_exported_value(exported_metadata, key) do
+    case Enum.find(exported_metadata, &(&1.key == key)) do
+      nil -> nil
+      %{value: value} -> Workflows.extract_metadata_text(value)
+    end
+  end
 
   defp extract_intermediate_entry(%ClaudeCode.Message.AssistantMessage{message: message}) do
     text =
@@ -1229,6 +1320,13 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           </div>
         </div>
       <% end %>
+
+      <%!-- Post-completion follow-up modal --%>
+      <.follow_up_modal
+        open?={@follow_up_modal_open?}
+        candidates={@follow_up_candidates}
+        selected_type={@follow_up_selected_type}
+      />
 
       <%!-- Text modal --%>
       <%= if @text_modal_content do %>

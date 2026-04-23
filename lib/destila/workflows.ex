@@ -66,6 +66,34 @@ defmodule Destila.Workflows do
     end
   end
 
+  @doc """
+  Returns the workflow types whose `source_metadata_key/0` matches an exported
+  metadata key on the given session. Each result is a map with `:type`,
+  `:label`, `:description`, `:icon`, `:icon_class`, and `:source_metadata_key`
+  so UIs can render a rich card. The list preserves the registry insertion
+  order of `@workflow_modules`.
+  """
+  def list_follow_up_workflows(%Session{} = session) do
+    exported_keys =
+      session.id
+      |> get_exported_metadata()
+      |> MapSet.new(& &1.key)
+
+    for {type, mod} <- @workflow_modules,
+        key = mod.source_metadata_key(),
+        is_binary(key),
+        MapSet.member?(exported_keys, key) do
+      %{
+        type: type,
+        label: mod.label(),
+        description: mod.description(),
+        icon: mod.icon(),
+        icon_class: mod.icon_class(),
+        source_metadata_key: key
+      }
+    end
+  end
+
   def creation_label(workflow_type), do: workflow_module(workflow_type).creation_label()
 
   def phases(workflow_type), do: workflow_module(workflow_type).phases()
@@ -225,9 +253,15 @@ defmodule Destila.Workflows do
     |> Enum.reject(fn {_ws, text} -> is_nil(text) || text == "" end)
   end
 
-  defp extract_metadata_text(value) do
+  @doc """
+  Extracts the first renderable text from an exported metadata value map,
+  checking each type in `valid_metadata_types/0` in order.
+  """
+  def extract_metadata_text(value) when is_map(value) do
     Enum.find_value(@valid_metadata_types, fn type -> value[type] end)
   end
+
+  def extract_metadata_text(_), do: nil
 
   def count_by_project(project_id) do
     Repo.aggregate(
