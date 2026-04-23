@@ -8,7 +8,7 @@ defmodule Destila.Workflows.Session do
     field(:title, :string, default: "Untitled Session")
 
     field(:workflow_type, Ecto.Enum,
-      values: [:brainstorm_idea, :implement_general_prompt, :code_chat]
+      values: [:brainstorm_idea, :implement_general_prompt, :code_chat, :code_redesign_analysis]
     )
 
     field(:current_phase, :integer, default: 1)

@@ -35,7 +35,8 @@ defmodule Destila.Workflows do
   @workflow_modules %{
     brainstorm_idea: Destila.Workflows.BrainstormIdeaWorkflow,
     implement_general_prompt: Destila.Workflows.ImplementGeneralPromptWorkflow,
-    code_chat: Destila.Workflows.CodeChatWorkflow
+    code_chat: Destila.Workflows.CodeChatWorkflow,
+    code_redesign_analysis: Destila.Workflows.CodeRedesignAnalysisWorkflow
   }
 
   def workflow_module(workflow_type) do
@@ -294,32 +295,78 @@ defmodule Destila.Workflows do
   def upsert_metadata(workflow_session_id, phase_name, key, value, opts) do
     exported = Keyword.get(opts, :exported, false)
 
-    if exported and not valid_exported_value?(value) do
-      {:error, :invalid_metadata_type}
-    else
-      now = DateTime.utc_now() |> DateTime.truncate(:second)
+    cond do
+      exported and not valid_exported_value?(value) ->
+        {:error, :invalid_metadata_type}
 
-      %SessionMetadata{}
-      |> SessionMetadata.changeset(%{
-        workflow_session_id: workflow_session_id,
-        phase_name: phase_name,
-        key: key,
-        value: value,
-        exported: exported
-      })
-      |> Repo.insert(
-        on_conflict: {:replace, [:value, :exported, :updated_at]},
-        conflict_target: [:workflow_session_id, :phase_name, :key],
-        set: [updated_at: now]
-      )
-      |> case do
-        {:ok, metadata} ->
+      exported ->
+        upsert_exported_metadata(workflow_session_id, phase_name, key, value)
+
+      true ->
+        do_upsert_metadata(workflow_session_id, phase_name, key, value, false)
+    end
+  end
+
+  # Exported metadata is a per-session singleton keyed by
+  # `(workflow_session_id, key)`. A re-export from a different `phase_name`
+  # must replace the original exported row rather than create a second one.
+  # The transaction deletes any other exported rows with the same
+  # `(workflow_session_id, key)` first, then upserts the new value under
+  # the given `phase_name`.
+  defp upsert_exported_metadata(workflow_session_id, phase_name, key, value) do
+    result =
+      Repo.transaction(fn ->
+        from(m in SessionMetadata,
+          where:
+            m.workflow_session_id == ^workflow_session_id and
+              m.key == ^key and
+              m.exported == true and
+              m.phase_name != ^phase_name
+        )
+        |> Repo.delete_all()
+
+        case do_upsert_metadata(workflow_session_id, phase_name, key, value, true) do
+          {:ok, metadata} -> metadata
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+
+    case result do
+      {:ok, metadata} ->
+        Destila.PubSubHelper.broadcast_event(:metadata_updated, workflow_session_id)
+        {:ok, metadata}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  defp do_upsert_metadata(workflow_session_id, phase_name, key, value, exported) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    %SessionMetadata{}
+    |> SessionMetadata.changeset(%{
+      workflow_session_id: workflow_session_id,
+      phase_name: phase_name,
+      key: key,
+      value: value,
+      exported: exported
+    })
+    |> Repo.insert(
+      on_conflict: {:replace, [:value, :exported, :updated_at]},
+      conflict_target: [:workflow_session_id, :phase_name, :key],
+      set: [updated_at: now]
+    )
+    |> case do
+      {:ok, metadata} ->
+        unless exported do
           Destila.PubSubHelper.broadcast_event(:metadata_updated, workflow_session_id)
-          {:ok, metadata}
+        end
 
-        {:error, changeset} ->
-          {:error, changeset}
-      end
+        {:ok, metadata}
+
+      {:error, changeset} ->
+        {:error, changeset}
     end
   end
 
