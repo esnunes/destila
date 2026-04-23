@@ -3,6 +3,7 @@ title: Add Code Redesign Analysis workflow
 type: feat
 status: active
 date: 2026-04-22
+deepened: 2026-04-22
 ---
 
 # Add Code Redesign Analysis workflow
@@ -438,7 +439,7 @@ self-contained in this unit.
   when `exported: true`.
 
 **Approach:**
-- Write a failing test first (characterization):
+- Write a failing characterization test first:
   - Upsert `requirements_doc` under phase name `"Extract Requirements"`
     with `exported: true`.
   - Upsert `requirements_doc` again under phase name `"Adjustments"`
@@ -446,41 +447,100 @@ self-contained in this unit.
   - Assert that `Workflows.get_exported_metadata/1` returns exactly one
     row for `requirements_doc` and that its value is the second one.
 - If the test passes today (single-row behavior), leave code untouched
-  and keep the test as a regression guard.
-- If the test fails (two rows), the cleanest fix is to have the export
-  path (`upsert_metadata/5` when called with `exported: true`) first
-  delete any pre-existing exported row for `(workflow_session_id,
-  key)` under a different `phase_name`, then upsert. Alternatively,
-  rewrite the `on_conflict` strategy for exported inserts to use a
-  different conflict target. Pick the one that touches the fewest
-  call sites — the first, likely — and do it in one function.
-- Either way, the non-exported metadata path is unchanged.
+  and keep the test as a regression guard. **Unlikely** — the unique
+  index at `lib/destila/workflows/session_metadata.ex` covers
+  `(workflow_session_id, phase_name, key)`, so two different phase
+  names will produce two rows.
+- Two viable fixes. Evaluate both against the concurrency + crash
+  scenarios below and pick one before coding:
+  - **Option A (transactional delete-then-upsert).** In
+    `upsert_metadata/5`, when `exported: true`, open a
+    `Repo.transaction/1` that first deletes any pre-existing rows
+    matching `workflow_session_id == ^id AND key == ^key AND exported
+    == true AND phase_name != ^phase_name`, then runs the existing
+    upsert. Scope the delete strictly by `exported == true` so non-
+    exported rows with the same key in a different phase are never
+    touched. Broadcast `:metadata_updated` exactly once, after commit
+    — never mid-transaction.
+  - **Option B (partial unique index).** Add a migration introducing
+    a partial unique index
+    `(workflow_session_id, key) WHERE exported = 1` alongside the
+    existing full index. Then either split the code path — exported
+    writes use `conflict_target: {:unsafe_fragment, ...}` keyed on
+    `(session, key)` against the partial index, non-exported writes
+    keep today's target — or collapse exported rows to a single
+    "Exported" sentinel phase name via a new column default. Cleaner
+    invariant (DB enforces it, no race window), but requires a
+    migration and an Ecto `on_conflict` shape that's fiddly on SQLite
+    (must use the named partial index).
+- Decision rule: if the concurrent-write or crash-simulation tests
+  below expose data-loss gaps in Option A that can't be closed with a
+  transaction, switch to Option B in this same unit. Otherwise prefer
+  Option A — it adds no migration and is localized to one function.
+- The non-exported metadata path is unchanged under either option.
 
 **Patterns to follow:**
-- Existing tests at `test/destila/workflows_metadata_test.exs` (lines
-  18-50 were cited during research as covering the baseline upsert
-  behavior).
+- Baseline upsert tests: `test/destila/workflows_metadata_test.exs`
+  (the upsert-on-conflict scenarios at roughly lines 18-50).
+- Transaction usage elsewhere in the app:
+  `lib/destila/workflows.ex` already imports `Ecto.Query` and uses
+  `Repo` directly — follow the same idioms for the new
+  `Repo.transaction/1` wrapper.
 
 **Test scenarios:**
 - Happy path: same phase name, same key, repeated upsert → one row,
-  second value wins, `updated_at` advances.
-- Edge case: different phase names, same key, both `exported: true`
-  → one exported row for that key (the later write wins) after the
-  fix / baseline.
-- Edge case: different phase names, same key, one exported and one
-  not exported → the two rows are distinct if today's behavior is
-  preserved (confirm via the test); if we collapse them for exported,
-  the non-exported row should be untouched.
-- Integration: starting a `:code_redesign_analysis` session, letting
-  Phase 1-3 export all four keys, then asserting that Phase 4 export
-  of a new `comparison_report` value leaves exactly one exported row
-  for that key (covered by Unit 4 LiveView test as well).
+  second value wins, `updated_at` advances. (Regression guard.)
+- Happy path: different phase names, same key, both `exported: true`
+  → after the fix, exactly one exported row for that key; the later
+  write wins.
+- Edge case: Phase 3 exports both `comparison_report` and
+  `prompt_generated`; Phase 4 re-exports only `comparison_report`.
+  Assert the original Phase 3 `prompt_generated` row survives
+  untouched (cross-key isolation — the delete must be scoped by
+  `key`).
+- Edge case: a non-exported row with the same key exists under the
+  original phase name; an exported Phase 4 re-export of that key
+  must leave the non-exported row untouched. (Delete must be scoped
+  by `exported == true`.)
+- Edge case: re-export → re-export (two consecutive Phase 4 re-
+  exports of the same key) → still exactly one row, final value
+  wins.
+- Concurrency / race: two tasks calling `upsert_metadata/5` in
+  parallel with `exported: true`, same session/key, different
+  phase names, different values. Assert exactly one exported row
+  remains and its value is one of the two inputs. Uses
+  `Task.async/1` + `Task.await/2` against the SQLite writer.
+- Error path (atomicity): stub or mock `Repo.insert/2` to raise
+  after the delete portion of the transaction. Assert the original
+  row survives (transaction rolls back) and
+  `get_exported_metadata/1` still returns the original value.
+  Feasible via a test-only wrapper or by swapping the `Repo`
+  module in test config; if neither is tractable, fall back to a
+  property-style test that asserts the invariant after many random
+  interleavings.
+- PubSub: subscribe to the session's topic via
+  `Destila.PubSubHelper` (or `Phoenix.PubSub.subscribe/2` against
+  the same topic `upsert_metadata/5` broadcasts on), perform a
+  Phase 4 re-export, assert exactly one `:metadata_updated` message
+  arrives for that export (delete + upsert should not produce two
+  events).
+- Integration: start a `:code_redesign_analysis` session, drive
+  Phases 1-3 to export all four keys, then simulate a Phase 4
+  re-export of a new `comparison_report` value and assert exactly
+  one exported row for each of the four keys. (Also covered end to
+  end by the LiveView test in Unit 4.)
 
 **Verification:**
-- The new characterization test passes.
-- Existing workflow-metadata tests still pass (no regression in
-  brainstorm / implement / code-chat behavior).
+- All new characterization tests pass.
+- Existing `test/destila/workflows_metadata_test.exs` tests still
+  pass (no regression in brainstorm / implement / code-chat upsert
+  behavior).
 - `mix test test/destila/` passes.
+- Audit the exported-metadata read sites
+  (`lib/destila/workflows.ex:214-226`, `get_exported_metadata/1` at
+  `lib/destila/workflows.ex:333-351`, `WorkflowRunnerLive.assign_metadata/2`,
+  `CreateSessionLive` source picker) — none should be seeing
+  duplicate exported rows after the fix.
 
 - [ ] **Unit 4: Write the Gherkin feature file and LiveView tests.**
 
@@ -539,15 +599,109 @@ parallel with Unit 2 and Unit 3 once Unit 1 is landed.
   - `@moduledoc` referencing
     `features/code_redesign_analysis_workflow.feature`.
   - `@feature "code_redesign_analysis_workflow"` module attribute.
-  - `setup` block using `ClaudeCode.Test.set_mode_to_shared/0` and
-    `ClaudeCode.Test.stub/2` to return a canned AI response that
-    exports each phase's artifact and calls `phase_complete`.
+  - `setup` block using `ClaudeCode.Test.set_mode_to_shared/0`
+    (`deps/claude_code/lib/claude_code/test.ex:201-203`) and
+    `ClaudeCode.Test.stub(ClaudeCode, fn _query, _opts -> [...] end)`
+    (`deps/claude_code/lib/claude_code/test.ex:133-157`).
   - Per-scenario tests tagged `@tag feature: @feature, scenario:
     "..."` — every scenario from the feature file has at least one
-    matching test. Reuse `create_project/0` and
-    `create_*_session/1` helpers from the implement-general-prompt
-    test module (copy, don't share — both test modules stay
-    self-contained).
+    matching test. Copy (don't share) the helpers from the
+    implement-general-prompt test module so both modules stay
+    self-contained. Because
+    `create_implement_session/2` there hardcodes
+    `workflow_type: :implement_general_prompt` and
+    `total_phases: 7`, **write a fresh
+    `create_redesign_session/2` helper** in this module with
+    `workflow_type: :code_redesign_analysis` and `total_phases: 4`;
+    keep its `pe_status` contract the same (default `:processing`;
+    `:setup` sentinel skips `PhaseExecution` creation).
+- **Non-interactive phase stub shape.** To drive Phase 1, 2, or 3
+  auto-advance, return this ordered event list from
+  `ClaudeCode.Test.stub/2`:
+  1. `ClaudeCode.Test.text("...")` — intermediate assistant text
+     (optional; adds realism).
+  2. One `ClaudeCode.Test.tool_use("mcp__destila__session", %{
+     "action" => "export", "key" => "<artifact_key>", "type" =>
+     "markdown", "value" => "..."})` per artifact the phase
+     produces (Phase 3 emits two).
+  3. One `ClaudeCode.Test.tool_use("mcp__destila__session",
+     %{"action" => "phase_complete", "message" => "..."})` to
+     trigger auto-advance.
+  4. `ClaudeCode.Test.result("...")` — optional; auto-appended by
+     `build_stream/2` if omitted
+     (`deps/claude_code/lib/claude_code/test.ex:566-586`).
+  For multi-phase tests that need different stub sequences across
+  turns (the default stub is called on every new AI session), mirror
+  the `Agent` counter pattern at
+  `test/destila_web/live/brainstorm_idea_workflow_live_test.exs:328-346`
+  — the stub closure reads and increments an `Agent` counter and
+  branches on the invocation index. Required for the Adjustments
+  scenario (Phase 4 re-export is a second-turn response).
+- **Phase-advance assertion.** After the stubbed `phase_complete`
+  fires, the runner advances via a PubSub message. The reliable
+  pattern (see
+  `test/destila_web/live/brainstorm_idea_workflow_live_test.exs:354-364`)
+  is: call `render(view)` once to flush, then re-mount with a fresh
+  `live(conn, ~p"/sessions/#{ws.id}")`, then assert the new header
+  text — e.g. `assert html =~ "Phase 2/4"` and `assert html =~
+  "Greenfield Design"`. Do not rely on same-mount re-render races.
+- **Sidebar / exported-metadata assertions.** Element IDs used by
+  existing tests:
+  - Sidebar container: `#metadata-sidebar`,
+    `#metadata-sidebar-content`.
+  - Empty state text: `"No metadata exported yet"`.
+  - Per-entry id prefix: `[id^='metadata-entry-']`.
+  - Inline markdown card id prefix: `[id^='export-md-']` with
+    `[data-content]` (see
+    `test/destila_web/live/markdown_metadata_viewing_live_test.exs:171-184`).
+  - Markdown view button:
+    `button[phx-click='open_markdown_modal'][phx-value-id]`.
+  - Keys are humanized in the sidebar — assert on
+    `"Requirements Doc"`, `"Greenfield Design"`, `"Comparison Report"`,
+    `"Prompt Generated"` (not the raw keys).
+  - For deterministic sidebar state without stubbing a full AI turn,
+    seed directly via
+    `Destila.Workflows.upsert_metadata(ws.id, phase_name, key,
+    %{"markdown" => "..."}, exported: true)` — pattern at
+    `test/destila_web/live/markdown_metadata_viewing_live_test.exs:80-87`.
+- **Cancel / Retry assertions** (mirror
+  `test/destila_web/live/implement_general_prompt_workflow_live_test.exs:181-273`):
+  - Running non-interactive phase (`pe_status: :processing`):
+    `refute has_element?(view, "textarea[name='content']")`,
+    `assert has_element?(view, "#cancel-phase-btn")`.
+  - Errored non-interactive phase (`pe_status: :awaiting_input` in
+    a non-interactive phase):
+    `assert has_element?(view, "#retry-phase-btn")`,
+    `refute has_element?(view, "#cancel-phase-btn")`.
+  - Retry: `view |> element("#retry-phase-btn") |> render_click()`;
+    reload with `Destila.Workflows.get_workflow_session!(ws.id)`
+    and assert `Destila.Workflows.Session.phase_status(ws) in
+    [:processing, :awaiting_input]` (race-tolerant).
+- **Adjustments-phase (Phase 4) test pattern — new territory.**
+  No existing test combines a user-submitted text form with a
+  stubbed AI export response, so the plan introduces it. Compose
+  two existing pieces:
+  - User text submission:
+    `view |> form("form[phx-submit='send_text']", %{"content" =>
+    "Tighten the comparison report"}) |> render_submit()`
+    (pattern at
+    `test/destila_web/live/brainstorm_idea_workflow_live_test.exs:261-265`).
+  - Second-turn AI stub returning
+    `text + tool_use(export, key: "comparison_report") + result`
+    using the `Agent` counter idiom so Phase 4's initial mount
+    doesn't also trigger the export.
+  - After submission, assert the sidebar's `comparison_report`
+    entry's rendered markdown equals the new value (via the
+    `[data-content]` attribute or by querying
+    `Destila.Workflows.get_exported_metadata/1` directly).
+- **ClaudeCode.Test reference.** All test helpers live in
+  `deps/claude_code/lib/claude_code/test.ex`. Key builders:
+  `text/2` (line 276-290), `tool_use/3` (line 306-331 — use this
+  for all `mcp__destila__session` calls, with string keys in the
+  input map), `result/2` (line 437-446). The test adapter is
+  already wired via `config :claude_code, adapter: {ClaudeCode.Test,
+  ClaudeCode}` in `config/test.exs`; no extra setup beyond
+  `set_mode_to_shared/0` in the test module's `setup` block.
 - **Structure tests** in `test/destila/workflow_test.exs`:
   - Add `alias Destila.Workflows.CodeRedesignAnalysisWorkflow`.
   - New `describe` block asserting `total_phases/0 == 4`,
