@@ -15,6 +15,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     only: [workflow_badge: 1, progress_indicator: 1, aliveness_dot: 1]
 
   import DestilaWeb.ChatComponents
+  import DestilaWeb.FollowUpModal, only: [follow_up_modal: 1]
 
   alias Destila.AI
   alias Destila.AI.AlivenessTracker
@@ -75,6 +76,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:text_modal_label, nil)
        |> assign(:follow_up_modal_open?, false)
        |> assign(:follow_up_candidates, [])
+       |> assign(:follow_up_selected_type, nil)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -177,10 +179,46 @@ defmodule DestilaWeb.WorkflowRunnerLive do
          |> assign(:workflow_session, ws)
          |> assign(:follow_up_modal_open?, true)
          |> assign(:follow_up_candidates, candidates)
+         |> assign(:follow_up_selected_type, default_follow_up_selection(candidates))
          |> assign_ai_state(ws)}
 
       {:error, _} ->
         {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_follow_up_modal", _params, socket) do
+    {:noreply, assign(socket, :follow_up_modal_open?, false)}
+  end
+
+  def handle_event("select_follow_up", %{"workflow_type" => type_str}, socket) do
+    workflow_type = String.to_existing_atom(type_str)
+    {:noreply, assign(socket, :follow_up_selected_type, workflow_type)}
+  end
+
+  def handle_event("archive_only", _params, socket) do
+    case Workflows.archive_workflow_session(socket.assigns.workflow_session) do
+      {:ok, _ws} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Session archived")
+         |> push_navigate(to: ~p"/crafting")}
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> assign(:follow_up_modal_open?, false)
+         |> put_flash(:error, "Could not archive session")}
+    end
+  end
+
+  def handle_event("start_follow_up", %{"archive" => archive_str}, socket) do
+    case socket.assigns.follow_up_selected_type do
+      nil ->
+        {:noreply, socket}
+
+      workflow_type ->
+        start_follow_up(socket, workflow_type, archive_str == "true")
     end
   end
 
@@ -563,27 +601,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
-  def handle_info(:close_follow_up_modal, socket) do
-    {:noreply, assign(socket, :follow_up_modal_open?, false)}
-  end
+  def handle_info(_msg, socket), do: {:noreply, socket}
 
-  def handle_info(:archive_only, socket) do
-    case Workflows.archive_workflow_session(socket.assigns.workflow_session) do
-      {:ok, _ws} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Session archived")
-         |> push_navigate(to: ~p"/crafting")}
-
-      {:error, _changeset} ->
-        {:noreply,
-         socket
-         |> assign(:follow_up_modal_open?, false)
-         |> put_flash(:error, "Could not archive session")}
-    end
-  end
-
-  def handle_info({:start_follow_up, workflow_type, archive_source?}, socket) do
+  defp start_follow_up(socket, workflow_type, archive_source?) do
     ws = socket.assigns.workflow_session
     source_key = Workflows.workflow_module(workflow_type).source_metadata_key()
     input_text = find_exported_value(socket.assigns.exported_metadata, source_key)
@@ -620,7 +640,8 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
-  def handle_info(_msg, socket), do: {:noreply, socket}
+  defp default_follow_up_selection([%{type: type} | _]), do: type
+  defp default_follow_up_selection(_), do: nil
 
   defp find_exported_value(exported_metadata, key) do
     case Enum.find(exported_metadata, &(&1.key == key)) do
@@ -1301,11 +1322,10 @@ defmodule DestilaWeb.WorkflowRunnerLive do
       <% end %>
 
       <%!-- Post-completion follow-up modal --%>
-      <.live_component
-        module={DestilaWeb.FollowUpModalComponent}
-        id="follow-up-modal-component"
+      <.follow_up_modal
         open?={@follow_up_modal_open?}
         candidates={@follow_up_candidates}
+        selected_type={@follow_up_selected_type}
       />
 
       <%!-- Text modal --%>
