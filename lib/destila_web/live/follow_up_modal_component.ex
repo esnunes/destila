@@ -1,8 +1,14 @@
 defmodule DestilaWeb.FollowUpModalComponent do
   @moduledoc """
-  Post-completion follow-up modal. Offers to start a compatible follow-up
-  workflow (with or without archiving the source), archive without starting,
-  or dismiss.
+  Post-completion follow-up modal. Shows each compatible follow-up workflow as
+  a selectable card (icon, label, description). Actions in the modal footer
+  operate on the selected card:
+
+    * `Start and archive` — primary action (start the follow-up and archive the
+      source session)
+    * `Start` — start the follow-up without archiving the source
+    * `Archive only` — archive the source without starting a follow-up
+    * `Close` — dismiss the modal
 
   Receives `:open?` and `:candidates` from the parent LiveView and forwards
   user intent back via `send(self(), ...)`:
@@ -19,11 +25,22 @@ defmodule DestilaWeb.FollowUpModalComponent do
   use DestilaWeb, :live_component
 
   def update(assigns, socket) do
+    previous_open? = socket.assigns[:open?] || false
+    new_open? = assigns[:open?] || false
+
+    selected =
+      if new_open? and not previous_open? do
+        default_selection(assigns[:candidates] || [])
+      else
+        socket.assigns[:selected_type]
+      end
+
     {:ok,
      socket
      |> assign(:id, assigns.id)
-     |> assign(:open?, assigns[:open?] || false)
-     |> assign(:candidates, assigns[:candidates] || [])}
+     |> assign(:open?, new_open?)
+     |> assign(:candidates, assigns[:candidates] || [])
+     |> assign(:selected_type, selected)}
   end
 
   def handle_event("close_follow_up_modal", _params, socket) do
@@ -36,16 +53,25 @@ defmodule DestilaWeb.FollowUpModalComponent do
     {:noreply, socket}
   end
 
-  def handle_event(
-        "start_follow_up",
-        %{"workflow_type" => type_str, "archive" => archive_str},
-        socket
-      ) do
+  def handle_event("select_workflow", %{"workflow_type" => type_str}, socket) do
     workflow_type = String.to_existing_atom(type_str)
-    archive? = archive_str == "true"
-    send(self(), {:start_follow_up, workflow_type, archive?})
-    {:noreply, socket}
+    {:noreply, assign(socket, :selected_type, workflow_type)}
   end
+
+  def handle_event("start_follow_up", %{"archive" => archive_str}, socket) do
+    case socket.assigns.selected_type do
+      nil ->
+        {:noreply, socket}
+
+      workflow_type ->
+        archive? = archive_str == "true"
+        send(self(), {:start_follow_up, workflow_type, archive?})
+        {:noreply, socket}
+    end
+  end
+
+  defp default_selection([%{type: type} | _]), do: type
+  defp default_selection(_), do: nil
 
   def render(assigns) do
     ~H"""
@@ -90,43 +116,40 @@ defmodule DestilaWeb.FollowUpModalComponent do
                   </p>
                 <% else %>
                   <div class="grid gap-3">
-                    <div
+                    <button
                       :for={wf <- @candidates}
+                      type="button"
                       id={"follow-up-card-#{wf.type}"}
-                      class="card bg-base-100 border-2 border-base-300 hover:border-primary/60 transition-colors"
+                      phx-click="select_workflow"
+                      phx-target={@myself}
+                      phx-value-workflow_type={wf.type}
+                      aria-pressed={to_string(@selected_type == wf.type)}
+                      class={[
+                        "card bg-base-100 border-2 text-left transition-all cursor-pointer",
+                        if(@selected_type == wf.type,
+                          do: "border-primary ring-2 ring-primary/30 bg-primary/5",
+                          else: "border-base-300 hover:border-primary/60"
+                        )
+                      ]}
                     >
                       <div class="card-body p-4">
                         <div class="flex items-start gap-3">
                           <.icon name={wf.icon} class={["size-8 shrink-0", wf.icon_class]} />
                           <div class="flex-1 min-w-0">
-                            <h3 class="font-semibold text-sm text-base-content">{wf.label}</h3>
+                            <div class="flex items-center justify-between gap-2">
+                              <h3 class="font-semibold text-sm text-base-content">{wf.label}</h3>
+                              <span
+                                :if={@selected_type == wf.type}
+                                class="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-primary shrink-0"
+                              >
+                                <.icon name="hero-check-circle-micro" class="size-3.5" /> Selected
+                              </span>
+                            </div>
                             <p class="text-xs text-base-content/60 mt-0.5">{wf.description}</p>
                           </div>
                         </div>
-                        <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
-                          <button
-                            id={"follow-up-start-#{wf.type}-btn"}
-                            phx-click="start_follow_up"
-                            phx-target={@myself}
-                            phx-value-workflow_type={wf.type}
-                            phx-value-archive="false"
-                            class="btn btn-primary btn-sm"
-                          >
-                            <.icon name="hero-rocket-launch-micro" class="size-4" /> Start
-                          </button>
-                          <button
-                            id={"follow-up-start-#{wf.type}-archive-btn"}
-                            phx-click="start_follow_up"
-                            phx-target={@myself}
-                            phx-value-workflow_type={wf.type}
-                            phx-value-archive="true"
-                            class="btn btn-soft btn-sm"
-                          >
-                            <.icon name="hero-archive-box-micro" class="size-4" /> Start and archive
-                          </button>
-                        </div>
                       </div>
-                    </div>
+                    </button>
                   </div>
                 <% end %>
               </div>
@@ -147,6 +170,28 @@ defmodule DestilaWeb.FollowUpModalComponent do
                   class="btn btn-soft btn-sm"
                 >
                   <.icon name="hero-archive-box-micro" class="size-4" /> Archive only
+                </button>
+                <button
+                  :if={@candidates != []}
+                  id="follow-up-start-btn"
+                  phx-click="start_follow_up"
+                  phx-target={@myself}
+                  phx-value-archive="false"
+                  disabled={is_nil(@selected_type)}
+                  class="btn btn-soft btn-sm"
+                >
+                  <.icon name="hero-rocket-launch-micro" class="size-4" /> Start
+                </button>
+                <button
+                  :if={@candidates != []}
+                  id="follow-up-start-and-archive-btn"
+                  phx-click="start_follow_up"
+                  phx-target={@myself}
+                  phx-value-archive="true"
+                  disabled={is_nil(@selected_type)}
+                  class="btn btn-primary btn-sm"
+                >
+                  <.icon name="hero-rocket-launch-micro" class="size-4" /> Start and archive
                 </button>
               </div>
             </div>
