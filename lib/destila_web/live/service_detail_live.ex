@@ -246,9 +246,9 @@ defmodule DestilaWeb.ServiceDetailLive do
                   <dt class="text-base-content/50 text-xs">Port</dt>
                   <dd
                     id="service-port-text"
-                    class="mt-1 font-mono tabular-nums text-base font-semibold text-base-content/90"
+                    class="mt-1 font-mono tabular-nums text-base-content/80"
                   >
-                    <span class="text-base-content/35 font-normal">:</span>{@service_state["port"]}
+                    <span class="text-base-content/35">:</span>{@service_state["port"]}
                   </dd>
                 </div>
 
