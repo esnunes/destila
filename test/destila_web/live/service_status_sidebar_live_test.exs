@@ -214,6 +214,33 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
     end
   end
 
+  describe "open service details link" do
+    @tag feature: @feature,
+         scenario: "Sidebar exposes a link to the service detail page"
+    test "renders link to /services/:id when service item is visible", %{conn: conn} do
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
+
+      ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(
+               view,
+               ~s|#service-open-details-link[href="/services/#{ws.id}"]|
+             )
+    end
+
+    @tag feature: @feature,
+         scenario: "Open service details link is not shown when project is not a webservice"
+    test "does not render link when project has no run_command", %{conn: conn} do
+      project = create_project(%{run_command: nil, service_env_var: "PORT"})
+      ws = create_session(%{project_id: project.id})
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      refute has_element?(view, "#service-open-details-link")
+    end
+  end
+
   describe "real-time updates" do
     @tag feature: @feature,
          scenario: "Service status updates in real-time"

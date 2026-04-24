@@ -1038,6 +1038,15 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                             </span>
                           </div>
                         <% end %>
+                        <.link
+                          id="service-open-details-link"
+                          navigate={~p"/services/#{@workflow_session.id}"}
+                          class="size-5 rounded flex items-center justify-center shrink-0 text-base-content/50 hover:bg-base-200 hover:text-primary transition-colors"
+                          aria-label="Open service details"
+                          title="Open service details"
+                        >
+                          <.icon name="hero-arrow-top-right-on-square-micro" class="size-3.5" />
+                        </.link>
                         <button
                           type="button"
                           id={"service-#{if service_active?, do: "stop", else: "start"}-button"}

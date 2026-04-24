@@ -60,3 +60,13 @@ Feature: Service Status Sidebar
     And the session's service_state changes from stopped to running
     Then the service item should update to reflect the new state
     And the service link should become clickable with the correct port
+
+  Scenario: Sidebar exposes a link to the service detail page
+    Given I am on a session detail page
+    And the session's project has a run_command and a service_env_var configured
+    Then the sidebar should expose a link that navigates to the service detail page at /services/<session_id>
+
+  Scenario: Open service details link is not shown when project is not a webservice
+    Given I am on a session detail page
+    And the session's project has no run_command configured
+    Then no link to the service detail page should be present in the sidebar
