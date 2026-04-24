@@ -191,6 +191,14 @@ defmodule DestilaWeb.ServiceDetailLive do
             </div>
 
             <div class="flex items-center gap-2">
+              <.link
+                id="open-terminal-link"
+                navigate={~p"/sessions/#{@workflow_session.id}/terminal"}
+                class="btn btn-soft btn-sm"
+                title="Open terminal"
+              >
+                <.icon name="hero-command-line-micro" class="size-4" /> Terminal
+              </.link>
               <.url_link state={@service_state} />
               <.control_buttons state={@service_state} />
             </div>
@@ -272,6 +280,19 @@ defmodule DestilaWeb.ServiceDetailLive do
                       class="font-mono text-xs bg-base-200/60 text-base-content/80 rounded-md px-2.5 py-1.5 block break-all"
                     >
                       {setup_command(@project, @service_state)}
+                    </code>
+                  </dd>
+                </div>
+
+                <div :if={@worktree_path} id="worktree-path-block">
+                  <dt class="text-base-content/50 text-xs">Worktree</dt>
+                  <dd class="mt-1">
+                    <code
+                      id="service-worktree-path"
+                      class="font-mono text-xs bg-base-200/60 text-base-content/80 rounded-md px-2.5 py-1.5 block break-all"
+                      title={@worktree_path}
+                    >
+                      {@worktree_path}
                     </code>
                   </dd>
                 </div>
