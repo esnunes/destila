@@ -84,6 +84,8 @@ export default {
     this.term.loadAddon(this.fitAddon)
     this.term.open(container)
 
+    container.querySelector('.xterm-helpers').style.letterSpacing = 0
+
     document.fonts.ready.then(() => {
       requestAnimationFrame(() => {
         this.fitAddon.fit()
@@ -102,7 +104,9 @@ export default {
     this._resizeTimer = null
     this.resizeObserver = new ResizeObserver(() => {
       clearTimeout(this._resizeTimer)
-      this._resizeTimer = setTimeout(() => this.fitAddon.fit(), 150)
+      this._resizeTimer = setTimeout(() => {
+        this.fitAddon.fit()
+      }, 150)
     })
     this.resizeObserver.observe(container)
 
