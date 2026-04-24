@@ -199,6 +199,30 @@ defmodule DestilaWeb.ServiceDetailLive do
 
         <%!-- Body --%>
         <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-6 overflow-hidden">
+          <%!-- Log viewer --%>
+          <div class="flex-1 min-h-0 min-w-0 flex flex-col rounded-lg border border-base-300 bg-base-200/30 overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-base-300 bg-base-100 flex items-center justify-between gap-4 shrink-0">
+              <h2 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider shrink-0">
+                Logs
+              </h2>
+              <span
+                class="text-[11px] text-base-content/40 font-mono truncate min-w-0"
+                title={Logs.log_path(@workflow_session.id)}
+              >
+                {Path.basename(Logs.log_path(@workflow_session.id))}
+              </span>
+            </div>
+            <div
+              id={"service-logs-#{@workflow_session.id}"}
+              phx-hook="ServiceLogViewer"
+              phx-update="ignore"
+              data-session-id={@workflow_session.id}
+              class="flex-1 min-h-0 overflow-hidden"
+            >
+              <div data-terminal-container class="h-full w-full p-2" />
+            </div>
+          </div>
+
           <%!-- Details card --%>
           <div class="lg:w-80 shrink-0 flex flex-col gap-4">
             <div class="rounded-lg border border-base-300 bg-base-100 p-4">
@@ -251,30 +275,6 @@ defmodule DestilaWeb.ServiceDetailLive do
                   </dd>
                 </div>
               </dl>
-            </div>
-          </div>
-
-          <%!-- Log viewer --%>
-          <div class="flex-1 min-h-0 min-w-0 flex flex-col rounded-lg border border-base-300 bg-base-200/30 overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-base-300 bg-base-100 flex items-center justify-between gap-4 shrink-0">
-              <h2 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider shrink-0">
-                Logs
-              </h2>
-              <span
-                class="text-[11px] text-base-content/40 font-mono truncate min-w-0"
-                title={Logs.log_path(@workflow_session.id)}
-              >
-                {Path.basename(Logs.log_path(@workflow_session.id))}
-              </span>
-            </div>
-            <div
-              id={"service-logs-#{@workflow_session.id}"}
-              phx-hook="ServiceLogViewer"
-              phx-update="ignore"
-              data-session-id={@workflow_session.id}
-              class="flex-1 min-h-0 overflow-hidden"
-            >
-              <div data-terminal-container class="h-full w-full p-2" />
             </div>
           </div>
         </div>
