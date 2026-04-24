@@ -99,11 +99,11 @@ export function createXtermHook(opts = {}) {
         requestAnimationFrame(() => {
           this.fitAddon.fit()
           if (interactive) this.term.focus()
+          this.pushEvent("terminal_ready", {})
           if (forwardResize) {
             const dims = this.fitAddon.proposeDimensions()
             if (dims) this.pushEvent("resize", { cols: dims.cols, rows: dims.rows })
           }
-          this.pushEvent("terminal_ready", {})
         })
       })
 
