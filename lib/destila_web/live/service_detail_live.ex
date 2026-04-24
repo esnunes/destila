@@ -243,7 +243,7 @@ defmodule DestilaWeb.ServiceDetailLive do
                   <dt class="text-base-content/50 text-xs">Status</dt>
                   <dd
                     id="service-status-text"
-                    class="mt-1 flex items-center gap-2 text-base-content/80 capitalize"
+                    class="mt-1 flex items-center gap-2 text-xs text-base-content/80 capitalize"
                   >
                     <.status_dot state={@service_state} />
                     {@service_state["status"] || "stopped"}
@@ -254,7 +254,7 @@ defmodule DestilaWeb.ServiceDetailLive do
                   <dt class="text-base-content/50 text-xs">Port</dt>
                   <dd
                     id="service-port-text"
-                    class="mt-1 font-mono tabular-nums text-base-content/80"
+                    class="mt-1 font-mono tabular-nums text-xs text-base-content/80"
                   >
                     <span class="text-base-content/35">:</span>{@service_state["port"]}
                   </dd>
