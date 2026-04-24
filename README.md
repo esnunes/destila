@@ -2,6 +2,122 @@
 
 Destila is an AI-powered workflow orchestration tool for software development. It manages multi-phase, AI-assisted workflows that take developers from rough ideas to implemented code.
 
+## Run with Docker
+
+An official container image is published to the GitHub Container Registry at
+[`ghcr.io/esnunes/destila`](https://github.com/esnunes/destila/pkgs/container/destila).
+It ships with Destila plus every required CLI pre-installed (`claude`, `tmux`,
+`ffmpeg`, `agent-browser`, `git`) so you can run Destila without installing
+Elixir, Erlang, Node, or the Claude Code CLI on your host.
+
+### 1. Pull the image
+
+```sh
+docker pull ghcr.io/esnunes/destila:latest
+```
+
+Pin to a specific version (recommended for anything beyond a quick try) by
+using a semver tag such as `ghcr.io/esnunes/destila:0.1.0`.
+
+### 2. Generate a `SECRET_KEY_BASE`
+
+Phoenix refuses to boot without a signing secret. Generate one once and reuse it:
+
+```sh
+export SECRET_KEY_BASE=$(openssl rand -hex 64)
+```
+
+### 3. Choose an authentication method
+
+The three options below are mutually exclusive and resolved in the same
+priority order as the [Authentication](#authentication) section. Pick one:
+
+- **OAuth token (Claude subscription)** — pass via env var:
+
+  ```sh
+  -e CLAUDE_AGENT_OAUTH_TOKEN="sk-ant-oat01-..."
+  ```
+
+- **Anthropic API key** — pass via env var:
+
+  ```sh
+  -e ANTHROPIC_API_KEY="sk-ant-api03-..."
+  ```
+
+- **Pre-logged-in host** — mount your host `~/.claude` directory so the
+  container reuses an existing `claude login` session:
+
+  ```sh
+  -v ~/.claude:/root/.claude
+  ```
+
+### 4. Run the container
+
+```sh
+mkdir -p ~/destila-data ~/.cache/destila
+
+docker run -d \
+  --name destila \
+  -p 4000:4000 \
+  -v ~/.claude:/root/.claude \
+  -v ~/.cache/destila:/root/.cache/destila \
+  -v ~/destila-data:/data \
+  -e SECRET_KEY_BASE="$SECRET_KEY_BASE" \
+  -e PHX_HOST=localhost \
+  ghcr.io/esnunes/destila:latest
+```
+
+Open http://localhost:4000. Migrations run automatically on first boot; the
+SQLite database lives at `/data/destila.db` (i.e. on the `~/destila-data`
+mount).
+
+### 5. Upgrade
+
+```sh
+docker pull ghcr.io/esnunes/destila:latest
+docker rm -f destila
+docker run -d --name destila ...   # same flags as step 4
+```
+
+Your projects, sessions, Claude login, and SQLite database all live on the
+three mounted volumes and survive container recreation.
+
+### Volumes
+
+| Host path          | Container path          | Purpose                                                        |
+| ------------------ | ----------------------- | -------------------------------------------------------------- |
+| `~/.claude`        | `/root/.claude`         | Claude Code CLI credentials and settings.                      |
+| `~/.cache/destila` | `/root/.cache/destila`  | Per-project git clones and workflow-session worktrees.         |
+| `~/destila-data`   | `/data`                 | SQLite database (`destila.db` plus its WAL/SHM sidecar files). |
+
+> The cache mount maps the host's `~/.cache/destila` — **not** `~/.cache`.
+> Destila adds the `destila/` segment itself at `lib/destila/git.ex`; if you
+> mount `~/.cache` you'll end up with clones at `~/.cache/destila/destila/...`.
+
+### Limitations
+
+- Services launched by Destila workflows bind to dynamic host ports inside
+  the container and are therefore only reachable from the host if you run
+  with `--network host` (Linux only) or forward the needed ports with
+  additional `-p` flags at `docker run` time.
+- The image is published for `linux/amd64` only. ARM hosts (Apple Silicon,
+  Raspberry Pi, arm64 servers) need Docker's emulation layer or a custom
+  local build.
+- The container runs as `root` by default. For host-UID parity on bind
+  mounts, pass `--user $(id -u):$(id -g)` — the `HOME=/root` and
+  `XDG_CACHE_HOME` defaults still resolve correctly.
+
+### Troubleshooting
+
+- **`environment variable SECRET_KEY_BASE is missing`** — set
+  `SECRET_KEY_BASE` on the `docker run` command line (see step 2).
+- **Permission denied on volume mounts under SELinux / Podman** — append
+  `:Z` to each bind mount, e.g. `-v ~/.claude:/root/.claude:Z`.
+- **`Destila.Deps.check/0` reports `available?: false`** — rebuild the image
+  from a clean checkout (`docker pull` for the official tag, or
+  `docker build --no-cache` for a local build). The required CLIs are baked
+  into the image and should never be missing at runtime.
+
 ## Getting started
 
 To start your Phoenix server:
