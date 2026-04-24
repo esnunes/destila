@@ -103,9 +103,12 @@ three mounted volumes and survive container recreation.
 - The image is published for `linux/amd64` only. ARM hosts (Apple Silicon,
   Raspberry Pi, arm64 servers) need Docker's emulation layer or a custom
   local build.
-- The container runs as `root` by default. For host-UID parity on bind
-  mounts, pass `--user $(id -u):$(id -g)` — the `HOME=/root` and
-  `XDG_CACHE_HOME` defaults still resolve correctly.
+- The container runs as `root` by default. Running with
+  `--user $(id -u):$(id -g)` is possible but requires pre-creating the
+  bind-mount directories (`~/.claude`, `~/.cache/destila`, `~/destila-data`)
+  with matching ownership on the host — otherwise SQLite and the Claude CLI
+  will hit `EACCES` on first write, since the image's `/data`, `/root/.claude`,
+  and `/root/.cache/destila` paths are owned by `root` inside the image.
 
 ### Troubleshooting
 

@@ -12,7 +12,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
 
     concurrency:
       group: ghcr-${{ github.ref }}

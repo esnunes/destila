@@ -7,6 +7,8 @@ defmodule Destila.Deps do
   per tool — no caching, no process state.
   """
 
+  # When adding a tool here, also install it in the runtime stage of /Dockerfile
+  # so the published container image ships with it on PATH.
   @required_tools [
     %{
       name: "claude",
