@@ -208,24 +208,30 @@ defmodule DestilaWeb.ServiceDetailLive do
               <dl class="space-y-3 text-sm">
                 <div>
                   <dt class="text-base-content/50 text-xs">Status</dt>
-                  <dd id="service-status-text" class="font-mono text-base-content/80 mt-0.5">
+                  <dd
+                    id="service-status-text"
+                    class="font-mono text-base-content/80 mt-1 tabular-nums"
+                  >
                     {@service_state["status"] || "stopped"}
                   </dd>
                 </div>
 
                 <div :if={@service_state["port"]}>
                   <dt class="text-base-content/50 text-xs">Port</dt>
-                  <dd id="service-port-text" class="font-mono text-base-content/80 mt-0.5">
+                  <dd
+                    id="service-port-text"
+                    class="font-mono text-base-content/80 mt-1 tabular-nums"
+                  >
                     {@service_state["port"]}
                   </dd>
                 </div>
 
                 <div :if={run_command(@project, @service_state)} id="run-command-block">
                   <dt class="text-base-content/50 text-xs">Run command</dt>
-                  <dd class="mt-0.5">
+                  <dd class="mt-1">
                     <code
                       id="service-run-command"
-                      class="font-mono text-xs bg-base-200/60 rounded px-2 py-1 block whitespace-pre-wrap break-all"
+                      class="font-mono text-xs bg-base-200/60 text-base-content/80 rounded-md px-2.5 py-1.5 block break-all"
                     >
                       {run_command(@project, @service_state)}
                     </code>
@@ -234,10 +240,10 @@ defmodule DestilaWeb.ServiceDetailLive do
 
                 <div :if={setup_command(@project, @service_state)} id="setup-command-block">
                   <dt class="text-base-content/50 text-xs">Setup command</dt>
-                  <dd class="mt-0.5">
+                  <dd class="mt-1">
                     <code
                       id="service-setup-command"
-                      class="font-mono text-xs bg-base-200/60 rounded px-2 py-1 block whitespace-pre-wrap break-all"
+                      class="font-mono text-xs bg-base-200/60 text-base-content/80 rounded-md px-2.5 py-1.5 block break-all"
                     >
                       {setup_command(@project, @service_state)}
                     </code>
@@ -248,33 +254,37 @@ defmodule DestilaWeb.ServiceDetailLive do
           </div>
 
           <%!-- Log viewer --%>
-          <div class="flex-1 min-h-0 min-w-0 flex flex-col rounded-lg border border-base-300 bg-base-900/5 overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-base-300 bg-base-200/40 flex items-center justify-between shrink-0">
-              <h2 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider">
+          <div class="flex-1 min-h-0 min-w-0 flex flex-col rounded-lg border border-base-300 bg-base-200/30 overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-base-300 bg-base-100 flex items-center justify-between gap-4 shrink-0">
+              <h2 class="text-xs font-semibold text-base-content/50 uppercase tracking-wider shrink-0">
                 Logs
               </h2>
-              <span class="text-[10px] text-base-content/40 font-mono">
-                {Destila.Services.Logs.log_path(@workflow_session.id)}
+              <span
+                class="text-[11px] text-base-content/40 font-mono truncate min-w-0"
+                title={Destila.Services.Logs.log_path(@workflow_session.id)}
+              >
+                {Path.basename(Destila.Services.Logs.log_path(@workflow_session.id))}
               </span>
             </div>
             <div
               id="service-logs"
               phx-update="stream"
-              class="flex-1 min-h-0 overflow-y-auto p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap"
+              aria-live="polite"
+              aria-label="Service logs"
+              class="flex-1 min-h-0 overflow-y-auto px-4 py-3 font-mono text-xs leading-snug"
             >
               <div
                 id="service-logs-empty"
-                class="hidden only:block text-base-content/40 italic"
+                class="hidden only:flex items-center justify-center gap-2 h-full text-base-content/40"
               >
-                No logs yet.
+                <.icon name="hero-document-text-micro" class="size-4" />
+                <span>No logs yet.</span>
               </div>
-              <div
+              <pre
                 :for={{dom_id, line} <- @streams.log_lines}
                 id={dom_id}
-                class="text-base-content/80"
-              >
-                {line.text}
-              </div>
+                class="m-0 text-base-content/80 whitespace-pre-wrap break-all"
+              >{line.text}</pre>
             </div>
           </div>
         </div>
@@ -407,10 +417,13 @@ defmodule DestilaWeb.ServiceDetailLive do
   end
 
   defp presence(nil), do: nil
-  defp presence(""), do: nil
 
-  defp presence(value) when is_binary(value),
-    do: if(String.trim(value) == "", do: nil, else: value)
+  defp presence(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
 
   # --- Private: log helpers ---
 
