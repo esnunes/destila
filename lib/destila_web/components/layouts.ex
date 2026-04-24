@@ -60,6 +60,12 @@ defmodule DestilaWeb.Layouts do
           label="Projects"
           active={@page_title == "Projects"}
         />
+        <.sidebar_item
+          navigate={~p"/services"}
+          icon="hero-server-stack"
+          label="Services"
+          active={@page_title == "Services"}
+        />
 
         <div class="my-2 mx-1 border-t border-base-300/50" />
 

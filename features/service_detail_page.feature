@@ -40,9 +40,13 @@ Feature: Service Detail Page
     Given I visit the service detail page for a running service
     Then I should see a Clear logs button
 
-  Scenario: Back link returns to the session detail page
+  Scenario: Back link returns to the services index
     Given I visit the service detail page for a workflow session
-    Then I should see a back link that navigates to /sessions/<session_id>
+    Then I should see a back link that navigates to /services
+
+  Scenario: Details sidebar links to the associated session
+    Given I visit the service detail page for a workflow session
+    Then the details sidebar should show a link that navigates to /sessions/<session_id>
 
   Scenario: Initial log file contents are sent to the terminal on mount
     Given the service log file contains some bytes

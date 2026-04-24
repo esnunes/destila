@@ -182,15 +182,26 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       assert has_element?(view_running, "#clear-logs-button")
     end
 
-    @tag feature: @feature, scenario: "Back link returns to the session detail page"
-    test "back-to-session link present", %{conn: conn} do
+    @tag feature: @feature, scenario: "Back link returns to the services index"
+    test "back-to-services link present", %{conn: conn} do
       project = webservice_project()
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
 
       {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
 
-      assert has_element?(view, ~s|#back-to-session-link[href="/sessions/#{ws.id}"]|)
+      assert has_element?(view, ~s|#back-to-services-link[href="/services"]|)
+    end
+
+    @tag feature: @feature, scenario: "Details sidebar links to the associated session"
+    test "details sidebar session link present", %{conn: conn} do
+      project = webservice_project()
+      ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
+      clear_log(ws.id)
+
+      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+
+      assert has_element?(view, ~s|#service-session-link[href="/sessions/#{ws.id}"]|)
     end
   end
 

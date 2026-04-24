@@ -173,11 +173,11 @@ defmodule DestilaWeb.ServiceDetailLive do
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-4 min-w-0">
               <.link
-                id="back-to-session-link"
-                navigate={~p"/sessions/#{@workflow_session.id}"}
+                id="back-to-services-link"
+                navigate={~p"/services"}
                 class="btn btn-ghost btn-sm btn-square"
-                aria-label="Back to session"
-                title="Back to session"
+                aria-label="Back to services"
+                title="Back to services"
               >
                 <.icon name="hero-arrow-left-micro" class="size-4" />
               </.link>
@@ -239,6 +239,20 @@ defmodule DestilaWeb.ServiceDetailLive do
               </h2>
 
               <dl class="space-y-3 text-sm">
+                <div>
+                  <dt class="text-base-content/50 text-xs">Session</dt>
+                  <dd class="mt-1">
+                    <.link
+                      id="service-session-link"
+                      navigate={~p"/sessions/#{@workflow_session.id}"}
+                      class="inline-flex items-center gap-1 text-xs text-primary hover:underline break-all"
+                    >
+                      {@workflow_session.title}
+                      <.icon name="hero-arrow-top-right-on-square-micro" class="size-3 shrink-0" />
+                    </.link>
+                  </dd>
+                </div>
+
                 <div>
                   <dt class="text-base-content/50 text-xs">Status</dt>
                   <dd
