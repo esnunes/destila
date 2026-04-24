@@ -24,7 +24,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/destila"
 import topbar from "../vendor/topbar"
-import TerminalPanel from "./hooks/terminal_panel"
+import {TerminalPanel, ServiceLogViewer} from "./hooks/xterm_hook"
 import LocalTime from "./hooks/local_time"
 import DraftsBoard from "./hooks/drafts_board"
 
@@ -82,6 +82,7 @@ const Hooks = {
   FocusFirstError: FocusFirstErrorHook,
   AutoDismiss: AutoDismissHook,
   TerminalPanel: TerminalPanel,
+  ServiceLogViewer: ServiceLogViewer,
   LocalTime: LocalTime,
   DraftsBoard: DraftsBoard,
 }

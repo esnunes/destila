@@ -79,6 +79,16 @@ defmodule Destila.Terminal.Tmux do
   end
 
   @doc """
+  Starts piping the pane's output at the given target to a shell command.
+
+  The `shell_command` is passed as a single argv argument; tmux invokes
+  `sh -c` on it. Passing `nil` or an empty string stops an active pipe.
+  """
+  def pipe_pane(target, shell_command) do
+    System.cmd("tmux", ["pipe-pane", "-t", target, shell_command], stderr_to_stdout: true)
+  end
+
+  @doc """
   Sends SIGTERM to the process group of each pane in the target window.
   """
   def term_panes(target) do

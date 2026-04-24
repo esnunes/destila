@@ -17,4 +17,32 @@ defmodule Destila.PubSubHelper do
   end
 
   def claude_session_topic, do: "claude_sessions"
+
+  def service_topic(workflow_session_id) do
+    "service:#{workflow_session_id}"
+  end
+
+  def broadcast_service_status(workflow_session_id, state) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      service_topic(workflow_session_id),
+      {:service_status, state}
+    )
+  end
+
+  def broadcast_service_log(workflow_session_id, chunk) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      service_topic(workflow_session_id),
+      {:service_log, chunk}
+    )
+  end
+
+  def broadcast_service_logs_cleared(workflow_session_id) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      service_topic(workflow_session_id),
+      {:service_logs_cleared, workflow_session_id}
+    )
+  end
 end

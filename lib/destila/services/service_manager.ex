@@ -8,8 +8,9 @@ defmodule Destila.Services.ServiceManager do
   index 9 of the session.
   """
 
-  alias Destila.{Projects, Workflows}
+  alias Destila.{Projects, PubSubHelper, Workflows}
   alias Destila.Projects.Project
+  alias Destila.Services.{LogTailer, Logs}
   alias Destila.Terminal.Tmux
   import Destila.StringHelper, only: [blank?: 1]
   require Logger
@@ -37,11 +38,24 @@ defmodule Destila.Services.ServiceManager do
   end
 
   @doc """
+  Truncates the session's log file and broadcasts a clear event. Callable
+  regardless of whether the service is currently running.
+  """
+  def clear_logs(ws) do
+    Logs.ensure_log_dir()
+    File.write!(Logs.log_path(ws.id), "")
+    PubSubHelper.broadcast_service_logs_cleared(ws.id)
+    :ok
+  end
+
+  @doc """
   Cleans up the service tmux window and clears service state.
   Called during session archival.
   """
   def cleanup(ws) do
     Tmux.kill_window(service_target(ws))
+    LogTailer.stop_for(ws.id)
+    File.rm(Logs.log_path(ws.id))
     Workflows.update_workflow_session(ws, %{service_state: nil})
     :ok
   end
@@ -63,10 +77,17 @@ defmodule Destila.Services.ServiceManager do
         worktree_path = Keyword.get(opts, :worktree_path)
         session = Tmux.session_name(ws)
         target = service_target(ws)
+        log_path = Logs.log_path(ws.id)
+
+        Logs.ensure_log_dir()
+        File.write!(log_path, "")
+        LogTailer.stop_for(ws.id)
 
         Tmux.ensure_session(session, worktree_path)
         Tmux.kill_window(target)
         Tmux.new_window(target, cwd: worktree_path)
+        Tmux.pipe_pane(target, "cat >> #{Tmux.escape_shell(log_path)}")
+        LogTailer.start_for(ws.id)
 
         Tmux.send_keys(
           target,
@@ -86,12 +107,14 @@ defmodule Destila.Services.ServiceManager do
         }
 
         Workflows.update_workflow_session(ws, %{service_state: starting_state})
+        PubSubHelper.broadcast_service_status(ws.id, starting_state)
         Logger.info("ServiceManager: #{ws.id} starting; waiting for port #{port}")
 
         if wait_for_port(port, @startup_timeout_ms) do
           Logger.info("ServiceManager: #{ws.id} port responded; marking running")
           running_state = %{starting_state | "status" => "running"}
           Workflows.update_workflow_session(ws, %{service_state: running_state})
+          PubSubHelper.broadcast_service_status(ws.id, running_state)
           {:ok, running_state}
         else
           Logger.warning(
@@ -110,6 +133,7 @@ defmodule Destila.Services.ServiceManager do
     target = service_target(ws)
     Tmux.term_panes(target)
     Tmux.kill_window(target)
+    LogTailer.stop_for(ws.id)
 
     ws = Workflows.get_workflow_session!(ws.id)
 
@@ -121,6 +145,7 @@ defmodule Destila.Services.ServiceManager do
       |> Map.put("status", "stopped")
 
     Workflows.update_workflow_session(ws, %{service_state: service_state})
+    PubSubHelper.broadcast_service_status(ws.id, service_state)
 
     {:ok, service_state}
   end

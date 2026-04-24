@@ -19,6 +19,8 @@ defmodule Destila.Application do
         Destila.AI.AlivenessTracker,
         {Registry, keys: :unique, name: Destila.Sessions.Registry},
         {DynamicSupervisor, name: Destila.Sessions.Supervisor, strategy: :one_for_one},
+        {Registry, keys: :unique, name: Destila.Services.LogTailerRegistry},
+        {DynamicSupervisor, name: Destila.Services.LogTailerSupervisor, strategy: :one_for_one},
         DestilaWeb.Endpoint
       ]
 

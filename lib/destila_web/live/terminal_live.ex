@@ -22,6 +22,7 @@ defmodule DestilaWeb.TerminalLive do
          socket
          |> assign(:workflow_session, ws)
          |> assign(:ai_session, ai_session)
+         |> assign(:terminal_pid, nil)
          |> assign(:page_title, "Terminal — #{ws.title}")}
       else
         {:ok,
@@ -54,12 +55,12 @@ defmodule DestilaWeb.TerminalLive do
   end
 
   def handle_event("input", %{"data" => data}, socket) do
-    TerminalServer.write(socket.assigns.terminal_pid, data)
+    if pid = socket.assigns.terminal_pid, do: TerminalServer.write(pid, data)
     {:noreply, socket}
   end
 
   def handle_event("resize", %{"cols" => cols, "rows" => rows}, socket) do
-    TerminalServer.resize(socket.assigns.terminal_pid, cols, rows)
+    if pid = socket.assigns.terminal_pid, do: TerminalServer.resize(pid, cols, rows)
     {:noreply, socket}
   end
 

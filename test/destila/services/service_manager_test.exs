@@ -3,9 +3,10 @@ defmodule Destila.Services.ServiceManagerTest do
   Unit tests for the service command builder.
   Feature: features/service_setup_command.feature
   """
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
-  alias Destila.Services.ServiceManager
+  alias Destila.PubSubHelper
+  alias Destila.Services.{Logs, ServiceManager}
 
   @feature "service_setup_command"
 
@@ -134,6 +135,24 @@ defmodule Destila.Services.ServiceManagerTest do
       port = ServiceManager.reserve_port()
       assert is_integer(port)
       assert port > 0
+    end
+  end
+
+  describe "clear_logs/1" do
+    test "truncates the log file and broadcasts a clear event" do
+      ws_id = "smtest-" <> Integer.to_string(System.unique_integer([:positive]))
+      path = Logs.log_path(ws_id)
+      Logs.ensure_log_dir()
+      File.write!(path, "old logs here")
+
+      Phoenix.PubSub.subscribe(Destila.PubSub, PubSubHelper.service_topic(ws_id))
+
+      assert :ok = ServiceManager.clear_logs(%{id: ws_id})
+
+      assert File.read!(path) == ""
+      assert_receive {:service_logs_cleared, ^ws_id}
+
+      File.rm(path)
     end
   end
 end
