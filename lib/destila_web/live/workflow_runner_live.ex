@@ -980,43 +980,38 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                       <% url = service_url(@project, @workflow_session.service_state) %>
                       <div
                         id="service-status-item"
-                        class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
+                        class="w-full flex items-center gap-1 px-1 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
                         aria-label="Service status"
                       >
-                        <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
-                          <.icon
-                            name="hero-server-micro"
-                            class={[
-                              "size-3.5 transition-colors duration-300",
-                              service_running? && "text-green-500",
-                              service_starting? && "text-amber-500",
-                              !service_active? && "text-base-content/30"
-                            ]}
-                          />
-                          <span
-                            :if={service_active?}
-                            class={[
-                              "absolute -top-0.5 -right-0.5 size-2 rounded-full ring-2 ring-base-100 animate-pulse",
-                              if(service_running?, do: "bg-green-500", else: "bg-amber-500")
-                            ]}
-                          >
+                        <.link
+                          id="service-status-link"
+                          navigate={~p"/services/#{@workflow_session.id}"}
+                          class="flex items-center gap-2.5 flex-1 min-w-0 px-1 rounded-md"
+                          aria-label="Open service details"
+                          title="Open service details"
+                        >
+                          <span class="size-5 rounded flex items-center justify-center shrink-0 relative">
+                            <.icon
+                              name="hero-server-micro"
+                              class={[
+                                "size-3.5 transition-colors duration-300",
+                                service_running? && "text-green-500",
+                                service_starting? && "text-amber-500",
+                                !service_active? && "text-base-content/30"
+                              ]}
+                            />
+                            <span
+                              :if={service_active?}
+                              class={[
+                                "absolute -top-0.5 -right-0.5 size-2 rounded-full ring-2 ring-base-100 animate-pulse",
+                                if(service_running?, do: "bg-green-500", else: "bg-amber-500")
+                              ]}
+                            >
+                            </span>
                           </span>
-                        </span>
-                        <%= if url do %>
-                          <a
-                            id="service-status-link"
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="text-sm text-base-content/80 truncate flex-1 text-left hover:text-primary transition-colors"
-                            aria-label="Open service"
-                          >
-                            Service
-                          </a>
-                        <% else %>
                           <div class="flex-1 min-w-0 flex items-baseline gap-1.5">
                             <span class={[
-                              "text-sm truncate min-w-0 text-left transition-colors duration-300",
+                              "text-sm truncate min-w-0 text-left transition-colors duration-300 group-hover:text-primary",
                               if(service_active?,
                                 do: "text-base-content/80",
                                 else: "text-base-content/60"
@@ -1037,16 +1032,19 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                               Starting…
                             </span>
                           </div>
-                        <% end %>
-                        <.link
-                          id="service-open-details-link"
-                          navigate={~p"/services/#{@workflow_session.id}"}
-                          class="size-5 rounded flex items-center justify-center shrink-0 text-base-content/50 hover:bg-base-200 hover:text-primary transition-colors"
-                          aria-label="Open service details"
-                          title="Open service details"
-                        >
-                          <.icon name="hero-arrow-top-right-on-square-micro" class="size-3.5" />
                         </.link>
+                        <a
+                          :if={url}
+                          id="service-open-url-link"
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="size-5 rounded flex items-center justify-center shrink-0 text-base-content/50 hover:bg-base-200 hover:text-primary transition-colors"
+                          aria-label="Open service URL in new tab"
+                          title={"Open #{url} in new tab"}
+                        >
+                          <.icon name="hero-globe-alt-micro" class="size-3.5" />
+                        </a>
                         <button
                           type="button"
                           id={"service-#{if service_active?, do: "stop", else: "start"}-button"}

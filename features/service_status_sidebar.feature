@@ -2,10 +2,11 @@ Feature: Service Status Sidebar
   The workflow session sidebar displays a "Service" item for projects that are
   configured as webservices (i.e. projects with both a run command and a
   service env var name). The item reflects whether the project's development
-  service is running or stopped, and becomes a clickable link to
-  http://localhost:<port> in a new browser tab when running. The item is
-  hidden entirely when the project is not a webservice or the session has no
-  project.
+  service is running or stopped. Clicking the item navigates to the service
+  detail page at /services/<session_id>. When the service is running with a
+  port, a separate globe button opens http://localhost:<port> in a new browser
+  tab. The item is hidden entirely when the project is not a webservice or the
+  session has no project.
 
   Scenario: Service item visible when project is a webservice
     Given I am on a session detail page
@@ -37,36 +38,37 @@ Feature: Service Status Sidebar
     And the session's service_state status is "stopped"
     Then the service icon should be muted/gray
 
-  Scenario: Running service with port is a clickable link
+  Scenario: Service item always navigates to the service detail page
+    Given I am on a session detail page
+    And the session's project has a run_command and a service_env_var configured
+    Then the service item label should be a link that navigates to /services/<session_id>
+
+  Scenario: Globe button opens the service URL in a new tab when running with port
     Given I am on a session detail page
     And the session's service_state status is "running"
     And the session's service_state has a port assigned
-    Then the service item should be a link to http://localhost:<port>
+    Then a globe button should be visible
+    And the globe button should be a link to http://localhost:<port>
     And the link should open in a new browser tab
 
-  Scenario: Stopped service is not clickable
+  Scenario: Globe button hidden when the service is stopped
     Given I am on a session detail page
     And the session's service_state status is "stopped"
-    Then the service item should not be a clickable link
+    Then no globe button should be visible
 
   Scenario: Nil service_state treated as stopped
     Given I am on a session detail page
     And the session's service_state is nil
-    Then the service item should not be a clickable link
+    Then no globe button should be visible
     And the service icon should be muted/gray
 
   Scenario: Service status updates in real-time
     Given I am on a session detail page
     And the session's service_state changes from stopped to running
     Then the service item should update to reflect the new state
-    And the service link should become clickable with the correct port
+    And the globe button should become visible with the correct port
 
-  Scenario: Sidebar exposes a link to the service detail page
-    Given I am on a session detail page
-    And the session's project has a run_command and a service_env_var configured
-    Then the sidebar should expose a link that navigates to the service detail page at /services/<session_id>
-
-  Scenario: Open service details link is not shown when project is not a webservice
+  Scenario: Service item hidden when project is not a webservice
     Given I am on a session detail page
     And the session's project has no run_command configured
     Then no link to the service detail page should be present in the sidebar

@@ -112,7 +112,6 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert has_element?(view, "#service-status-link")
       assert has_element?(view, "#service-status-item .text-green-500")
     end
 
@@ -146,10 +145,34 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
     end
   end
 
-  describe "service link behavior" do
+  describe "service item navigation" do
     @tag feature: @feature,
-         scenario: "Running service with port is a clickable link"
-    test "renders link with correct href when running with port", %{conn: conn} do
+         scenario: "Service item always navigates to the service detail page"
+    test "service item label links to /services/:id", %{conn: conn} do
+      project =
+        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
+
+      ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      assert has_element?(view, ~s|#service-status-link[href="/services/#{ws.id}"]|)
+    end
+
+    @tag feature: @feature,
+         scenario: "Service item hidden when project is not a webservice"
+    test "no service detail link when project has no run_command", %{conn: conn} do
+      project = create_project(%{run_command: nil, service_env_var: "PORT"})
+      ws = create_session(%{project_id: project.id})
+      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
+
+      refute has_element?(view, "#service-status-link")
+    end
+  end
+
+  describe "globe button" do
+    @tag feature: @feature,
+         scenario: "Globe button opens the service URL in a new tab when running with port"
+    test "globe button links to the service URL in a new tab", %{conn: conn} do
       project =
         create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
@@ -161,13 +184,13 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert has_element?(view, ~s|#service-status-link[href="http://localhost:4000"]|)
-      assert has_element?(view, ~s|#service-status-link[target="_blank"]|)
+      assert has_element?(view, ~s|#service-open-url-link[href="http://localhost:4000"]|)
+      assert has_element?(view, ~s|#service-open-url-link[target="_blank"]|)
     end
 
     @tag feature: @feature,
-         scenario: "Stopped service is not clickable"
-    test "renders static element when stopped", %{conn: conn} do
+         scenario: "Globe button hidden when the service is stopped"
+    test "globe button absent when service is stopped", %{conn: conn} do
       project =
         create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
@@ -180,12 +203,12 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "#service-status-item")
-      refute has_element?(view, "#service-status-link")
+      refute has_element?(view, "#service-open-url-link")
     end
 
     @tag feature: @feature,
          scenario: "Nil service_state treated as stopped"
-    test "not a link when service_state is nil", %{conn: conn} do
+    test "globe button absent when service_state is nil", %{conn: conn} do
       project =
         create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
@@ -193,10 +216,12 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "#service-status-item")
-      refute has_element?(view, "#service-status-link")
+      refute has_element?(view, "#service-open-url-link")
     end
 
-    test "legacy service_state with ports map renders running icon but no link", %{conn: conn} do
+    test "legacy service_state with ports map renders running icon but no globe button", %{
+      conn: conn
+    } do
       project =
         create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
@@ -209,35 +234,8 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "#service-status-item")
-      refute has_element?(view, "#service-status-link")
+      refute has_element?(view, "#service-open-url-link")
       assert has_element?(view, "#service-status-item .text-green-500")
-    end
-  end
-
-  describe "open service details link" do
-    @tag feature: @feature,
-         scenario: "Sidebar exposes a link to the service detail page"
-    test "renders link to /services/:id when service item is visible", %{conn: conn} do
-      project =
-        create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
-
-      ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      assert has_element?(
-               view,
-               ~s|#service-open-details-link[href="/services/#{ws.id}"]|
-             )
-    end
-
-    @tag feature: @feature,
-         scenario: "Open service details link is not shown when project is not a webservice"
-    test "does not render link when project has no run_command", %{conn: conn} do
-      project = create_project(%{run_command: nil, service_env_var: "PORT"})
-      ws = create_session(%{project_id: project.id})
-      {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
-
-      refute has_element?(view, "#service-open-details-link")
     end
   end
 
@@ -252,7 +250,7 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
       assert has_element?(view, "#service-status-item")
-      refute has_element?(view, "#service-status-link")
+      refute has_element?(view, "#service-open-url-link")
 
       {:ok, updated_ws} =
         Destila.Workflows.update_workflow_session(ws, %{
@@ -261,7 +259,7 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
 
       send(view.pid, {:workflow_session_updated, updated_ws})
 
-      assert has_element?(view, ~s|#service-status-link[href="http://localhost:4000"]|)
+      assert has_element?(view, ~s|#service-open-url-link[href="http://localhost:4000"]|)
     end
   end
 end
