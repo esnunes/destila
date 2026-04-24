@@ -195,8 +195,9 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
   end
 
   describe "log rendering" do
-    @tag feature: @feature, scenario: "Initial log file contents render on mount"
-    test "initial log contents render on mount", %{conn: conn} do
+    @tag feature: @feature,
+         scenario: "Initial log file contents are sent to the terminal on mount"
+    test "initial log contents are pushed to the terminal once ready", %{conn: conn} do
       project = webservice_project()
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
 
@@ -205,25 +206,32 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
 
-      assert has_element?(view, "#service-logs", "line one")
-      assert has_element?(view, "#service-logs", "line two")
+      render_hook(view, "terminal_ready", %{})
+
+      assert_push_event(view, "output", %{data: data})
+      assert Base.decode64!(data) == "line one\nline two\n"
     end
 
-    @tag feature: @feature, scenario: "New log bytes stream into the viewer"
-    test "a new log chunk appends a line to the viewer", %{conn: conn} do
+    @tag feature: @feature, scenario: "New log bytes stream into the terminal"
+    test "a new log chunk is pushed to the terminal", %{conn: conn} do
       project = webservice_project()
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
 
       {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      render_hook(view, "terminal_ready", %{})
 
       send(view.pid, {:service_log, "hello world\n"})
+      _ = render(view)
 
-      assert has_element?(view, "#service-logs", "hello world")
+      assert_push_event(view, "output", %{data: data})
+      assert Base.decode64!(data) == "hello world\n"
     end
 
-    @tag feature: @feature, scenario: "Partial log chunks buffer until a newline arrives"
-    test "partial chunks buffer until a newline", %{conn: conn} do
+    @tag feature: @feature, scenario: "Log bytes buffer until the terminal signals ready"
+    test "log bytes received before terminal_ready are buffered and flushed once ready", %{
+      conn: conn
+    } do
       project = webservice_project()
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
@@ -231,28 +239,34 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
 
       send(view.pid, {:service_log, "par"})
-      # Force LiveView to flush the handle_info before assertion.
       _ = render(view)
-      refute has_element?(view, "#service-logs", "par")
+      refute_push_event(view, "output", %{})
 
       send(view.pid, {:service_log, "tial\n"})
-      assert has_element?(view, "#service-logs", "partial")
+      _ = render(view)
+      refute_push_event(view, "output", %{})
+
+      render_hook(view, "terminal_ready", %{})
+
+      assert_push_event(view, "output", %{data: data})
+      assert Base.decode64!(data) == "partial\n"
     end
 
-    @tag feature: @feature, scenario: "Clear logs resets the viewer to an empty state"
-    test "logs_cleared resets the stream and shows the empty state", %{conn: conn} do
+    @tag feature: @feature, scenario: "Clear logs resets the terminal"
+    test "logs_cleared pushes a clear event", %{conn: conn} do
       project = webservice_project()
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
 
       Logs.ensure_log_dir()
       File.write!(Logs.log_path(ws.id), "seed\n")
       {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
-      assert has_element?(view, "#service-logs", "seed")
+      render_hook(view, "terminal_ready", %{})
+      assert_push_event(view, "output", %{})
 
       send(view.pid, {:service_logs_cleared, ws.id})
+      _ = render(view)
 
-      refute has_element?(view, "#service-logs div[id^=\"log_lines-\"]")
-      assert has_element?(view, "#service-logs-empty")
+      assert_push_event(view, "clear", %{})
     end
 
     @tag feature: @feature, scenario: "Logs survive a page reload"
@@ -263,11 +277,13 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       Logs.ensure_log_dir()
       File.write!(Logs.log_path(ws.id), "persisted\n")
 
-      {:ok, view1, _html} = live(conn, ~p"/services/#{ws.id}")
-      assert has_element?(view1, "#service-logs", "persisted")
+      for _ <- 1..2 do
+        {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+        render_hook(view, "terminal_ready", %{})
 
-      {:ok, view2, _html} = live(conn, ~p"/services/#{ws.id}")
-      assert has_element?(view2, "#service-logs", "persisted")
+        assert_push_event(view, "output", %{data: data})
+        assert Base.decode64!(data) == "persisted\n"
+      end
     end
   end
 

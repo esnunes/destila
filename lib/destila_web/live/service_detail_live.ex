@@ -36,18 +36,15 @@ defmodule DestilaWeb.ServiceDetailLive do
 
     service_state = ws.service_state || %{"status" => "stopped"}
 
-    {initial_lines, next_id, buffer} = load_initial_log_lines(id)
-
     {:ok,
      socket
      |> assign(:workflow_session, ws)
      |> assign(:project, project)
      |> assign(:service_state, service_state)
      |> assign(:worktree_path, worktree_path)
-     |> assign(:log_buffer, buffer)
-     |> assign(:next_log_id, next_id)
-     |> assign(:page_title, "Service — #{ws.title}")
-     |> stream(:log_lines, initial_lines, reset: true)}
+     |> assign(:terminal_ready, false)
+     |> assign(:pending_bytes, read_initial_log_bytes(id))
+     |> assign(:page_title, "Service — #{ws.title}")}
   end
 
   # --- Events ---
@@ -106,6 +103,21 @@ defmodule DestilaWeb.ServiceDetailLive do
     {:noreply, socket}
   end
 
+  def handle_event("terminal_ready", _params, socket) do
+    socket = assign(socket, :terminal_ready, true)
+
+    case socket.assigns.pending_bytes do
+      "" ->
+        {:noreply, socket}
+
+      bytes ->
+        {:noreply,
+         socket
+         |> assign(:pending_bytes, "")
+         |> push_event("output", %{data: Base.encode64(bytes)})}
+    end
+  end
+
   # --- Info ---
 
   @impl true
@@ -114,20 +126,10 @@ defmodule DestilaWeb.ServiceDetailLive do
   end
 
   def handle_info({:service_log, chunk}, socket) when is_binary(chunk) do
-    buffer = socket.assigns.log_buffer <> chunk
-
-    {complete, remainder} = split_on_last_newline(buffer)
-
-    if complete == "" do
-      {:noreply, assign(socket, :log_buffer, remainder)}
+    if socket.assigns.terminal_ready do
+      {:noreply, push_event(socket, "output", %{data: Base.encode64(chunk)})}
     else
-      lines = String.split(complete, "\n", trim: false) |> drop_trailing_empty()
-      {socket, next_id} = push_lines(socket, lines, socket.assigns.next_log_id)
-
-      {:noreply,
-       socket
-       |> assign(:log_buffer, remainder)
-       |> assign(:next_log_id, next_id)}
+      {:noreply, assign(socket, :pending_bytes, socket.assigns.pending_bytes <> chunk)}
     end
   end
 
@@ -135,9 +137,8 @@ defmodule DestilaWeb.ServiceDetailLive do
     if ws_id == socket.assigns.workflow_session.id do
       {:noreply,
        socket
-       |> assign(:log_buffer, "")
-       |> assign(:next_log_id, 0)
-       |> stream(:log_lines, [], reset: true)}
+       |> assign(:pending_bytes, "")
+       |> push_event("clear", %{})}
     else
       {:noreply, socket}
     end
@@ -261,30 +262,19 @@ defmodule DestilaWeb.ServiceDetailLive do
               </h2>
               <span
                 class="text-[11px] text-base-content/40 font-mono truncate min-w-0"
-                title={Destila.Services.Logs.log_path(@workflow_session.id)}
+                title={Logs.log_path(@workflow_session.id)}
               >
-                {Path.basename(Destila.Services.Logs.log_path(@workflow_session.id))}
+                {Path.basename(Logs.log_path(@workflow_session.id))}
               </span>
             </div>
             <div
-              id="service-logs"
-              phx-update="stream"
-              aria-live="polite"
-              aria-label="Service logs"
-              class="flex-1 min-h-0 overflow-y-auto px-4 py-3 font-mono text-xs leading-snug"
+              id={"service-logs-#{@workflow_session.id}"}
+              phx-hook="ServiceLogViewer"
+              phx-update="ignore"
+              data-session-id={@workflow_session.id}
+              class="flex-1 min-h-0 overflow-hidden"
             >
-              <div
-                id="service-logs-empty"
-                class="hidden only:flex items-center justify-center gap-2 h-full text-base-content/40"
-              >
-                <.icon name="hero-document-text-micro" class="size-4" />
-                <span>No logs yet.</span>
-              </div>
-              <pre
-                :for={{dom_id, line} <- @streams.log_lines}
-                id={dom_id}
-                class="m-0 text-base-content/80 whitespace-pre-wrap break-all"
-              >{line.text}</pre>
+              <div data-terminal-container class="h-full w-full p-2" />
             </div>
           </div>
         </div>
@@ -427,63 +417,10 @@ defmodule DestilaWeb.ServiceDetailLive do
 
   # --- Private: log helpers ---
 
-  defp load_initial_log_lines(ws_id) do
-    path = Logs.log_path(ws_id)
-
-    case File.read(path) do
-      {:ok, contents} ->
-        build_lines_from_string(contents)
-
-      {:error, _} ->
-        {[], 0, ""}
+  defp read_initial_log_bytes(ws_id) do
+    case File.read(Logs.log_path(ws_id)) do
+      {:ok, contents} -> contents
+      {:error, _} -> ""
     end
-  end
-
-  defp build_lines_from_string(contents) do
-    {complete, remainder} = split_on_last_newline(contents)
-
-    if complete == "" do
-      {[], 0, remainder}
-    else
-      lines =
-        complete
-        |> String.split("\n", trim: false)
-        |> drop_trailing_empty()
-
-      {entries, next_id} =
-        Enum.map_reduce(lines, 0, fn text, id ->
-          {%{id: id, text: text}, id + 1}
-        end)
-
-      {entries, next_id, remainder}
-    end
-  end
-
-  defp split_on_last_newline(binary) do
-    case :binary.matches(binary, "\n") do
-      [] ->
-        {"", binary}
-
-      matches ->
-        {last_idx, 1} = List.last(matches)
-        before = binary_part(binary, 0, last_idx + 1)
-        after_ = binary_part(binary, last_idx + 1, byte_size(binary) - last_idx - 1)
-        {before, after_}
-    end
-  end
-
-  defp drop_trailing_empty(list) do
-    case List.last(list) do
-      "" -> Enum.drop(list, -1)
-      nil -> list
-      _ -> list
-    end
-  end
-
-  defp push_lines(socket, lines, next_id) do
-    Enum.reduce(lines, {socket, next_id}, fn text, {acc_socket, id} ->
-      entry = %{id: id, text: text}
-      {stream_insert(acc_socket, :log_lines, entry, at: -1), id + 1}
-    end)
   end
 end

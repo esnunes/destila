@@ -4,8 +4,9 @@ Feature: Service Detail Page
   live tail of the service log, plus lifecycle controls (Start, Stop, Restart,
   Clear logs). The page is only available for workflow sessions whose project
   is a webservice (i.e. has both a run_command and a service_env_var). Logs
-  are captured via tmux pipe-pane and streamed to the browser through a
-  per-session log tailer and PubSub topic.
+  are captured via tmux pipe-pane, streamed to the browser through a
+  per-session log tailer and PubSub topic, and rendered in an xterm.js
+  terminal emulator so ANSI escape sequences display correctly.
 
   Scenario: Running service renders status, port, URL, and commands
     Given I visit the service detail page for a running service
@@ -43,32 +44,31 @@ Feature: Service Detail Page
     Given I visit the service detail page for a workflow session
     Then I should see a back link that navigates to /sessions/<session_id>
 
-  Scenario: Initial log file contents render on mount
-    Given the service log file contains some lines
-    When I visit the service detail page
-    Then those lines should be rendered in the log viewer
+  Scenario: Initial log file contents are sent to the terminal on mount
+    Given the service log file contains some bytes
+    When I visit the service detail page and the terminal signals ready
+    Then the server should push those bytes to the terminal as a single output event
 
-  Scenario: New log bytes stream into the viewer
+  Scenario: New log bytes stream into the terminal
+    Given I am on the service detail page with the terminal ready
+    When a new chunk of log output is broadcast
+    Then the server should push those bytes to the terminal as an output event
+
+  Scenario: Log bytes buffer until the terminal signals ready
+    Given I am on the service detail page and the terminal has not yet signaled ready
+    When a chunk of log output is broadcast
+    Then no output event should be pushed yet
+    And once the terminal signals ready the buffered bytes should be pushed as an output event
+
+  Scenario: Clear logs resets the terminal
     Given I am on the service detail page
-    When a new line of log output is broadcast
-    Then the line should appear in the log viewer
-
-  Scenario: Partial log chunks buffer until a newline arrives
-    Given I am on the service detail page
-    When only part of a log line arrives without a trailing newline
-    Then no partial line should appear in the viewer
-    And when the remaining bytes with a newline arrive the full line is shown
-
-  Scenario: Clear logs resets the viewer to an empty state
-    Given I am on the service detail page with existing log lines
     When the logs are cleared
-    Then the log viewer should be empty
-    And the empty-state message should be visible
+    Then the server should push a clear event to the terminal
 
   Scenario: Logs survive a page reload
-    Given the service log file contains some lines
-    When I reload the service detail page
-    Then the existing lines should still appear in the log viewer
+    Given the service log file contains some bytes
+    When I reload the service detail page and the terminal signals ready
+    Then the server should push the file contents to the terminal as an output event
 
   Scenario: Status update from PubSub refreshes the header
     Given I am on the service detail page
