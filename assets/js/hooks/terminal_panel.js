@@ -84,6 +84,7 @@ export default {
       fontWeightBold: 700,
       fontFamily: "'JetBrains Mono NF', monospace",
       letterSpacing: 0,
+      convertEol: true,
       theme,
     })
 
@@ -91,17 +92,15 @@ export default {
     this.term.loadAddon(this.fitAddon)
     this.term.open(container)
 
+    container.querySelector('.xterm-helpers').style.letterSpacing = 0
+
     // Wait for fonts to load before fitting so xterm measures glyphs correctly
     document.fonts.ready.then(() => {
       requestAnimationFrame(() => {
         this.fitAddon.fit()
         this.term.focus()
         const dims = this.fitAddon.proposeDimensions()
-        if (dims) {
-          const canvasDims = this.term._core._renderService.dimensions.css.canvas
-          const cols = Math.floor(canvasDims.width / 7.32)
-          this.pushEvent("resize", { cols, rows: dims.rows })
-        }
+        this.pushEvent("resize", { cols: dims.cols, rows: dims.rows })
       })
     })
 
@@ -132,11 +131,7 @@ export default {
       this._resizeTimer = setTimeout(() => {
         this.fitAddon.fit()
         const dims = this.fitAddon.proposeDimensions()
-        if (dims) {
-          const canvasDims = this.term._core._renderService.dimensions.css.canvas
-          const cols = Math.floor(canvasDims.width / 7.32)
-          this.pushEvent("resize", { cols, rows: dims.rows })
-        }
+        this.pushEvent("resize", { cols: dims.cols, rows: dims.rows })
       }, 150)
     })
     this.resizeObserver.observe(container)
