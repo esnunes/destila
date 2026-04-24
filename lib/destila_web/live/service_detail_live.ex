@@ -146,7 +146,7 @@ defmodule DestilaWeb.ServiceDetailLive do
   def handle_info({:workflow_session_updated, updated_ws}, socket) do
     if updated_ws.id == socket.assigns.workflow_session.id do
       ws = Workflows.get_workflow_session(updated_ws.id) || socket.assigns.workflow_session
-      service_state = ws.service_state || socket.assigns.service_state
+      service_state = ws.service_state || %{"status" => "stopped"}
 
       {:noreply,
        socket
@@ -225,7 +225,6 @@ defmodule DestilaWeb.ServiceDetailLive do
                   <dd class="mt-0.5">
                     <code
                       id="service-run-command"
-                      phx-no-curly-interpolation
                       class="font-mono text-xs bg-base-200/60 rounded px-2 py-1 block whitespace-pre-wrap break-all"
                     >
                       {run_command(@project, @service_state)}
@@ -238,7 +237,6 @@ defmodule DestilaWeb.ServiceDetailLive do
                   <dd class="mt-0.5">
                     <code
                       id="service-setup-command"
-                      phx-no-curly-interpolation
                       class="font-mono text-xs bg-base-200/60 rounded px-2 py-1 block whitespace-pre-wrap break-all"
                     >
                       {setup_command(@project, @service_state)}
