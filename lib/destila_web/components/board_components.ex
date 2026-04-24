@@ -184,10 +184,12 @@ defmodule DestilaWeb.BoardComponents do
   def workflow_label(:brainstorm_idea), do: "Brainstorm Idea"
   def workflow_label(:implement_general_prompt), do: "Implementation"
   def workflow_label(:code_chat), do: "Code Chat"
+  def workflow_label(:code_redesign_analysis), do: "Redesign Analysis"
   def workflow_label(_), do: "Workflow"
 
   defp workflow_badge_class(:brainstorm_idea), do: "bg-amber-600 text-white"
   defp workflow_badge_class(:implement_general_prompt), do: "badge-primary"
   defp workflow_badge_class(:code_chat), do: "badge-accent"
+  defp workflow_badge_class(:code_redesign_analysis), do: "badge-info"
   defp workflow_badge_class(_), do: "badge-neutral"
 end

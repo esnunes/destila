@@ -5,6 +5,7 @@ defmodule Destila.WorkflowTest do
   alias Destila.Workflows.AISessionGroup
   alias Destila.Workflows.BrainstormIdeaWorkflow
   alias Destila.Workflows.CodeChatWorkflow
+  alias Destila.Workflows.CodeRedesignAnalysisWorkflow
   alias Destila.Workflows.ImplementGeneralPromptWorkflow
   alias Destila.Workflows.Phase
 
@@ -108,6 +109,41 @@ defmodule Destila.WorkflowTest do
                {"Feature Video", true},
                {"Adjustments", false}
              ]
+
+      redesign_phases = CodeRedesignAnalysisWorkflow.phases()
+
+      assert Enum.map(redesign_phases, &{&1.name, &1.non_interactive}) == [
+               {"Extract Requirements", true},
+               {"Greenfield Design", true},
+               {"Compare & Improve", true},
+               {"Adjustments", false}
+             ]
+    end
+
+    test "CodeRedesignAnalysisWorkflow splits into Analysis, Design & Compare, and Adjustments groups" do
+      [analysis, design_compare, adjustments] = CodeRedesignAnalysisWorkflow.groups()
+
+      assert analysis.name == "Analysis"
+      assert analysis.skills == ["code_quality"]
+      assert "Read" in analysis.allowed_tools
+      assert "mcp__destila__session" in analysis.allowed_tools
+      refute "mcp__destila__ask_user_question" in analysis.allowed_tools
+      assert length(analysis.allowed_tools) == 10
+      assert Enum.map(analysis.phases, & &1.name) == ["Extract Requirements"]
+
+      assert design_compare.name == "Design & Compare"
+      assert design_compare.skills == ["code_quality"]
+      assert design_compare.allowed_tools == analysis.allowed_tools
+
+      assert Enum.map(design_compare.phases, & &1.name) == [
+               "Greenfield Design",
+               "Compare & Improve"
+             ]
+
+      assert adjustments.name == "Adjustments"
+      assert adjustments.skills == ["code_quality"]
+      assert adjustments.allowed_tools == analysis.allowed_tools
+      assert Enum.map(adjustments.phases, & &1.name) == ["Adjustments"]
     end
 
     test "Phase struct has no legacy fields" do
@@ -168,6 +204,47 @@ defmodule Destila.WorkflowTest do
     end
   end
 
+  describe "CodeRedesignAnalysisWorkflow basics" do
+    test "total_phases/0 returns 4" do
+      assert CodeRedesignAnalysisWorkflow.total_phases() == 4
+    end
+
+    test "phase_name/1 maps to the expected phase names" do
+      assert CodeRedesignAnalysisWorkflow.phase_name(1) == "Extract Requirements"
+      assert CodeRedesignAnalysisWorkflow.phase_name(2) == "Greenfield Design"
+      assert CodeRedesignAnalysisWorkflow.phase_name(3) == "Compare & Improve"
+      assert CodeRedesignAnalysisWorkflow.phase_name(4) == "Adjustments"
+      assert is_nil(CodeRedesignAnalysisWorkflow.phase_name(5))
+    end
+
+    test "phase_columns/0 ends with :done and has length 5" do
+      columns = CodeRedesignAnalysisWorkflow.phase_columns()
+      assert length(columns) == 5
+      assert List.last(columns) == {:done, "Done"}
+      assert hd(columns) == {1, "Extract Requirements"}
+    end
+
+    test "creation_label/0 returns Scope" do
+      assert CodeRedesignAnalysisWorkflow.creation_label() == "Scope"
+    end
+
+    test "source_metadata_key/0 returns nil" do
+      assert CodeRedesignAnalysisWorkflow.source_metadata_key() == nil
+    end
+
+    test "label, description, default_title, completion_message, icon, icon_class are non-empty strings" do
+      for fun <- [:label, :description, :default_title, :completion_message, :icon, :icon_class] do
+        value = apply(CodeRedesignAnalysisWorkflow, fun, [])
+        assert is_binary(value)
+        assert value != ""
+      end
+    end
+
+    test "Workflows.groups dispatcher matches the module's groups" do
+      assert Workflows.groups(:code_redesign_analysis) == CodeRedesignAnalysisWorkflow.groups()
+    end
+  end
+
   describe "Workflows.group_for_phase/2" do
     test "returns Planning for phases 1-2 of implement_general_prompt" do
       [planning, _] = ImplementGeneralPromptWorkflow.groups()
@@ -192,6 +269,17 @@ defmodule Destila.WorkflowTest do
       assert Workflows.group_for_phase(:brainstorm_idea, 1) == brainstorm
       assert Workflows.group_for_phase(:brainstorm_idea, 4) == brainstorm
       assert Workflows.group_for_phase(:brainstorm_idea, 5) == nil
+    end
+
+    test "returns the right group for each phase of code_redesign_analysis" do
+      [analysis, design_compare, adjustments] = CodeRedesignAnalysisWorkflow.groups()
+
+      assert Workflows.group_for_phase(:code_redesign_analysis, 1) == analysis
+      assert Workflows.group_for_phase(:code_redesign_analysis, 2) == design_compare
+      assert Workflows.group_for_phase(:code_redesign_analysis, 3) == design_compare
+      assert Workflows.group_for_phase(:code_redesign_analysis, 4) == adjustments
+      assert Workflows.group_for_phase(:code_redesign_analysis, 5) == nil
+      assert Workflows.group_for_phase(:code_redesign_analysis, 0) == nil
     end
   end
 

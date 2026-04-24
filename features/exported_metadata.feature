@@ -148,3 +148,34 @@ Feature: Exported Metadata
     When I click the terminal toggle button again
     Then the terminal panel should close
     And the terminal process should be stopped
+
+  # --- Re-export across phase boundaries ---
+
+  Scenario: Re-export from a later phase replaces the original artifact
+    Given a workflow exported an artifact during an earlier phase
+    When a later phase re-exports the same key with revised content
+    Then only one exported row should exist for that key
+    And the stored phase name and value should reflect the re-export
+
+  Scenario: Re-export leaves other exported keys untouched
+    Given a workflow session has two exported keys from an earlier phase
+    When a later phase re-exports only one of those keys
+    Then the untouched key should still be exported under its original phase
+    And the re-exported key should be stored under the later phase
+
+  Scenario: Re-export leaves non-exported rows with the same key untouched
+    Given a workflow session has a non-exported row and an exported row with the same key
+    When a later phase re-exports that key
+    Then the non-exported row should remain unchanged
+    And a single exported row should remain under the later phase
+
+  Scenario: Consecutive re-exports keep a single row
+    Given a workflow session has re-exported an artifact from a later phase
+    When the same later phase re-exports the key again
+    Then a single exported row should remain under that phase
+    And the stored value should reflect the latest content
+
+  Scenario: Re-export broadcasts a single metadata_updated event
+    Given a workflow session has an exported artifact
+    When a later phase re-exports that key
+    Then exactly one metadata_updated event should be broadcast

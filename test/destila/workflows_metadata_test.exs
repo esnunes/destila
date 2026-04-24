@@ -170,7 +170,7 @@ defmodule Destila.WorkflowsMetadataTest do
       ws = create_session()
 
       {:ok, _} =
-        Workflows.upsert_metadata(ws.id, "z_phase", "alpha", %{"text" => "1"}, exported: true)
+        Workflows.upsert_metadata(ws.id, "z_phase", "gamma", %{"text" => "1"}, exported: true)
 
       {:ok, _} =
         Workflows.upsert_metadata(ws.id, "a_phase", "beta", %{"text" => "2"}, exported: true)
@@ -181,7 +181,200 @@ defmodule Destila.WorkflowsMetadataTest do
       exported = Workflows.get_exported_metadata(ws.id)
       assert length(exported) == 3
       assert Enum.map(exported, & &1.phase_name) == ["a_phase", "a_phase", "z_phase"]
-      assert Enum.map(exported, & &1.key) == ["alpha", "beta", "alpha"]
+      assert Enum.map(exported, & &1.key) == ["alpha", "beta", "gamma"]
+    end
+  end
+
+  describe "upsert_metadata/5 re-export across phase boundaries" do
+    @tag feature: "exported_metadata",
+         scenario: "Re-export from a later phase replaces the original artifact"
+    test "re-export from a different phase name replaces the original row" do
+      ws = create_session()
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Extract Requirements",
+          "requirements_doc",
+          %{"markdown" => "original"},
+          exported: true
+        )
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Adjustments",
+          "requirements_doc",
+          %{"markdown" => "refined"},
+          exported: true
+        )
+
+      exported = Workflows.get_exported_metadata(ws.id)
+      assert length(exported) == 1
+      [entry] = exported
+      assert entry.key == "requirements_doc"
+      assert entry.phase_name == "Adjustments"
+      assert entry.value == %{"markdown" => "refined"}
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Re-export leaves other exported keys untouched"
+    test "re-export of one key does not touch other exported keys" do
+      ws = create_session()
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Compare & Improve",
+          "comparison_report",
+          %{"markdown" => "report"},
+          exported: true
+        )
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Compare & Improve",
+          "prompt_generated",
+          %{"markdown" => "prompt"},
+          exported: true
+        )
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Adjustments",
+          "comparison_report",
+          %{"markdown" => "revised report"},
+          exported: true
+        )
+
+      exported =
+        ws.id
+        |> Workflows.get_exported_metadata()
+        |> Enum.sort_by(& &1.key)
+
+      assert length(exported) == 2
+
+      [comparison, prompt] = exported
+      assert comparison.key == "comparison_report"
+      assert comparison.phase_name == "Adjustments"
+      assert comparison.value == %{"markdown" => "revised report"}
+
+      assert prompt.key == "prompt_generated"
+      assert prompt.phase_name == "Compare & Improve"
+      assert prompt.value == %{"markdown" => "prompt"}
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Re-export leaves non-exported rows with the same key untouched"
+    test "re-export leaves non-exported rows with the same key untouched" do
+      ws = create_session()
+
+      {:ok, _} =
+        Workflows.upsert_metadata(ws.id, "creation", "notes", %{"text" => "private"})
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Phase 1",
+          "notes",
+          %{"markdown" => "first export"},
+          exported: true
+        )
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Adjustments",
+          "notes",
+          %{"markdown" => "refined export"},
+          exported: true
+        )
+
+      all =
+        ws.id
+        |> Workflows.get_all_metadata()
+        |> Enum.sort_by(&{&1.exported, &1.phase_name})
+
+      assert length(all) == 2
+
+      [private, exported] = all
+      assert private.exported == false
+      assert private.phase_name == "creation"
+      assert private.value == %{"text" => "private"}
+
+      assert exported.exported == true
+      assert exported.phase_name == "Adjustments"
+      assert exported.value == %{"markdown" => "refined export"}
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Consecutive re-exports keep a single row"
+    test "consecutive re-exports collapse to a single row" do
+      ws = create_session()
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Phase 1",
+          "artifact",
+          %{"markdown" => "v1"},
+          exported: true
+        )
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Adjustments",
+          "artifact",
+          %{"markdown" => "v2"},
+          exported: true
+        )
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Adjustments",
+          "artifact",
+          %{"markdown" => "v3"},
+          exported: true
+        )
+
+      exported = Workflows.get_exported_metadata(ws.id)
+      assert length(exported) == 1
+      [entry] = exported
+      assert entry.value == %{"markdown" => "v3"}
+      assert entry.phase_name == "Adjustments"
+    end
+
+    @tag feature: "exported_metadata",
+         scenario: "Re-export broadcasts a single metadata_updated event"
+    test "re-export broadcasts exactly one metadata_updated event" do
+      ws = create_session()
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Phase 1",
+          "artifact",
+          %{"markdown" => "v1"},
+          exported: true
+        )
+
+      :ok = Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
+
+      {:ok, _} =
+        Workflows.upsert_metadata(
+          ws.id,
+          "Adjustments",
+          "artifact",
+          %{"markdown" => "v2"},
+          exported: true
+        )
+
+      assert_receive {:metadata_updated, _}, 100
+      refute_receive {:metadata_updated, _}, 50
     end
   end
 
