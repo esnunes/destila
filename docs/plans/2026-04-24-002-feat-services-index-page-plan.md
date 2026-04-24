@@ -1,7 +1,7 @@
 ---
 title: "feat: Services Index Page"
 type: feat
-status: active
+status: completed
 date: 2026-04-24
 ---
 
@@ -224,7 +224,7 @@ and Ecto patterns already used throughout the codebase.
 
 ## Implementation Units
 
-- [ ] **Unit 1: Feature file, router, and sidebar link**
+- [x] **Unit 1: Feature file, router, and sidebar link**
 
 **Goal:** Land the non-behavioral scaffolding — the Gherkin spec, the new
 route, and the sidebar entry — so later units have a stable target.
@@ -275,7 +275,7 @@ route, and the sidebar entry — so later units have a stable target.
 
 ---
 
-- [ ] **Unit 2: `ServicesLive` module — mount and render**
+- [x] **Unit 2: `ServicesLive` module — mount and render**
 
 **Goal:** Ship the LiveView module that fetches eligible sessions, renders
 them as a stream of compact table rows with the correct status / port / URL /
@@ -358,7 +358,7 @@ visual and via `mix compile --warnings-as-errors`)*
 
 ---
 
-- [ ] **Unit 3: Live updates via PubSub + tests**
+- [x] **Unit 3: Live updates via PubSub + tests**
 
 **Goal:** Make the index update in real time as services start / stop and as
 sessions and projects are created, updated, archived, or deleted — and cover
