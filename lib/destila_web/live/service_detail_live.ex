@@ -235,8 +235,9 @@ defmodule DestilaWeb.ServiceDetailLive do
                   <dt class="text-base-content/50 text-xs">Status</dt>
                   <dd
                     id="service-status-text"
-                    class="font-mono text-base-content/80 mt-1 tabular-nums"
+                    class="mt-1 flex items-center gap-2 text-base-content/80 capitalize"
                   >
+                    <.status_dot state={@service_state} />
                     {@service_state["status"] || "stopped"}
                   </dd>
                 </div>
@@ -245,9 +246,9 @@ defmodule DestilaWeb.ServiceDetailLive do
                   <dt class="text-base-content/50 text-xs">Port</dt>
                   <dd
                     id="service-port-text"
-                    class="font-mono text-base-content/80 mt-1 tabular-nums"
+                    class="mt-1 font-mono tabular-nums text-base font-semibold text-base-content/90"
                   >
-                    {@service_state["port"]}
+                    <span class="text-base-content/35 font-normal">:</span>{@service_state["port"]}
                   </dd>
                 </div>
 
@@ -284,6 +285,22 @@ defmodule DestilaWeb.ServiceDetailLive do
   end
 
   # --- Private: render helpers ---
+
+  attr :state, :map, required: true
+
+  defp status_dot(assigns) do
+    status = assigns.state["status"] || "stopped"
+    assigns = assign(assigns, :status, status)
+
+    ~H"""
+    <span class={[
+      "size-1.5 rounded-full shrink-0",
+      @status == "running" && "bg-green-500",
+      @status == "starting" && "bg-amber-500 animate-pulse",
+      @status not in ["running", "starting"] && "bg-base-content/30"
+    ]} />
+    """
+  end
 
   attr :state, :map, required: true
 
