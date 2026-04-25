@@ -111,6 +111,25 @@ defmodule Destila.AI.SessionConfigTest do
       assert opts[:hooks] == %{SessionStart: [Destila.AI.Hooks.SessionStart]}
     end
 
+    test "defaults --effort to xhigh via :extra_args" do
+      ws = create_session()
+      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+      opts = SessionConfig.session_opts_for_workflow(ws, 1)
+
+      assert opts[:extra_args]["--effort"] == "xhigh"
+    end
+
+    test "preserves a caller-supplied --effort in :extra_args" do
+      ws = create_session()
+      {:ok, _} = AI.create_ai_session(%{workflow_session_id: ws.id})
+
+      opts =
+        SessionConfig.session_opts_for_workflow(ws, 1, extra_args: %{"--effort" => "high"})
+
+      assert opts[:extra_args]["--effort"] == "high"
+    end
+
     test ":hooks coexists with the other session options" do
       ws = create_session()
 
