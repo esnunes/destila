@@ -81,4 +81,132 @@ defmodule Destila.Git do
     cache_home = System.get_env("XDG_CACHE_HOME", Path.expand("~/.cache"))
     Path.join([cache_home, "destila", project_id])
   end
+
+  @doc """
+  Fetches refs from the default remote in the given local repository folder.
+  """
+  def fetch(local_folder) do
+    case System.cmd("git", ["fetch", "--prune"], cd: local_folder, stderr_to_stdout: true) do
+      {_output, 0} -> :ok
+      {output, _code} -> {:error, String.trim(output)}
+    end
+  end
+
+  @doc """
+  Returns the configured default branch on the `origin` remote (e.g. "main").
+  """
+  def default_branch(local_folder) do
+    case System.cmd("git", ["symbolic-ref", "refs/remotes/origin/HEAD"],
+           cd: local_folder,
+           stderr_to_stdout: true
+         ) do
+      {output, 0} ->
+        branch =
+          output
+          |> String.trim()
+          |> String.replace_prefix("refs/remotes/origin/", "")
+
+        {:ok, branch}
+
+      {output, _code} ->
+        {:error, String.trim(output)}
+    end
+  end
+
+  @doc """
+  Returns true when the working tree (or index) has uncommitted changes.
+  """
+  def dirty?(local_folder) do
+    case System.cmd("git", ["status", "--porcelain"],
+           cd: local_folder,
+           stderr_to_stdout: true
+         ) do
+      {output, 0} -> {:ok, String.trim(output) != ""}
+      {output, _code} -> {:error, String.trim(output)}
+    end
+  end
+
+  @doc """
+  Returns true when there are commits on `origin/<default_branch>` that are
+  not yet on the local HEAD.
+  """
+  def ahead?(local_folder) do
+    with {:ok, branch} <- default_branch(local_folder) do
+      case System.cmd(
+             "git",
+             ["rev-list", "--count", "HEAD..origin/" <> branch],
+             cd: local_folder,
+             stderr_to_stdout: true
+           ) do
+        {output, 0} ->
+          case Integer.parse(String.trim(output)) do
+            {count, _} -> {:ok, count > 0}
+            :error -> {:error, "could not parse rev-list output: " <> String.trim(output)}
+          end
+
+        {output, _code} ->
+          {:error, String.trim(output)}
+      end
+    end
+  end
+
+  @doc """
+  Returns true when local HEAD has commits not on `origin/<default_branch>`
+  AND `origin/<default_branch>` has commits not on local HEAD (i.e. a
+  fast-forward is impossible).
+  """
+  def diverged?(local_folder) do
+    with {:ok, branch} <- default_branch(local_folder) do
+      case System.cmd(
+             "git",
+             [
+               "rev-list",
+               "--left-right",
+               "--count",
+               "HEAD...origin/" <> branch
+             ],
+             cd: local_folder,
+             stderr_to_stdout: true
+           ) do
+        {output, 0} ->
+          parts =
+            output
+            |> String.trim()
+            |> String.split(~r/\s+/, trim: true)
+
+          case parts do
+            [left, right] ->
+              with {l, _} <- Integer.parse(left),
+                   {r, _} <- Integer.parse(right) do
+                {:ok, l > 0 and r > 0}
+              else
+                _ ->
+                  {:error, "could not parse rev-list output: " <> output}
+              end
+
+            _ ->
+              {:error, "could not parse rev-list output: " <> output}
+          end
+
+        {output, _code} ->
+          {:error, String.trim(output)}
+      end
+    end
+  end
+
+  @doc """
+  Fast-forwards the local default branch to `origin/<default_branch>`.
+  Returns `{:error, _}` if a fast-forward is not possible.
+  """
+  def fast_forward(local_folder) do
+    with {:ok, branch} <- default_branch(local_folder) do
+      case System.cmd("git", ["merge", "--ff-only", "origin/" <> branch],
+             cd: local_folder,
+             stderr_to_stdout: true
+           ) do
+        {_output, 0} -> :ok
+        {output, _code} -> {:error, String.trim(output)}
+      end
+    end
+  end
 end

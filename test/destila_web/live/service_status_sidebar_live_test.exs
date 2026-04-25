@@ -148,14 +148,17 @@ defmodule DestilaWeb.ServiceStatusSidebarLiveTest do
   describe "service item navigation" do
     @tag feature: @feature,
          scenario: "Service item always navigates to the service detail page"
-    test "service item label links to /services/:id", %{conn: conn} do
+    test "service item label links to /services/sessions/:id", %{conn: conn} do
       project =
         create_project(%{run_command: "mix phx.server", service_env_var: "PORT"})
 
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       {:ok, view, _html} = live(conn, ~p"/sessions/#{ws.id}")
 
-      assert has_element?(view, ~s|#service-status-link[href="/services/#{ws.id}"]|)
+      assert has_element?(
+               view,
+               ~s|#service-status-link[href="/services/sessions/#{ws.id}"]|
+             )
     end
 
     @tag feature: @feature,

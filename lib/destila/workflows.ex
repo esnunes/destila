@@ -289,10 +289,39 @@ defmodule Destila.Workflows do
 
     Destila.AI.ClaudeSession.stop_for_workflow_session(ws.id)
 
+    enqueue_project_service_pull_restart(ws.project_id)
+
     ws
     |> Session.changeset(%{archived_at: DateTime.utc_now()})
     |> Repo.update()
     |> broadcast(:workflow_session_updated)
+  end
+
+  @doc """
+  Enqueues a `Destila.Workers.ProjectServicePullRestartWorker` job for the
+  given project. Oban uniqueness collapses concurrent enqueues across cron,
+  archive hooks, and mark-done hooks to one job per project per minute.
+
+  No-op when `project_id` is nil.
+  """
+  def enqueue_project_service_pull_restart(nil), do: :ok
+
+  def enqueue_project_service_pull_restart(project_id) when is_binary(project_id) do
+    case %{"project_id" => project_id}
+         |> Destila.Workers.ProjectServicePullRestartWorker.new()
+         |> Oban.insert() do
+      {:ok, _job} ->
+        :ok
+
+      {:error, reason} ->
+        require Logger
+
+        Logger.error(
+          "Failed to enqueue ProjectServicePullRestartWorker for project #{project_id}: #{inspect(reason)}"
+        )
+
+        :ok
+    end
   end
 
   def delete_workflow_session(%Session{} = ws) do

@@ -67,7 +67,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
 
   defp clear_log(ws_id) do
     Logs.ensure_log_dir()
-    File.write!(Logs.log_path(ws_id), "")
+    File.write!(Logs.log_path("session-" <> ws_id), "")
   end
 
   describe "mount and status rendering" do
@@ -88,7 +88,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
 
       clear_log(ws.id)
 
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       assert has_element?(
                view,
@@ -111,7 +111,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
         })
 
       clear_log(ws.id)
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       refute has_element?(view, "#setup-command-block")
       assert has_element?(view, "#run-command-block")
@@ -130,7 +130,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
         })
 
       clear_log(ws.id)
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       assert has_element?(view, "#start-service-button")
       assert has_element?(view, "#clear-logs-button")
@@ -151,7 +151,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
         })
 
       clear_log(ws.id)
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       assert has_element?(view, "#stop-service-button")
       assert has_element?(view, "#restart-service-button")
@@ -168,7 +168,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
         create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
 
       clear_log(ws_stopped.id)
-      {:ok, view_stopped, _} = live(conn, ~p"/services/#{ws_stopped.id}")
+      {:ok, view_stopped, _} = live(conn, ~p"/services/sessions/#{ws_stopped.id}")
       assert has_element?(view_stopped, "#clear-logs-button")
 
       ws_running =
@@ -178,7 +178,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
         })
 
       clear_log(ws_running.id)
-      {:ok, view_running, _} = live(conn, ~p"/services/#{ws_running.id}")
+      {:ok, view_running, _} = live(conn, ~p"/services/sessions/#{ws_running.id}")
       assert has_element?(view_running, "#clear-logs-button")
     end
 
@@ -188,7 +188,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
 
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       assert has_element?(view, ~s|#back-to-services-link[href="/services"]|)
     end
@@ -199,7 +199,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
 
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       assert has_element?(view, ~s|#service-session-link[href="/sessions/#{ws.id}"]|)
     end
@@ -213,9 +213,9 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
 
       Logs.ensure_log_dir()
-      File.write!(Logs.log_path(ws.id), "line one\nline two\n")
+      File.write!(Logs.log_path("session-" <> ws.id), "line one\nline two\n")
 
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       render_hook(view, "terminal_ready", %{})
 
@@ -229,7 +229,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
 
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
       render_hook(view, "terminal_ready", %{})
 
       send(view.pid, {:service_log, "hello world\n"})
@@ -247,7 +247,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
 
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       send(view.pid, {:service_log, "par"})
       _ = render(view)
@@ -269,8 +269,8 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
 
       Logs.ensure_log_dir()
-      File.write!(Logs.log_path(ws.id), "seed\n")
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      File.write!(Logs.log_path("session-" <> ws.id), "seed\n")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
       render_hook(view, "terminal_ready", %{})
       assert_push_event(view, "output", %{})
 
@@ -286,10 +286,10 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
 
       Logs.ensure_log_dir()
-      File.write!(Logs.log_path(ws.id), "persisted\n")
+      File.write!(Logs.log_path("session-" <> ws.id), "persisted\n")
 
       for _ <- 1..2 do
-        {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+        {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
         render_hook(view, "terminal_ready", %{})
 
         assert_push_event(view, "output", %{data: data})
@@ -305,7 +305,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
 
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       PubSubHelper.broadcast_service_status(ws.id, %{
         "status" => "running",
@@ -323,7 +323,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id, service_state: %{"status" => "stopped"}})
       clear_log(ws.id)
 
-      {:ok, view, _html} = live(conn, ~p"/services/#{ws.id}")
+      {:ok, view, _html} = live(conn, ~p"/services/sessions/#{ws.id}")
 
       {:ok, updated_ws} =
         Destila.Workflows.update_workflow_session(ws, %{
@@ -340,7 +340,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
     @tag feature: @feature, scenario: "Returns 404 for unknown session id"
     test "unknown id returns 404", %{conn: conn} do
       assert_error_sent 404, fn ->
-        live(conn, ~p"/services/#{Ecto.UUID.generate()}")
+        live(conn, ~p"/services/sessions/#{Ecto.UUID.generate()}")
       end
     end
 
@@ -349,7 +349,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: nil})
 
       assert_error_sent 404, fn ->
-        live(conn, ~p"/services/#{ws.id}")
+        live(conn, ~p"/services/sessions/#{ws.id}")
       end
     end
 
@@ -360,7 +360,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id})
 
       assert_error_sent 404, fn ->
-        live(conn, ~p"/services/#{ws.id}")
+        live(conn, ~p"/services/sessions/#{ws.id}")
       end
     end
 
@@ -371,7 +371,7 @@ defmodule DestilaWeb.ServiceDetailLiveTest do
       ws = create_session(%{project_id: project.id})
 
       assert_error_sent 404, fn ->
-        live(conn, ~p"/services/#{ws.id}")
+        live(conn, ~p"/services/sessions/#{ws.id}")
       end
     end
   end

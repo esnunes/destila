@@ -13,7 +13,7 @@ config :destila,
 
 config :destila, Oban,
   engine: Oban.Engines.Lite,
-  queues: [default: 2, setup: 1],
+  queues: [default: 2, setup: 1, project_services: 1],
   repo: Destila.Repo
 
 # Resolve the Claude CLI from the system ($PATH and common locations like

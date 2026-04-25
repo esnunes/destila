@@ -313,6 +313,8 @@ defmodule Destila.Sessions.SessionProcess do
     {:ok, ws} = Workflows.update_workflow_session(data.ws, %{done_at: DateTime.utc_now()})
     broadcast_updated(ws)
 
+    Workflows.enqueue_project_service_pull_restart(ws.project_id)
+
     {:next_state, :done, %{data | ws: ws}, [{:reply, from, {:ok, ws}}, inactivity_timeout()]}
   end
 

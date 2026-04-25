@@ -36,6 +36,7 @@ defmodule DestilaWeb.Router do
     live "/sessions/:id/terminal", TerminalLive
     live "/sessions/:workflow_session_id/ai/:ai_session_id", AiSessionDetailLive
     live "/services", ServicesLive
-    live "/services/:id", ServiceDetailLive
+    live "/services/sessions/:id", ServiceDetailLive, :session
+    live "/services/projects/:id", ServiceDetailLive, :project
   end
 end

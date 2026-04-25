@@ -3,7 +3,7 @@ Feature: Service Status Sidebar
   configured as webservices (i.e. projects with both a run command and a
   service env var name). The item reflects whether the project's development
   service is running or stopped. Clicking the item navigates to the service
-  detail page at /services/<session_id>. When the service is running with a
+  detail page at /services/sessions/<session_id>. When the service is running with a
   port, a separate globe button opens http://localhost:<port> in a new browser
   tab. The item is hidden entirely when the project is not a webservice or the
   session has no project.
@@ -41,7 +41,7 @@ Feature: Service Status Sidebar
   Scenario: Service item always navigates to the service detail page
     Given I am on a session detail page
     And the session's project has a run_command and a service_env_var configured
-    Then the service item label should be a link that navigates to /services/<session_id>
+    Then the service item label should be a link that navigates to /services/sessions/<session_id>
 
   Scenario: Globe button opens the service URL in a new tab when running with port
     Given I am on a session detail page

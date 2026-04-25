@@ -14,6 +14,7 @@ defmodule Destila.Projects.Project do
     field(:service_env_var, :string)
     field(:mise_auto_trust, :boolean, default: false)
     field(:archived_at, :utc_datetime)
+    field(:service_state, :map)
 
     has_many(:workflow_sessions, Destila.Workflows.Session)
 
@@ -30,7 +31,8 @@ defmodule Destila.Projects.Project do
       :setup_command,
       :service_env_var,
       :mise_auto_trust,
-      :archived_at
+      :archived_at,
+      :service_state
     ])
     |> validate_required([:name])
     |> validate_at_least_one_location()

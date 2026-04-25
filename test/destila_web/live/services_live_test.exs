@@ -204,7 +204,7 @@ defmodule DestilaWeb.ServicesLiveTest do
     end
 
     @tag feature: @feature, scenario: "Row navigates to the service detail page"
-    test "row link navigates to /services/:id", %{conn: conn} do
+    test "row link navigates to /services/sessions/:id", %{conn: conn} do
       project = webservice_project()
 
       ws =
@@ -215,7 +215,10 @@ defmodule DestilaWeb.ServicesLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/services")
 
-      assert has_element?(view, ~s|#service-row-#{ws.id}[href="/services/#{ws.id}"]|)
+      assert has_element?(
+               view,
+               ~s|#service-row-#{ws.id}[href="/services/sessions/#{ws.id}"]|
+             )
     end
 
     @tag feature: @feature, scenario: "No inline lifecycle controls in the list"
@@ -238,14 +241,23 @@ defmodule DestilaWeb.ServicesLiveTest do
   end
 
   describe "empty state" do
-    @tag feature: @feature, scenario: "Empty state when no eligible services exist"
-    test "shows empty state when no eligible sessions", %{conn: conn} do
+    @tag feature: @feature,
+         scenario: "Empty state when no eligible session services exist"
+    test "shows session empty state when no eligible sessions", %{conn: conn} do
       non_web = create_project(%{name: "Non-Web", run_command: nil, service_env_var: nil})
       _ws = create_session(%{project_id: non_web.id})
 
       {:ok, view, _html} = live(conn, ~p"/services")
 
-      assert has_element?(view, "#services-empty")
+      assert has_element?(view, "#session-services-empty")
+    end
+
+    @tag feature: @feature,
+         scenario: "Empty state when no eligible project services exist"
+    test "shows project empty state when no eligible project services", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/services")
+
+      assert has_element?(view, "#project-services-empty")
     end
   end
 

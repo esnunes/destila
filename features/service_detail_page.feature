@@ -1,12 +1,25 @@
 Feature: Service Detail Page
-  The /services/:id page offers a dedicated view of a workflow session's
-  development service. It shows status, port, URL, configured commands and a
-  live tail of the service log, plus lifecycle controls (Start, Stop, Restart,
-  Clear logs). The page is only available for workflow sessions whose project
-  is a webservice (i.e. has both a run_command and a service_env_var). Logs
-  are captured via tmux pipe-pane, streamed to the browser through a
-  per-session log tailer and PubSub topic, and rendered in an xterm.js
-  terminal emulator so ANSI escape sequences display correctly.
+  The /services/sessions/:id and /services/projects/:id pages offer dedicated
+  views of a development service. Both routes mount the same LiveView, branched
+  on `live_action` (`:session` vs `:project`). The page shows status, port,
+  URL, configured commands and a live tail of the service log, plus lifecycle
+  controls (Start, Stop, Restart, Clear logs).
+
+  The :project branch additionally exposes:
+    * a "Pull latest & restart" button that fetches the default branch,
+      fast-forwards, and restarts the service
+    * a self-hosted notice banner when the project's local_folder
+      canonicalizes to the BEAM's current working directory (i.e. Destila
+      itself)
+    * a "Remove service" control that clears service_state and cleans up
+      tmux + log files
+    * details for "Default branch", "Last pulled", and "Working directory"
+
+  The page is only available for projects that are webservices (i.e. have
+  both a run_command and a service_env_var). Logs are captured via tmux
+  pipe-pane, streamed to the browser through a per-target log tailer and
+  PubSub topic, and rendered in an xterm.js terminal emulator so ANSI escape
+  sequences display correctly.
 
   Scenario: Running service renders status, port, URL, and commands
     Given I visit the service detail page for a running service
@@ -85,7 +98,7 @@ Feature: Service Detail Page
     Then the page should reflect the new service_state
 
   Scenario: Returns 404 for unknown session id
-    Given I visit /services/<id> with an id that does not exist
+    Given I visit /services/sessions/<id> with an id that does not exist
     Then the response status should be 404
 
   Scenario: Returns 404 for session with no project
@@ -99,3 +112,28 @@ Feature: Service Detail Page
   Scenario: Returns 404 for project without service_env_var
     Given I visit the service detail page for a project without a service_env_var
     Then the response status should be 404
+
+  Scenario: Project branch shows a "Pull latest & restart" button
+    Given I visit /services/projects/<project_id> for a project-level service
+    Then I should see a "Pull latest & restart" button
+
+  Scenario: Session branch does NOT show a "Pull latest & restart" button
+    Given I visit /services/sessions/<session_id> for a session-level service
+    Then I should not see a "Pull latest & restart" button
+
+  Scenario: Self-hosted Destila project renders the supervisor notice banner
+    Given the project's local_folder canonicalizes to the BEAM's cwd
+    When I visit /services/projects/<project_id>
+    Then I should see a self-hosted notice banner
+
+  Scenario: Pull failure surfaces an error flash on the detail page
+    Given I am on /services/projects/<project_id>
+    When a {:project_service_error, :dirty, _} broadcast is received
+    Then the page should display an error flash describing the dirty working tree
+
+  Scenario: Project detail page exposes a "Remove service" control
+    Given I visit /services/projects/<project_id> for a project-level service
+    Then I should see a "Remove service" button
+    When I click "Remove service"
+    Then the project's service_state should be cleared
+    And I should be navigated back to /services
