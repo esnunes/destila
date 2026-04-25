@@ -100,9 +100,9 @@ three mounted volumes and survive container recreation.
   the container and are therefore only reachable from the host if you run
   with `--network host` (Linux only) or forward the needed ports with
   additional `-p` flags at `docker run` time.
-- The image is published for `linux/amd64` only. ARM hosts (Apple Silicon,
-  Raspberry Pi, arm64 servers) need Docker's emulation layer or a custom
-  local build.
+- The image is published as a multi-arch manifest covering `linux/amd64`
+  and `linux/arm64`, so Apple Silicon, Raspberry Pi, and arm64 servers
+  pull a native image without emulation.
 - The container runs as `root` by default. Running with
   `--user $(id -u):$(id -g)` is possible but requires pre-creating the
   bind-mount directories (`~/.claude`, `~/.cache/destila`, `~/destila-data`)
