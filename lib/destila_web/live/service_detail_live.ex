@@ -365,6 +365,15 @@ defmodule DestilaWeb.ServiceDetailLive do
               >
                 <.icon name="hero-command-line-micro" class="size-4" /> Terminal
               </.link>
+              <.link
+                :if={@target_kind == :project}
+                id="open-terminal-link"
+                navigate={~p"/services/projects/#{@project.id}/terminal"}
+                class="btn btn-soft btn-sm"
+                title="Open terminal"
+              >
+                <.icon name="hero-command-line-micro" class="size-4" /> Terminal
+              </.link>
               <.url_link state={@service_state} />
               <.control_buttons state={@service_state} target_kind={@target_kind} />
             </div>

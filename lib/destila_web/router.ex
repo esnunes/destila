@@ -33,10 +33,11 @@ defmodule DestilaWeb.Router do
     live "/sessions/archived", ArchivedSessionsLive
     get "/media/:id", MediaController, :show
     live "/sessions/:id", WorkflowRunnerLive
-    live "/sessions/:id/terminal", TerminalLive
+    live "/sessions/:id/terminal", TerminalLive, :session
     live "/sessions/:workflow_session_id/ai/:ai_session_id", AiSessionDetailLive
     live "/services", ServicesLive
     live "/services/sessions/:id", ServiceDetailLive, :session
     live "/services/projects/:id", ServiceDetailLive, :project
+    live "/services/projects/:id/terminal", TerminalLive, :project
   end
 end
