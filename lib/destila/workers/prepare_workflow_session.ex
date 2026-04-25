@@ -3,7 +3,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
 
   require Logger
 
-  alias Destila.{AI, Git, Workflows}
+  alias Destila.{AI, Git, Mise, Workflows}
   alias Destila.Sessions.SessionProcess
   alias Destila.Terminal.Tmux
   import Destila.StringHelper, only: [blank?: 1]
@@ -31,7 +31,7 @@ defmodule Destila.Workers.PrepareWorkflowSession do
   def run_post_worktree_setup(nil, _worktree_path, _ws), do: :ok
 
   def run_post_worktree_setup(project, worktree_path, ws) do
-    maybe_run_mise_trust(project, worktree_path, ws)
+    Mise.maybe_trust(project, worktree_path, "session #{ws.id}")
 
     if blank?(project.setup_command) do
       :ok
@@ -56,29 +56,6 @@ defmodule Destila.Workers.PrepareWorkflowSession do
       end
     end
   end
-
-  defp maybe_run_mise_trust(%{mise_auto_trust: true} = project, worktree_path, ws) do
-    {output, status} =
-      System.cmd("mise", ["trust", "-y", "--all", "-C", worktree_path], stderr_to_stdout: true)
-
-    if status != 0 do
-      Logger.warning(
-        "mise trust -y --all -C #{worktree_path} exited #{status} for project #{project.id} session #{ws.id}: #{output}"
-      )
-    end
-
-    :ok
-  rescue
-    e ->
-      Logger.warning(
-        "mise trust failed for session #{ws.id}: " <>
-          Exception.format(:error, e, __STACKTRACE__)
-      )
-
-      :ok
-  end
-
-  defp maybe_run_mise_trust(_project, _worktree_path, _ws), do: :ok
 
   defp sync_repo(nil), do: :ok
 

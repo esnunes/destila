@@ -1,7 +1,15 @@
 defmodule Destila.Services.LogTailer do
   @moduledoc """
-  One process per active service run. Polls the session's log file and
-  broadcasts new bytes to `"service:<ws_id>"` as `{:service_log, chunk}`.
+  One process per active service run. Polls the service's log file and
+  broadcasts new bytes as `{:service_log, chunk}` on a configurable
+  PubSub topic.
+
+  The registration id is the `log_key` (the same string used to compute
+  the log file path under `Destila.Services.Logs.log_path/1`). The
+  broadcast topic is independent — sessions register under
+  `"session-<uuid>"` but broadcast on `"service:<uuid>"`, and self-hosted
+  Destila registers under `"project-destila-<branch>"` but broadcasts on
+  `"service:project-<project-id>"`.
 
   A tailer exists only while a service is running. On crash the
   `DynamicSupervisor` does not restart the process (`restart: :temporary`);
@@ -10,7 +18,6 @@ defmodule Destila.Services.LogTailer do
 
   use GenServer, restart: :temporary
 
-  alias Destila.PubSubHelper
   alias Destila.Services.Logs
 
   @default_poll_ms 250
@@ -19,22 +26,28 @@ defmodule Destila.Services.LogTailer do
   @supervisor Destila.Services.LogTailerSupervisor
 
   @doc """
-  Starts (or no-ops if already running) a tailer for the given workflow
-  session id. Returns `{:ok, pid}` in both cases.
+  Starts (or no-ops if already running) a tailer for the given log key.
+
+  Accepts an optional `:topic` keyword overriding the default broadcast
+  topic of `"service:<log_key>"`.
   """
-  def start_for(ws_id) when is_binary(ws_id) do
-    case DynamicSupervisor.start_child(@supervisor, {__MODULE__, ws_id: ws_id}) do
+  def start_for(log_key, opts \\ []) when is_binary(log_key) do
+    topic = Keyword.get(opts, :topic, "service:#{log_key}")
+
+    case DynamicSupervisor.start_child(
+           @supervisor,
+           {__MODULE__, log_key: log_key, topic: topic}
+         ) do
       {:ok, pid} -> {:ok, pid}
       {:error, {:already_started, pid}} -> {:ok, pid}
     end
   end
 
   @doc """
-  Stops a running tailer for the given workflow session id, if any.
-  Idempotent — returns `:ok` whether or not a tailer was running.
+  Stops a running tailer for the given log key, if any. Idempotent.
   """
-  def stop_for(ws_id) when is_binary(ws_id) do
-    case Registry.lookup(@registry, ws_id) do
+  def stop_for(log_key) when is_binary(log_key) do
+    case Registry.lookup(@registry, log_key) do
       [{pid, _}] ->
         _ = DynamicSupervisor.terminate_child(@supervisor, pid)
         :ok
@@ -45,37 +58,38 @@ defmodule Destila.Services.LogTailer do
   end
 
   @doc """
-  Returns `{:ok, pid} | :error` for the tailer registered for `ws_id`.
+  Returns `{:ok, pid} | :error` for the tailer registered under `log_key`.
   """
-  def whereis(ws_id) when is_binary(ws_id) do
-    case Registry.lookup(@registry, ws_id) do
+  def whereis(log_key) when is_binary(log_key) do
+    case Registry.lookup(@registry, log_key) do
       [{pid, _}] -> {:ok, pid}
       [] -> :error
     end
   end
 
   def start_link(opts) do
-    ws_id = Keyword.fetch!(opts, :ws_id)
-    name = {:via, Registry, {@registry, ws_id}}
+    log_key = Keyword.fetch!(opts, :log_key)
+    name = {:via, Registry, {@registry, log_key}}
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
-    ws_id = Keyword.fetch!(opts, :ws_id)
+    log_key = Keyword.fetch!(opts, :log_key)
+    topic = Keyword.fetch!(opts, :topic)
     poll_ms = Keyword.get(opts, :poll_ms, @default_poll_ms)
 
     Logs.ensure_log_dir()
-    log_path = Logs.log_path(ws_id)
+    log_path = Logs.log_path(log_key)
 
-    # Ensure the file exists so File.open succeeds even on a fresh start.
     unless File.exists?(log_path), do: File.write!(log_path, "")
 
     {:ok, io} = File.open(log_path, [:read, :binary])
 
     state = %{
-      ws_id: ws_id,
+      log_key: log_key,
+      topic: topic,
       log_path: log_path,
       io: io,
       position: 0,
@@ -129,7 +143,7 @@ defmodule Destila.Services.LogTailer do
         state
 
       data when is_binary(data) ->
-        PubSubHelper.broadcast_service_log(state.ws_id, data)
+        Phoenix.PubSub.broadcast(Destila.PubSub, state.topic, {:service_log, data})
         %{state | position: state.position + byte_size(data)}
     end
   end

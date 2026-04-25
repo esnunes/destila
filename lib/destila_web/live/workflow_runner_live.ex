@@ -985,7 +985,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                       >
                         <.link
                           id="service-status-link"
-                          navigate={~p"/services/#{@workflow_session.id}"}
+                          navigate={~p"/services/sessions/#{@workflow_session.id}"}
                           class="flex items-center gap-2.5 flex-1 min-w-0 px-1 rounded-md"
                           aria-label="Open service details"
                           title="Open service details"

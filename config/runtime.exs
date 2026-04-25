@@ -20,6 +20,16 @@ if System.get_env("PHX_SERVER") do
   config :destila, DestilaWeb.Endpoint, server: true
 end
 
+if config_env() in [:dev, :prod] do
+  config :destila, Oban,
+    plugins: [
+      {Oban.Plugins.Cron,
+       crontab: [
+         {"*/5 * * * *", Destila.Workers.ProjectServicePullRestartWorker}
+       ]}
+    ]
+end
+
 config :destila, DestilaWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

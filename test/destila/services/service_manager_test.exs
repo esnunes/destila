@@ -141,7 +141,7 @@ defmodule Destila.Services.ServiceManagerTest do
   describe "clear_logs/1" do
     test "truncates the log file and broadcasts a clear event" do
       ws_id = "smtest-" <> Integer.to_string(System.unique_integer([:positive]))
-      path = Logs.log_path(ws_id)
+      path = Logs.log_path("session-" <> ws_id)
       Logs.ensure_log_dir()
       File.write!(path, "old logs here")
 

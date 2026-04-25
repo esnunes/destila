@@ -70,4 +70,25 @@ defmodule DestilaWeb.OpenTerminalLiveTest do
       assert has_element?(view, "#terminal-panel-#{ws.id}")
     end
   end
+
+  describe "project terminal page" do
+    test "mounts and shows terminal panel for a project", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Term Project",
+          local_folder: System.tmp_dir!()
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/services/projects/#{project.id}/terminal")
+
+      assert has_element?(view, "#terminal-panel-project-#{project.id}")
+    end
+
+    test "redirects to /services when project not found", %{conn: conn} do
+      missing = Ecto.UUID.generate()
+
+      assert {:error, {:live_redirect, %{to: "/services"}}} =
+               live(conn, ~p"/services/projects/#{missing}/terminal")
+    end
+  end
 end

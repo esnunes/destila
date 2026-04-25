@@ -45,4 +45,42 @@ defmodule Destila.PubSubHelper do
       {:service_logs_cleared, workflow_session_id}
     )
   end
+
+  def project_service_topic(project_id) do
+    "service:project-#{project_id}"
+  end
+
+  def broadcast_project_service_status(project_id, state) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      project_service_topic(project_id),
+      {:service_status, state}
+    )
+  end
+
+  def broadcast_project_service_log(project_id, chunk) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      project_service_topic(project_id),
+      {:service_log, chunk}
+    )
+  end
+
+  def broadcast_project_service_logs_cleared(project_id) do
+    log_key = "project-#{project_id}"
+
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      project_service_topic(project_id),
+      {:service_logs_cleared, log_key}
+    )
+  end
+
+  def broadcast_project_service_error(project_id, stage, details) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      project_service_topic(project_id),
+      {:project_service_error, stage, details}
+    )
+  end
 end
