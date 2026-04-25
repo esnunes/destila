@@ -20,7 +20,7 @@ if System.get_env("PHX_SERVER") do
   config :destila, DestilaWeb.Endpoint, server: true
 end
 
-if config_env() == :prod do
+if config_env() in [:dev, :prod] do
   config :destila, Oban,
     plugins: [
       {Oban.Plugins.Cron,
