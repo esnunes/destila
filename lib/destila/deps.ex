@@ -8,7 +8,8 @@ defmodule Destila.Deps do
   """
 
   # When adding a tool here, also install it in the runtime stage of /Dockerfile
-  # so the published container image ships with it on PATH.
+  # — via mise where a plugin exists, otherwise via apt — so the published
+  # container image ships with it on PATH.
   @required_tools [
     %{
       name: "claude",
