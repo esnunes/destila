@@ -13,6 +13,11 @@ defmodule Destila.AI.SessionConfig do
   Every session also registers `Destila.AI.Hooks.SessionStart` on the
   `SessionStart` event so the current phase's initial prompt is re-injected
   into the agent's context after a compaction (`source: "compact"`).
+
+  Every session also defaults to `--effort xhigh` (passed via `:extra_args`
+  since the SDK's typed `:effort` option doesn't yet expose the `xhigh` tier
+  the CLI supports). Callers can override by passing their own
+  `extra_args: %{"--effort" => "..."}`.
   """
 
   alias Destila.AI.{Hooks, Tools}
@@ -36,6 +41,10 @@ defmodule Destila.AI.SessionConfig do
   # it forces the agent to use the Destila tool, which is the one wired into the UI.
   @default_disallowed_tools ["AskUserQuestion"]
 
+  # Routed through :extra_args because the SDK's typed :effort option (v0.36)
+  # only accepts :low/:medium/:high/:max, while the CLI also accepts "xhigh".
+  @default_effort "xhigh"
+
   @doc """
   Builds ClaudeCode session options for a workflow session and phase.
 
@@ -58,6 +67,16 @@ defmodule Destila.AI.SessionConfig do
     |> put_resume(ai_session)
     |> put_cwd(ai_session)
     |> put_hooks()
+    |> put_effort()
+  end
+
+  defp put_effort(opts) do
+    extra_args =
+      opts
+      |> Keyword.get(:extra_args, %{})
+      |> Map.put_new("--effort", @default_effort)
+
+    Keyword.put(opts, :extra_args, extra_args)
   end
 
   defp put_disallowed_tools(opts),
