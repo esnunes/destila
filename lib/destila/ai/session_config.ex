@@ -18,6 +18,9 @@ defmodule Destila.AI.SessionConfig do
   since the SDK's typed `:effort` option doesn't yet expose the `xhigh` tier
   the CLI supports). Callers can override by passing their own
   `extra_args: %{"--effort" => "..."}`.
+
+  Every session also defaults to the `claude-opus-4-7` model. Callers can
+  override by passing their own `model: "..."`.
   """
 
   alias Destila.AI.{Hooks, Tools}
@@ -44,6 +47,7 @@ defmodule Destila.AI.SessionConfig do
   # Routed through :extra_args because the SDK's typed :effort option (v0.36)
   # only accepts :low/:medium/:high/:max, while the CLI also accepts "xhigh".
   @default_effort "xhigh"
+  @default_model "claude-opus-4-7"
 
   @doc """
   Builds ClaudeCode session options for a workflow session and phase.
@@ -68,6 +72,7 @@ defmodule Destila.AI.SessionConfig do
     |> put_cwd(ai_session)
     |> put_hooks()
     |> put_effort()
+    |> put_model()
   end
 
   defp put_effort(opts) do
@@ -78,6 +83,8 @@ defmodule Destila.AI.SessionConfig do
 
     Keyword.put(opts, :extra_args, extra_args)
   end
+
+  defp put_model(opts), do: Keyword.put_new(opts, :model, @default_model)
 
   defp put_disallowed_tools(opts),
     do: Keyword.put_new(opts, :disallowed_tools, @default_disallowed_tools)
