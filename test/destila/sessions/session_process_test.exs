@@ -509,4 +509,134 @@ defmodule Destila.Sessions.SessionProcessTest do
       assert pe.status == :processing
     end
   end
+
+  describe "retry_after_auth/2" do
+    test "deletes the auth_error message and re-runs the AI worker for the failed turn" do
+      test_pid = self()
+
+      ClaudeCode.Test.stub(ClaudeCode, fn query, _opts ->
+        send(test_pid, {:claude_query, query})
+        text = "Retry response"
+        [ClaudeCode.Test.text(text), ClaudeCode.Test.result(text)]
+      end)
+
+      ClaudeCode.Test.set_mode_to_shared()
+
+      ws = create_session_with_ai(%{pe_status: :awaiting_input})
+      ai_session = AI.get_ai_session_for_workflow(ws.id)
+
+      {:ok, _user_msg} =
+        AI.create_message(ai_session.id, %{
+          role: :user,
+          content: "the original message",
+          phase: 1,
+          workflow_session_id: ws.id
+        })
+
+      {:ok, auth_msg} =
+        AI.create_message(ai_session.id, %{
+          role: :system,
+          content: "Claude authentication failed: ...",
+          message_type: :auth_error,
+          phase: 1,
+          workflow_session_id: ws.id
+        })
+
+      start_process(ws.id)
+
+      assert :ok = SessionProcess.retry_after_auth(ws.id, auth_msg.id)
+      sync_process(ws.id)
+
+      assert_received {:claude_query, "the original message"}
+
+      refute AI.list_messages_for_workflow_session(ws.id)
+             |> Enum.any?(&(&1.id == auth_msg.id))
+    end
+
+    test "returns {:error, :not_found} when the message id is unknown" do
+      ws = create_session_with_ai(%{pe_status: :awaiting_input})
+      start_process(ws.id)
+
+      assert {:error, :not_found} =
+               SessionProcess.retry_after_auth(ws.id, Ecto.UUID.generate())
+
+      pe = Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :awaiting_input
+    end
+
+    test "returns {:error, :no_user_turn_found} when phase has no preceding user message" do
+      ws = create_session_with_ai(%{pe_status: :awaiting_input})
+      ai_session = AI.get_ai_session_for_workflow(ws.id)
+
+      {:ok, auth_msg} =
+        AI.create_message(ai_session.id, %{
+          role: :system,
+          content: "Claude authentication failed: ...",
+          message_type: :auth_error,
+          phase: 1,
+          workflow_session_id: ws.id
+        })
+
+      start_process(ws.id)
+
+      assert {:error, :no_user_turn_found} =
+               SessionProcess.retry_after_auth(ws.id, auth_msg.id)
+
+      pe = Executions.get_current_phase_execution(ws.id)
+      assert pe.status == :awaiting_input
+    end
+
+    test "scopes the user-message lookup to the auth_error's phase" do
+      test_pid = self()
+
+      ClaudeCode.Test.stub(ClaudeCode, fn query, _opts ->
+        send(test_pid, {:claude_query, query})
+        text = "Retry response"
+        [ClaudeCode.Test.text(text), ClaudeCode.Test.result(text)]
+      end)
+
+      ClaudeCode.Test.set_mode_to_shared()
+
+      ws =
+        create_session_with_ai(%{
+          current_phase: 2,
+          total_phases: 4,
+          pe_status: :awaiting_input
+        })
+
+      ai_session = AI.get_ai_session_for_workflow(ws.id)
+
+      {:ok, _phase1_user_msg} =
+        AI.create_message(ai_session.id, %{
+          role: :user,
+          content: "phase 1 message",
+          phase: 1,
+          workflow_session_id: ws.id
+        })
+
+      {:ok, _phase2_user_msg} =
+        AI.create_message(ai_session.id, %{
+          role: :user,
+          content: "phase 2 message",
+          phase: 2,
+          workflow_session_id: ws.id
+        })
+
+      {:ok, auth_msg} =
+        AI.create_message(ai_session.id, %{
+          role: :system,
+          content: "Claude authentication failed: ...",
+          message_type: :auth_error,
+          phase: 2,
+          workflow_session_id: ws.id
+        })
+
+      start_process(ws.id)
+
+      assert :ok = SessionProcess.retry_after_auth(ws.id, auth_msg.id)
+      sync_process(ws.id)
+
+      assert_received {:claude_query, "phase 2 message"}
+    end
+  end
 end

@@ -372,6 +372,32 @@ defmodule DestilaWeb.ChatComponents do
     """
   end
 
+  defp render_chat_message(%{message: %{message_type: :auth_error}} = assigns) do
+    ~H"""
+    <div class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-primary text-primary-content">
+        D
+      </div>
+      <div class="max-w-[80%]">
+        <div class="rounded-2xl px-4 py-3 text-sm bg-base-200 text-base-content prose prose-sm max-w-none">
+          {raw(markdown_to_html(@message.content))}
+        </div>
+      </div>
+    </div>
+    <div class="ml-11 mb-4">
+      <button
+        id={"open-claude-login-" <> @message.id}
+        type="button"
+        phx-click="open_claude_login"
+        phx-value-message_id={@message.id}
+        class="btn btn-primary btn-sm"
+      >
+        Login to Claude
+      </button>
+    </div>
+    """
+  end
+
   defp render_chat_message(assigns) do
     ~H"""
     <div class={[

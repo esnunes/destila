@@ -49,6 +49,10 @@ defmodule Destila.Sessions.SessionProcess do
   def confirm_advance(session_id), do: call(session_id, :confirm_advance)
   def decline_advance(session_id), do: call(session_id, :decline_advance)
   def retry(session_id), do: call(session_id, :retry)
+
+  def retry_after_auth(session_id, auth_error_message_id),
+    do: call(session_id, {:retry_after_auth, auth_error_message_id})
+
   def retry_setup(session_id), do: call(session_id, :retry_setup)
   def cancel(session_id), do: call(session_id, :cancel)
   def mark_done(session_id), do: call(session_id, :mark_done)
@@ -198,6 +202,10 @@ defmodule Destila.Sessions.SessionProcess do
     handle_mark_done(from, data)
   end
 
+  def awaiting_input({:call, from}, {:retry_after_auth, msg_id}, data) do
+    handle_retry_after_auth(from, msg_id, data)
+  end
+
   def awaiting_input(:state_timeout, :inactivity, _data), do: {:stop, :normal}
 
   def awaiting_input({:call, from}, _event, _data),
@@ -234,6 +242,10 @@ defmodule Destila.Sessions.SessionProcess do
 
   def awaiting_confirmation({:call, from}, :mark_done, data) do
     handle_mark_done(from, data)
+  end
+
+  def awaiting_confirmation({:call, from}, {:retry_after_auth, msg_id}, data) do
+    handle_retry_after_auth(from, msg_id, data)
   end
 
   def awaiting_confirmation(:state_timeout, :inactivity, _data), do: {:stop, :normal}
@@ -296,6 +308,22 @@ defmodule Destila.Sessions.SessionProcess do
     broadcast_updated(data.ws)
 
     {:next_state, :processing, data, [{:reply, from, {:ok, data.ws}}, inactivity_timeout()]}
+  end
+
+  defp handle_retry_after_auth(from, msg_id, data) do
+    with {:ok, %{auth_error: auth_msg, user_turn: user_turn}} <-
+           AI.find_user_turn_for_auth_error(data.session_id, msg_id),
+         {:ok, _deleted} <- AI.delete_message(auth_msg),
+         {:ok, :processing} <-
+           AI.Conversation.enqueue_query_for_retry(data.ws, user_turn.phase, user_turn.content) do
+      with_current_pe(data, &Executions.process_phase/1)
+      broadcast_updated(data.ws)
+
+      {:next_state, :processing, data, [{:reply, from, :ok}, inactivity_timeout()]}
+    else
+      {:error, reason} ->
+        {:keep_state_and_data, [{:reply, from, {:error, reason}}]}
+    end
   end
 
   defp handle_mark_done(from, data) do

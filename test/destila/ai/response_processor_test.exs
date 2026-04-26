@@ -200,5 +200,58 @@ defmodule Destila.AI.ResponseProcessorTest do
 
       assert processed.message_type == nil
     end
+
+    test "honors persisted :auth_error message_type without raw_response" do
+      msg = %Message{
+        id: Ecto.UUID.generate(),
+        role: :system,
+        phase: 1,
+        content: "Claude authentication failed",
+        message_type: :auth_error,
+        inserted_at: DateTime.utc_now()
+      }
+
+      processed = ResponseProcessor.process_message(msg, %{workflow_type: :brainstorm_idea})
+
+      assert processed.message_type == :auth_error
+    end
+
+    test "honors persisted :auth_error message_type even with raw_response" do
+      msg = %Message{
+        id: Ecto.UUID.generate(),
+        role: :system,
+        phase: 1,
+        content: "Claude authentication failed",
+        message_type: :auth_error,
+        raw_response: %{"mcp_tool_uses" => []},
+        inserted_at: DateTime.utc_now()
+      }
+
+      processed = ResponseProcessor.process_message(msg, %{workflow_type: :brainstorm_idea})
+
+      assert processed.message_type == :auth_error
+    end
+
+    test "legacy phase_advance derivation still works without persisted type" do
+      msg = %Message{
+        id: Ecto.UUID.generate(),
+        role: :system,
+        phase: 1,
+        content: "",
+        raw_response: %{
+          "mcp_tool_uses" => [
+            %{
+              "name" => "mcp__destila__session",
+              "input" => %{"action" => "phase_complete", "message" => "moving on"}
+            }
+          ]
+        },
+        inserted_at: DateTime.utc_now()
+      }
+
+      processed = ResponseProcessor.process_message(msg, %{workflow_type: :brainstorm_idea})
+
+      assert processed.message_type == :phase_advance
+    end
   end
 end

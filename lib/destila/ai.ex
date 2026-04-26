@@ -199,6 +199,51 @@ defmodule Destila.AI do
     end
   end
 
+  @doc """
+  Looks up an auth_error message by id and returns the most recent
+  preceding user message in the same phase.
+
+  Returns `{:ok, %{auth_error: message, user_turn: message}}` on success,
+  or `{:error, :not_found | :no_user_turn_found}`.
+  """
+  def find_user_turn_for_auth_error(workflow_session_id, message_id) do
+    case Repo.get(Message, message_id) do
+      nil ->
+        {:error, :not_found}
+
+      %Message{message_type: :auth_error, workflow_session_id: ^workflow_session_id} = auth_msg ->
+        user_turn =
+          Repo.one(
+            from(m in Message,
+              where:
+                m.workflow_session_id == ^workflow_session_id and
+                  m.phase == ^auth_msg.phase and
+                  m.role == :user and
+                  m.inserted_at < ^auth_msg.inserted_at,
+              order_by: [desc: m.inserted_at],
+              limit: 1
+            )
+          )
+
+        if user_turn do
+          {:ok, %{auth_error: auth_msg, user_turn: user_turn}}
+        else
+          {:error, :no_user_turn_found}
+        end
+
+      _ ->
+        {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Deletes a message by id. Used to clean up an auth_error bubble after a
+  successful retry so the chat history stays tidy.
+  """
+  def delete_message(%Message{} = message) do
+    Repo.delete(message)
+  end
+
   def create_message(ai_session_id, attrs) do
     attrs =
       attrs

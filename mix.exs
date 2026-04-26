@@ -68,6 +68,7 @@ defmodule Destila.MixProject do
       {:oban, "~> 2.20"},
       {:oban_web, "~> 2.11"},
       {:expty, "~> 0.2"},
+      {:req, "~> 0.5"},
       {:mimic, "~> 2.3", only: :test}
     ]
   end

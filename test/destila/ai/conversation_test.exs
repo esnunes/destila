@@ -78,7 +78,7 @@ defmodule Destila.AI.ConversationTest do
       msg = last_message(ws.id)
 
       assert msg.content =~ "authentication failed: Invalid key"
-      assert msg.content =~ "claude login"
+      assert msg.content =~ "Login to Claude action below"
     end
 
     test "auth error detected from result text containing authentication_error" do
@@ -100,7 +100,7 @@ defmodule Destila.AI.ConversationTest do
       msg = last_message(ws.id)
 
       assert msg.content =~ "authentication failed"
-      assert msg.content =~ "claude login"
+      assert msg.content =~ "Login to Claude action below"
     end
 
     test "auth error detected from errors list containing authentication_error" do
@@ -123,7 +123,29 @@ defmodule Destila.AI.ConversationTest do
       msg = last_message(ws.id)
 
       assert msg.content =~ "authentication failed"
-      assert msg.content =~ "claude login"
+      assert msg.content =~ "Login to Claude action below"
+    end
+
+    test "auth error detected from 'Not logged in · Please run /login' result" do
+      ws = create_session()
+
+      reason = %{
+        result: "Not logged in · Please run /login",
+        is_error: true,
+        errors: nil,
+        text: "",
+        session_id: nil,
+        subtype: :error_during_execution,
+        auth_error: nil,
+        mcp_tool_uses: []
+      }
+
+      AI.Conversation.handle_ai_error(ws, reason)
+      msg = last_message(ws.id)
+
+      assert msg.message_type == :auth_error
+      assert msg.content =~ "authentication failed"
+      assert msg.content =~ "Login to Claude action below"
     end
 
     test "non-auth error with errors list shows the errors" do
@@ -218,6 +240,67 @@ defmodule Destila.AI.ConversationTest do
     test "always returns :awaiting_input" do
       ws = create_session()
       assert :awaiting_input == AI.Conversation.handle_ai_error(ws, :error)
+    end
+
+    test "auth error from AuthStatusMessage tags message with :auth_error type" do
+      ws = create_session()
+
+      reason = %{
+        result: nil,
+        is_error: true,
+        errors: nil,
+        text: "",
+        session_id: nil,
+        subtype: :error_during_execution,
+        auth_error: "Invalid key",
+        mcp_tool_uses: []
+      }
+
+      AI.Conversation.handle_ai_error(ws, reason)
+      msg = last_message(ws.id)
+
+      assert msg.message_type == :auth_error
+    end
+
+    test "auth error detected from result text tags message with :auth_error type" do
+      ws = create_session()
+
+      reason = %{
+        result:
+          ~s|API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid"}}|,
+        is_error: true,
+        errors: nil,
+        text: "",
+        session_id: nil,
+        subtype: :error_during_execution,
+        auth_error: nil,
+        mcp_tool_uses: []
+      }
+
+      AI.Conversation.handle_ai_error(ws, reason)
+      msg = last_message(ws.id)
+
+      assert msg.message_type == :auth_error
+    end
+
+    test "non-auth error leaves message_type as nil" do
+      ws = create_session()
+
+      reason = %{
+        result: "Rate limit exceeded",
+        is_error: true,
+        errors: nil,
+        text: "",
+        session_id: nil,
+        subtype: :error_during_execution,
+        auth_error: nil,
+        mcp_tool_uses: []
+      }
+
+      AI.Conversation.handle_ai_error(ws, reason)
+      msg = last_message(ws.id)
+
+      assert msg.message_type == nil
     end
   end
 

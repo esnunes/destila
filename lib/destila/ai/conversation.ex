@@ -142,10 +142,12 @@ defmodule Destila.AI.Conversation do
   def handle_ai_error(ws, reason) do
     phase_number = ws.current_phase
     ai_session = AI.get_ai_session_for_workflow!(ws.id)
+    {content, message_type} = classify_error(reason)
 
     AI.create_message(ai_session.id, %{
       role: :system,
-      content: error_message(reason),
+      content: content,
+      message_type: message_type,
       phase: phase_number,
       workflow_session_id: ws.id
     })
@@ -153,28 +155,28 @@ defmodule Destila.AI.Conversation do
     :awaiting_input
   end
 
-  defp error_message(%{auth_error: auth_error}) when is_binary(auth_error) do
-    auth_failed_message(auth_error)
+  defp classify_error(%{auth_error: auth_error}) when is_binary(auth_error) do
+    {auth_failed_message(auth_error), :auth_error}
   end
 
-  defp error_message(reason) do
+  defp classify_error(reason) do
     text = extract_error_text(reason)
 
     cond do
       text != "" && authentication_error?(text) ->
-        auth_failed_message(text)
+        {auth_failed_message(text), :auth_error}
 
       text != "" ->
-        "Something went wrong: #{text}"
+        {"Something went wrong: #{text}", nil}
 
       true ->
-        "Something went wrong. Please try sending your message again."
+        {"Something went wrong. Please try sending your message again.", nil}
     end
   end
 
   defp auth_failed_message(detail) do
     "Claude authentication failed: #{detail}. " <>
-      "Please run `claude login` in your terminal to re-authenticate, then retry."
+      "Use the Login to Claude action below to re-authenticate; we'll retry your last message automatically."
   end
 
   defp authentication_error?(text) do
@@ -182,6 +184,9 @@ defmodule Destila.AI.Conversation do
 
     String.contains?(downcased, "authentication_error") or
       String.contains?(downcased, "invalid authentication") or
+      String.contains?(downcased, "not logged in") or
+      String.contains?(downcased, "please run /login") or
+      String.contains?(downcased, "please run `/login`") or
       (String.contains?(downcased, "401") and String.contains?(downcased, "authenticate"))
   end
 
@@ -262,5 +267,19 @@ defmodule Destila.AI.Conversation do
     %{"workflow_session_id" => ws.id, "phase" => phase, "query" => query}
     |> Destila.Workers.AiQueryWorker.new()
     |> Oban.insert()
+  end
+
+  @doc """
+  Re-enqueues an AI worker for a previously-failed turn without persisting a
+  duplicate user message. Used by `SessionProcess.retry_after_auth/2` so the
+  user does not need to retype the message that triggered the auth error.
+
+  Returns `{:ok, :processing}` or `{:error, reason}` when Oban rejects the job.
+  """
+  def enqueue_query_for_retry(ws, phase, query) do
+    case enqueue_ai_worker(ws, phase, query) do
+      {:ok, _job} -> {:ok, :processing}
+      {:error, reason} -> {:error, reason}
+    end
   end
 end
