@@ -63,14 +63,24 @@ defmodule Destila.Workers.PrepareWorkflowSession do
     cond do
       project.local_folder && project.local_folder != "" ->
         case Git.pull(project.local_folder) do
-          {:ok, _} -> :ok
-          {:error, reason} -> {:error, reason}
+          {:ok, _} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning("Failed to pull #{project.local_folder}: #{inspect(reason)}")
+            :ok
         end
 
       project.git_repo_url && project.git_repo_url != "" ->
-        with {:ok, path} <- Git.effective_local_folder(project),
-             {:ok, _} <- Git.pull(path) do
-          :ok
+        with {:ok, path} <- Git.effective_local_folder(project) do
+          case Git.pull(path) do
+            {:ok, _} ->
+              :ok
+
+            {:error, reason} ->
+              Logger.warning("Failed to pull #{path}: #{inspect(reason)}")
+              :ok
+          end
         end
 
       true ->
