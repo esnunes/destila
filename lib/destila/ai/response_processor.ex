@@ -39,6 +39,7 @@ defmodule Destila.AI.ResponseProcessor do
   def process_message(%Message{role: :system, raw_response: raw} = msg, workflow_session)
       when is_map(raw) do
     {override_content, message_type} = derive_message_type(raw, msg.phase, workflow_session)
+    message_type = msg.message_type || message_type
     {input_type, options, questions} = extract_tool_input(raw)
     exports = extract_export_actions(raw)
 
@@ -83,7 +84,7 @@ defmodule Destila.AI.ResponseProcessor do
       content: msg.content,
       selected: nil,
       inserted_at: msg.inserted_at,
-      message_type: nil,
+      message_type: msg.message_type,
       input_type: :text,
       options: nil,
       questions: [],

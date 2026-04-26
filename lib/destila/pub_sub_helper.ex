@@ -83,4 +83,14 @@ defmodule Destila.PubSubHelper do
       {:project_service_error, stage, details}
     )
   end
+
+  def claude_auth_login_topic, do: "claude_auth_login"
+
+  def broadcast_claude_auth_login(snapshot) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      claude_auth_login_topic(),
+      {:claude_auth_login_state, snapshot}
+    )
+  end
 end
