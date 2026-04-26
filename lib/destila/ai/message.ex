@@ -10,6 +10,7 @@ defmodule Destila.AI.Message do
     field(:raw_response, :map)
     field(:selected, {:array, :string})
     field(:phase, :integer, default: 1)
+    field(:message_type, Ecto.Enum, values: [:phase_advance, :auth_error])
 
     belongs_to(:ai_session, Destila.AI.Session)
     belongs_to(:workflow_session, Destila.Workflows.Session)
@@ -27,7 +28,8 @@ defmodule Destila.AI.Message do
       :content,
       :raw_response,
       :selected,
-      :phase
+      :phase,
+      :message_type
     ])
     |> validate_required([:ai_session_id, :workflow_session_id, :role])
     |> validate_number(:phase, greater_than_or_equal_to: 1)
