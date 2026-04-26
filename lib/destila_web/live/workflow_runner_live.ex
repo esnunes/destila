@@ -15,10 +15,12 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     only: [workflow_badge: 1, progress_indicator: 1, aliveness_dot: 1]
 
   import DestilaWeb.ChatComponents
+  import DestilaWeb.ClaudeAuthLoginModal, only: [claude_auth_login_modal: 1]
   import DestilaWeb.FollowUpModal, only: [follow_up_modal: 1]
 
   alias Destila.AI
   alias Destila.AI.AlivenessTracker
+  alias Destila.AI.AuthLogin
   alias Destila.AI.ResponseProcessor
   alias Destila.Services.ServiceManager
   alias Destila.Sessions.SessionProcess
@@ -39,6 +41,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
           Phoenix.PubSub.subscribe(Destila.PubSub, "store:updates")
           Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.ai_stream_topic(id))
           Phoenix.PubSub.subscribe(Destila.PubSub, AlivenessTracker.topic())
+          Phoenix.PubSub.subscribe(Destila.PubSub, Destila.PubSubHelper.claude_auth_login_topic())
 
           AlivenessTracker.alive?(id)
         else
@@ -77,6 +80,12 @@ defmodule DestilaWeb.WorkflowRunnerLive do
        |> assign(:follow_up_modal_open?, false)
        |> assign(:follow_up_candidates, [])
        |> assign(:follow_up_selected_type, nil)
+       |> assign(:claude_login_modal_open?, false)
+       |> assign(:claude_login_state, :idle)
+       |> assign(:claude_login_url, nil)
+       |> assign(:claude_login_error, nil)
+       |> assign(:claude_login_form, to_form(%{"token" => ""}, as: :claude_login))
+       |> assign(:claude_login_target_message_id, nil)
        |> assign(:phase_status, Session.phase_status(workflow_session))
        |> assign_ai_state(workflow_session)}
     else
@@ -194,6 +203,46 @@ defmodule DestilaWeb.WorkflowRunnerLive do
   def handle_event("select_follow_up", %{"workflow_type" => type_str}, socket) do
     workflow_type = String.to_existing_atom(type_str)
     {:noreply, assign(socket, :follow_up_selected_type, workflow_type)}
+  end
+
+  def handle_event("open_claude_login", %{"message_id" => message_id}, socket) do
+    AuthLogin.start()
+    snapshot = AuthLogin.current()
+
+    {:noreply,
+     socket
+     |> assign(:claude_login_modal_open?, true)
+     |> assign(:claude_login_target_message_id, message_id)
+     |> assign(:claude_login_state, snapshot.state)
+     |> assign(:claude_login_url, snapshot.url)
+     |> assign(:claude_login_error, snapshot.error_message)
+     |> assign(:claude_login_form, to_form(%{"token" => ""}, as: :claude_login))}
+  end
+
+  def handle_event("close_claude_login_modal", _params, socket) do
+    {:noreply, reset_claude_login_assigns(socket)}
+  end
+
+  def handle_event("cancel_claude_login", _params, socket) do
+    AuthLogin.stop()
+    {:noreply, reset_claude_login_assigns(socket)}
+  end
+
+  def handle_event("submit_claude_token", %{"claude_login" => %{"token" => token}}, socket) do
+    AuthLogin.submit_token(String.trim(token))
+    {:noreply, socket}
+  end
+
+  def handle_event("restart_claude_login", _params, socket) do
+    AuthLogin.restart()
+    snapshot = AuthLogin.current()
+
+    {:noreply,
+     socket
+     |> assign(:claude_login_state, snapshot.state)
+     |> assign(:claude_login_url, snapshot.url)
+     |> assign(:claude_login_error, snapshot.error_message)
+     |> assign(:claude_login_form, to_form(%{"token" => ""}, as: :claude_login))}
   end
 
   def handle_event("archive_only", _params, socket) do
@@ -601,7 +650,55 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     end
   end
 
+  def handle_info(
+        {:claude_auth_login_state, _snapshot},
+        %{assigns: %{claude_login_modal_open?: false}} = socket
+      ) do
+    {:noreply, socket}
+  end
+
+  def handle_info({:claude_auth_login_state, snapshot}, socket) do
+    socket =
+      socket
+      |> assign(:claude_login_state, snapshot.state)
+      |> assign(:claude_login_url, snapshot.url)
+      |> assign(:claude_login_error, snapshot.error_message)
+
+    if snapshot.state == :succeeded do
+      handle_claude_login_succeeded(socket)
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  @impl true
+  def terminate(_reason, %{assigns: %{claude_login_modal_open?: true}}) do
+    AuthLogin.stop()
+    :ok
+  end
+
+  def terminate(_reason, _socket), do: :ok
+
+  defp handle_claude_login_succeeded(socket) do
+    if target_id = socket.assigns.claude_login_target_message_id do
+      SessionProcess.retry_after_auth(socket.assigns.workflow_session.id, target_id)
+    end
+
+    AuthLogin.stop()
+    {:noreply, reset_claude_login_assigns(socket)}
+  end
+
+  defp reset_claude_login_assigns(socket) do
+    socket
+    |> assign(:claude_login_modal_open?, false)
+    |> assign(:claude_login_state, :idle)
+    |> assign(:claude_login_url, nil)
+    |> assign(:claude_login_error, nil)
+    |> assign(:claude_login_form, to_form(%{"token" => ""}, as: :claude_login))
+    |> assign(:claude_login_target_message_id, nil)
+  end
 
   defp start_follow_up(socket, workflow_type, archive_source?) do
     ws = socket.assigns.workflow_session
@@ -1333,6 +1430,16 @@ defmodule DestilaWeb.WorkflowRunnerLive do
         open?={@follow_up_modal_open?}
         candidates={@follow_up_candidates}
         selected_type={@follow_up_selected_type}
+      />
+
+      <%!-- Claude CLI auth login modal --%>
+      <.claude_auth_login_modal
+        open?={@claude_login_modal_open?}
+        state={@claude_login_state}
+        url={@claude_login_url}
+        error_message={@claude_login_error}
+        form={@claude_login_form}
+        target_message_id={@claude_login_target_message_id}
       />
 
       <%!-- Text modal --%>
