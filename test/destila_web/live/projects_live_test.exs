@@ -552,7 +552,7 @@ defmodule DestilaWeb.ProjectsLiveTest do
   end
 
   describe "domain and basic auth" do
-    @tag feature: @feature, scenario: "Create a project with a domain"
+    @tag feature: @feature, scenario: "Create a project with a publishing domain"
     test "creates a project with a domain", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/projects")
 

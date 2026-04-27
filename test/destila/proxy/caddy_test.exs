@@ -225,8 +225,12 @@ defmodule Destila.Proxy.CaddyTest do
 
     @tag feature: @feature,
          scenario: "Two projects sharing the same domain both register their routes"
-    test "project with basic_auth_enabled=false produces handle without auth" do
+    test "two projects with the same domain both register under distinct @ids" do
+      agent = start_call_recorder()
+
       Req.Test.stub(Caddy, fn conn ->
+        record_call(conn, agent)
+
         case {conn.method, conn.request_path} do
           {"GET", "/config/"} -> Req.Test.json(conn, %{})
           {"DELETE", _} -> Req.Test.json(conn, %{})
@@ -234,8 +238,46 @@ defmodule Destila.Proxy.CaddyTest do
         end
       end)
 
-      target = project_target("myapp.example.com", false)
-      assert Caddy.register(target, 4321) == {:ok, :registered}
+      base = project_target("shared.example.com", false)
+      target_a = %{base | id: "proj-a", project: %{base.project | id: "proj-a"}}
+      target_b = %{base | id: "proj-b", project: %{base.project | id: "proj-b"}}
+
+      assert Caddy.register(target_a, 4321) == {:ok, :registered}
+      assert Caddy.register(target_b, 4322) == {:ok, :registered}
+
+      posts =
+        agent
+        |> recorded_calls()
+        |> Enum.filter(fn {method, _, _} -> method == "POST" end)
+
+      assert length(posts) == 2
+      [{_, _, body_a}, {_, _, body_b}] = posts
+
+      payload_a = Jason.decode!(body_a)
+      payload_b = Jason.decode!(body_b)
+
+      assert payload_a["@id"] == "destila-project-proj-a"
+      assert payload_b["@id"] == "destila-project-proj-b"
+      assert payload_a["match"] == [%{"host" => ["shared.example.com"]}]
+      assert payload_b["match"] == [%{"host" => ["shared.example.com"]}]
+    end
+
+    @tag feature: @feature,
+         scenario:
+           "Project service start wraps the route in basic auth when basic_auth_enabled is true"
+    test "project with basic_auth_enabled=true produces handle with auth handler" do
+      target = project_target("myapp.example.com", true)
+      payload = Caddy.route_json(target, 4321, true)
+
+      handlers = payload["handle"]
+      assert length(handlers) == 2
+      [auth, proxy] = handlers
+      assert auth["handler"] == "authentication"
+      [account] = auth["providers"]["http_basic"]["accounts"]
+      assert account["username"] == "alice"
+      assert String.starts_with?(account["password"], "$2")
+      assert proxy["handler"] == "reverse_proxy"
+      assert proxy["upstreams"] == [%{"dial" => "127.0.0.1:4321"}]
     end
 
     @tag feature: @feature,

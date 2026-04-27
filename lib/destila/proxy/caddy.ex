@@ -177,6 +177,7 @@ defmodule Destila.Proxy.Caddy do
         url: Config.admin_url() <> "/config/apps/http/servers/" <> @server_name <> "/routes",
         json: payload,
         headers: [{"accept", "application/json"}],
+        connect_options: [timeout: 5_000],
         receive_timeout: 5_000,
         retry: false
       ]
@@ -198,6 +199,7 @@ defmodule Destila.Proxy.Caddy do
     options =
       [
         url: Config.admin_url() <> "/id/" <> route_id,
+        connect_options: [timeout: 5_000],
         receive_timeout: 5_000,
         retry: false
       ]
@@ -234,14 +236,15 @@ defmodule Destila.Proxy.Caddy do
 
   defp password_hash do
     raw = Config.basic_auth_password()
+    fingerprint = :crypto.hash(:sha256, raw || "")
 
     case :persistent_term.get(@persistent_term_key, :none) do
-      {^raw, hash} ->
+      {^fingerprint, hash} ->
         hash
 
       _ ->
         hash = Bcrypt.hash_pwd_salt(raw || "")
-        :persistent_term.put(@persistent_term_key, {raw, hash})
+        :persistent_term.put(@persistent_term_key, {fingerprint, hash})
         hash
     end
   end
