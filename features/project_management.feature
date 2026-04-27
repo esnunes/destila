@@ -2,11 +2,17 @@ Feature: Project Management
   Users can manage projects independently from sessions. A project has a name,
   an optional git repository URL, an optional local folder path, an optional
   setup command, an optional run command, an optional service env var name,
-  and an optional `mise_auto_trust` boolean flag that defaults to off. At
-  least one of git repository URL or local folder must be provided. When a
-  project has both a run command and a service env var name it is treated as a
-  webservice. When `mise_auto_trust` is on, the worktree-preparation worker
-  runs `mise trust -y` inside each new worktree before the setup command.
+  an optional `domain` (publishing host for the project's webservice), an
+  optional `basic_auth_enabled` boolean flag that defaults to off, and an
+  optional `mise_auto_trust` boolean flag that defaults to off. At least one
+  of git repository URL or local folder must be provided. When a project has
+  both a run command and a service env var name it is treated as a webservice.
+  When `domain` is set it is used as the Caddy publishing host for the
+  project-level service; when `basic_auth_enabled` is true the published route
+  is wrapped in HTTP basic auth. The same `domain` may be reused across
+  projects (last successful register wins on the Caddy side). When
+  `mise_auto_trust` is on, the worktree-preparation worker runs
+  `mise trust -y` inside each new worktree before the setup command.
   Projects can be shared across multiple sessions.
 
   Scenario: View list of projects
@@ -162,3 +168,33 @@ Feature: Project Management
     And I check the "Auto-trust mise" checkbox
     And I click "Save"
     Then the project should be updated with mise_auto_trust set to true
+
+  Scenario: Create a project with a publishing domain
+    When I navigate to the projects page
+    And I click "New Project"
+    When I fill in the name, a git repository URL, a run command, a service env var, and a domain "myapp.example.com"
+    And I click "Create"
+    Then the project should be created with domain "myapp.example.com"
+
+  Scenario: Domain is optional on project creation
+    When I navigate to the projects page
+    And I click "New Project"
+    When I fill in the name, a git repository URL, a run command, and a service env var, and leave the domain blank
+    And I click "Create"
+    Then the project should be created with no domain
+
+  Scenario: Two projects may share the same domain
+    Given there is an existing project with domain "shared.example.com"
+    When I navigate to the projects page
+    And I click "New Project"
+    When I fill in the name, a git repository URL, a run command, a service env var, and the domain "shared.example.com"
+    And I click "Create"
+    Then the project should be created with domain "shared.example.com"
+
+  Scenario: Edit a project to toggle basic auth
+    Given there is an existing project with `basic_auth_enabled` false
+    When I navigate to the projects page
+    And I click edit on the project
+    And I check the "Require basic auth" checkbox
+    And I click "Save"
+    Then the project should be updated with `basic_auth_enabled` set to true

@@ -15,6 +15,21 @@ defmodule Destila.Services.Target do
 
   @type kind :: :session | :project
 
+  @type t :: %__MODULE__{
+          kind: kind(),
+          id: String.t(),
+          cwd: String.t() | nil,
+          tmux_session_name: String.t(),
+          tmux_window: non_neg_integer(),
+          log_key: String.t(),
+          pubsub_topic: String.t(),
+          run_command: String.t() | nil,
+          setup_command: String.t() | nil,
+          service_env_var: String.t() | nil,
+          project: term() | nil,
+          workflow_session: term() | nil
+        }
+
   @enforce_keys [
     :kind,
     :id,

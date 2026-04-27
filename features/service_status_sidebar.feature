@@ -3,10 +3,13 @@ Feature: Service Status Sidebar
   configured as webservices (i.e. projects with both a run command and a
   service env var name). The item reflects whether the project's development
   service is running or stopped. Clicking the item navigates to the service
-  detail page at /services/sessions/<session_id>. When the service is running with a
-  port, a separate globe button opens http://localhost:<port> in a new browser
-  tab. The item is hidden entirely when the project is not a webservice or the
-  session has no project.
+  detail page at /services/sessions/<session_id>. When the service is running
+  with a port, a separate globe button opens the service URL in a new browser
+  tab. The URL is computed via Destila.Services.Url — when the session's
+  Caddy route is registered the globe link uses the session domain
+  (`<session_id>.<base_domain>`); otherwise it falls back to
+  http://localhost:<port>. The item is hidden entirely when the project is
+  not a webservice or the session has no project.
 
   Scenario: Service item visible when project is a webservice
     Given I am on a session detail page
@@ -47,9 +50,16 @@ Feature: Service Status Sidebar
     Given I am on a session detail page
     And the session's service_state status is "running"
     And the session's service_state has a port assigned
+    And the session's `caddy_route` is false
     Then a globe button should be visible
     And the globe button should be a link to http://localhost:<port>
     And the link should open in a new browser tab
+
+  Scenario: Globe button uses the session domain when Caddy route is registered
+    Given I am on a session detail page
+    And the session's service_state status is "running"
+    And the session's `caddy_route` is true
+    Then the globe button should be a link to http://<session_id>.<base_domain>
 
   Scenario: Globe button hidden when the service is stopped
     Given I am on a session detail page

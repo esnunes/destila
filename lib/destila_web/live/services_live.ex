@@ -16,6 +16,7 @@ defmodule DestilaWeb.ServicesLive do
 
   alias Destila.{Projects, PubSubHelper, Workflows}
   alias Destila.Projects.Project
+  alias Destila.Services.Url
 
   @impl true
   def mount(_params, _session, socket) do
@@ -208,7 +209,7 @@ defmodule DestilaWeb.ServicesLive do
                   title={"Open #{running_url(project)}"}
                 >
                   <.icon name="hero-arrow-top-right-on-square-micro" class="size-4" />
-                  localhost:{port(project)}
+                  {url_label(project)}
                 </a>
               </div>
             </div>
@@ -271,7 +272,7 @@ defmodule DestilaWeb.ServicesLive do
                   title={"Open #{running_url(ws)}"}
                 >
                   <.icon name="hero-arrow-top-right-on-square-micro" class="size-4" />
-                  localhost:{port(ws)}
+                  {url_label(ws)}
                 </a>
               </div>
             </div>
@@ -297,11 +298,26 @@ defmodule DestilaWeb.ServicesLive do
     end
   end
 
-  defp running_url(item) do
-    state = service_state(item)
+  defp running_url(%Project{} = project), do: Url.for_project(project)
+  defp running_url(%{id: _, service_state: _} = ws), do: Url.for_session(ws)
+  defp running_url(_), do: nil
 
-    if state["status"] == "running" and is_integer(state["port"]) do
-      "http://localhost:#{state["port"]}"
+  defp url_label(item) do
+    case running_url(item) do
+      nil ->
+        nil
+
+      url ->
+        case URI.parse(url) do
+          %URI{host: host, port: port} ->
+            cond do
+              host in [nil, "localhost"] -> "localhost:#{port || port(item)}"
+              true -> host
+            end
+
+          _ ->
+            url
+        end
     end
   end
 

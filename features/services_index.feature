@@ -13,7 +13,11 @@ Feature: Services Index Page
 
   Each row shows status, port, and the row's primary identifier (project
   name or session title). When a service is running, the row also exposes a
-  clickable localhost:<port> URL that opens in a new tab.
+  clickable URL that opens in a new tab. The URL is computed via
+  Destila.Services.Url — when a Caddy route is registered the URL uses the
+  configured domain (https for non-localhost hosts, http for `*.localhost`);
+  otherwise it falls back to http://localhost:<port>. See
+  features/caddy_proxy.feature for the full reverse-proxy contract.
 
   Clicking a project row navigates to /services/projects/:id.
   Clicking a session row navigates to /services/sessions/:id.
@@ -54,7 +58,7 @@ Feature: Services Index Page
     And the row should show the project name
 
   Scenario: Running service row shows a clickable localhost URL
-    Given a running webservice-backed session on port 4321
+    Given a running webservice-backed session on port 4321 whose project has no configured domain
     When I visit /services
     Then the row should expose an anchor to http://localhost:4321
     And the anchor should have target="_blank" and rel="noopener noreferrer"
@@ -80,7 +84,7 @@ Feature: Services Index Page
     Then I should see an empty-state message in the Session services section
 
   Scenario: List updates live when a service starts
-    Given I am on the /services page with a stopped webservice-backed session
+    Given I am on the /services page with a stopped webservice-backed session whose project has no configured domain
     When a service_status broadcast reports the service as running with a port
     Then the row should expose a clickable localhost URL
 
@@ -109,3 +113,18 @@ Feature: Services Index Page
     Given no project-level services exist
     When I visit /services
     Then I should see an empty-state message in the Project services section
+
+  Scenario: Project service row shows the domain URL when registered with Caddy
+    Given a running project service registered with Caddy at "myapp.example.com"
+    When I visit /services
+    Then the row should expose an anchor to https://myapp.example.com
+
+  Scenario: Session service row shows the session domain URL when registered with Caddy
+    Given a running session service registered with Caddy at "<session_id>.localhost"
+    When I visit /services
+    Then the row should expose an anchor to http://<session_id>.localhost
+
+  Scenario: Service row falls back to localhost when Caddy is unreachable
+    Given a running webservice-backed session on port 4321 whose `caddy_route` is false
+    When I visit /services
+    Then the row should expose an anchor to http://localhost:4321

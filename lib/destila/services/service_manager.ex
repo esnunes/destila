@@ -17,6 +17,7 @@ defmodule Destila.Services.ServiceManager do
 
   alias Destila.{Projects, PubSubHelper, Workflows}
   alias Destila.Projects.Project
+  alias Destila.Proxy.Caddy
   alias Destila.Services.{LogTailer, Logs, Target}
   alias Destila.Terminal.Tmux
   import Destila.StringHelper, only: [blank?: 1]
@@ -127,6 +128,7 @@ defmodule Destila.Services.ServiceManager do
   """
   def cleanup_target(%Target{} = target) do
     Tmux.kill_window(Target.tmux_address(target))
+    unregister_caddy(target)
     LogTailer.stop_for(target.log_key)
     File.rm(Logs.log_path(target.log_key))
     :ok
@@ -153,57 +155,104 @@ defmodule Destila.Services.ServiceManager do
         {:error, "Target has no working directory configured"}
 
       true ->
-        port = reserve_port()
-        log_path = Logs.log_path(target.log_key)
-        tmux_address = Target.tmux_address(target)
+        case Caddy.preflight(target) do
+          :ok ->
+            do_start_after_preflight(target)
 
-        Logs.ensure_log_dir()
-        File.write!(log_path, "")
-        LogTailer.stop_for(target.log_key)
+          {:error, :missing_credentials} ->
+            {:error,
+             "Basic auth is required for this service but DESTILA_BASIC_AUTH_USER / DESTILA_BASIC_AUTH_PASSWORD is not set"}
+        end
+    end
+  end
 
-        Tmux.ensure_session(target.tmux_session_name, target.cwd)
-        Tmux.kill_window(tmux_address)
-        Tmux.new_window(tmux_address, cwd: target.cwd)
-        Tmux.pipe_pane(tmux_address, "cat >> #{Tmux.escape_shell(log_path)}")
-        LogTailer.start_for(target.log_key, topic: target.pubsub_topic)
+  defp do_start_after_preflight(%Target{} = target) do
+    port = __MODULE__.reserve_port()
+    log_path = Logs.log_path(target.log_key)
+    tmux_address = Target.tmux_address(target)
 
-        Tmux.send_keys(
-          tmux_address,
-          build_service_command(
-            target.setup_command,
-            target.run_command,
-            target.service_env_var,
-            port
-          )
+    Logs.ensure_log_dir()
+    File.write!(log_path, "")
+    LogTailer.stop_for(target.log_key)
+
+    Tmux.ensure_session(target.tmux_session_name, target.cwd)
+    Tmux.kill_window(tmux_address)
+    Tmux.new_window(tmux_address, cwd: target.cwd)
+    Tmux.pipe_pane(tmux_address, "cat >> #{Tmux.escape_shell(log_path)}")
+    LogTailer.start_for(target.log_key, topic: target.pubsub_topic)
+
+    Tmux.send_keys(
+      tmux_address,
+      build_service_command(
+        target.setup_command,
+        target.run_command,
+        target.service_env_var,
+        port
+      )
+    )
+
+    starting_state = %{
+      "status" => "starting",
+      "port" => port,
+      "run_command" => target.run_command,
+      "setup_command" => target.setup_command
+    }
+
+    persist_session_state(target, starting_state)
+    broadcast_status(target, starting_state)
+    Logger.info("ServiceManager: #{target.log_key} starting; waiting for port #{port}")
+
+    if wait_for_port(port, @startup_timeout_ms) do
+      Logger.info("ServiceManager: #{target.log_key} port responded; marking running")
+      caddy_route = register_caddy(target, port)
+
+      running_state =
+        starting_state |> Map.put("status", "running") |> Map.put("caddy_route", caddy_route)
+
+      persist_session_state(target, running_state)
+      broadcast_status(target, running_state)
+      {:ok, running_state}
+    else
+      Logger.warning(
+        "ServiceManager: #{target.log_key} port did not respond within #{@startup_timeout_ms}ms; stopping"
+      )
+
+      do_stop(target)
+
+      {:error,
+       "Service did not become ready within #{div(@startup_timeout_ms, 1000)}s; stopped to avoid leaving an unreachable process running"}
+    end
+  end
+
+  defp register_caddy(%Target{} = target, port) do
+    case Caddy.register(target, port) do
+      {:ok, :registered} ->
+        true
+
+      {:ok, :no_proxy} ->
+        false
+
+      {:error, {:caddy_status, status, body}} ->
+        Logger.warning(
+          "ServiceManager: #{target.log_key} Caddy register failed with status #{status}: #{inspect(body)}"
         )
 
-        starting_state = %{
-          "status" => "starting",
-          "port" => port,
-          "run_command" => target.run_command,
-          "setup_command" => target.setup_command
-        }
+        PubSubHelper.broadcast_service_proxy_error(target, {:caddy_status, status, body})
+        false
 
-        persist_session_state(target, starting_state)
-        broadcast_status(target, starting_state)
-        Logger.info("ServiceManager: #{target.log_key} starting; waiting for port #{port}")
+      {:error, :missing_credentials} ->
+        Logger.warning(
+          "ServiceManager: #{target.log_key} Caddy register reported missing credentials after preflight"
+        )
 
-        if wait_for_port(port, @startup_timeout_ms) do
-          Logger.info("ServiceManager: #{target.log_key} port responded; marking running")
-          running_state = %{starting_state | "status" => "running"}
-          persist_session_state(target, running_state)
-          broadcast_status(target, running_state)
-          {:ok, running_state}
-        else
-          Logger.warning(
-            "ServiceManager: #{target.log_key} port did not respond within #{@startup_timeout_ms}ms; stopping"
-          )
+        false
 
-          do_stop(target)
+      {:error, reason} ->
+        Logger.warning(
+          "ServiceManager: #{target.log_key} Caddy register failed: #{inspect(reason)}"
+        )
 
-          {:error,
-           "Service did not become ready within #{div(@startup_timeout_ms, 1000)}s; stopped to avoid leaving an unreachable process running"}
-        end
+        false
     end
   end
 
@@ -212,6 +261,7 @@ defmodule Destila.Services.ServiceManager do
     Tmux.term_panes(tmux_address)
     Tmux.kill_window(tmux_address)
     LogTailer.stop_for(target.log_key)
+    unregister_caddy(target)
 
     prior_state = current_state(target) || %{}
 
@@ -219,11 +269,26 @@ defmodule Destila.Services.ServiceManager do
       prior_state
       |> Map.take(["port", "run_command", "setup_command"])
       |> Map.put("status", "stopped")
+      |> Map.put("caddy_route", false)
 
     persist_session_state(target, service_state)
     broadcast_status(target, service_state)
 
     {:ok, service_state}
+  end
+
+  defp unregister_caddy(%Target{} = target) do
+    case Caddy.unregister(target) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "ServiceManager: #{target.log_key} Caddy unregister failed: #{inspect(reason)}"
+        )
+
+        :ok
+    end
   end
 
   defp do_restart(%Target{} = target) do

@@ -4,6 +4,12 @@ Feature: Project-Level Services
   baseline-comparison and shared preview surface that stays up across
   session lifetimes.
 
+  When the project has a `domain` configured, ServiceManager registers a
+  Caddy route on start and unregisters it on stop. When the Caddy admin URL
+  is unreachable, register/unregister are silent no-ops — the local service
+  still starts/stops and the UI advertises the localhost URL. See
+  features/caddy_proxy.feature for the full reverse-proxy contract.
+
   Owner: a project (singleton — at most one project-level service per project).
   Working directory: project.local_folder (or its effective folder for
   clone-only projects).
@@ -125,3 +131,21 @@ Feature: Project-Level Services
     Given an active workflow session whose project has a project-level service
     When the session is marked done
     Then a ProjectServicePullRestartWorker job should be enqueued with that project_id
+
+  Scenario: Start triggers Caddy register when domain is set
+    Given a project whose `domain` is "myapp.example.com" and Caddy is reachable
+    When ProjectServices.start/1 is called for that project
+    Then ServiceManager registers a Caddy route for the project
+    And service_state["caddy_route"] becomes true once the service is running
+
+  Scenario: Start makes no Caddy calls when no domain is set
+    Given a project with no configured `domain`
+    When ProjectServices.start/1 is called for that project
+    Then no HTTP calls are made to the Caddy admin API
+    And service_state["caddy_route"] remains false
+
+  Scenario: Stop triggers Caddy unregister
+    Given a running project service registered with Caddy
+    When ProjectServices.stop/1 is called
+    Then ServiceManager unregisters the Caddy route for the project
+    And service_state["caddy_route"] becomes false
