@@ -460,7 +460,7 @@ defmodule Destila.Proxy.CaddyTest do
   end
 
   describe "preflight/1" do
-    test "session with both creds returns :ok and makes zero HTTP calls" do
+    test "session with both creds returns :ok without probing Caddy" do
       agent = start_call_recorder()
 
       Req.Test.stub(Caddy, fn conn ->
@@ -482,13 +482,32 @@ defmodule Destila.Proxy.CaddyTest do
       assert Caddy.preflight(project_target("myapp.example.com", false)) == :ok
     end
 
-    test "session target with missing password returns :missing_credentials" do
+    test "session target with missing password returns :missing_credentials when Caddy is reachable" do
       set_credentials("alice", nil)
+
+      Req.Test.stub(Caddy, fn conn ->
+        Req.Test.json(conn, %{})
+      end)
+
       assert Caddy.preflight(session_target()) == {:error, :missing_credentials}
     end
 
-    test "project target with domain + basic_auth + missing user returns :missing_credentials" do
+    test "session target with missing creds returns :ok when Caddy is unreachable" do
+      set_credentials(nil, nil)
+
+      Req.Test.stub(Caddy, fn conn ->
+        Req.Test.transport_error(conn, :econnrefused)
+      end)
+
+      assert Caddy.preflight(session_target()) == :ok
+    end
+
+    test "project target with domain + basic_auth + missing user returns :missing_credentials when Caddy is reachable" do
       set_credentials(nil, "secret")
+
+      Req.Test.stub(Caddy, fn conn ->
+        Req.Test.json(conn, %{})
+      end)
 
       assert Caddy.preflight(project_target("myapp.example.com", true)) ==
                {:error, :missing_credentials}

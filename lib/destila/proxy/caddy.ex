@@ -10,8 +10,11 @@ defmodule Destila.Proxy.Caddy do
       `{:ok, :registered | :no_proxy} | {:error, term}`.
     * `unregister/1` — DELETE the route by deterministic `@id`. Returns
       `:ok | {:error, term}`.
-    * `preflight/1` — pure check (no HTTP) that asserts basic-auth
-      credentials are configured when the target requires them.
+    * `preflight/1` — checks that basic-auth credentials are configured
+      when the target requires them. Probes Caddy first; when Caddy is
+      unreachable, returns `:ok` so the local service can still start
+      (it will register with `:no_proxy`). Missing credentials only
+      block start when a proxy is actually available.
     * `probe/0` — TCP/HTTP reachability probe of the admin URL.
 
   All HTTP calls go through `Req`. Tests inject a `plug` via
@@ -69,6 +72,7 @@ defmodule Destila.Proxy.Caddy do
       is_nil(host_for(target)) -> :ok
       not basic_auth_required?(target) -> :ok
       credentials_configured?() -> :ok
+      probe() == :unreachable -> :ok
       true -> {:error, :missing_credentials}
     end
   end

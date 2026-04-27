@@ -104,16 +104,22 @@ defmodule DestilaWeb.ServiceDetailLive do
   def handle_event("start_service", _params, %{assigns: %{target_kind: :session}} = socket) do
     ws = socket.assigns.workflow_session
     opts = [worktree_path: socket.assigns.worktree_path]
+    parent = self()
 
     Task.start(fn ->
       try do
-        ServiceManager.execute(ws, "start", opts)
+        case ServiceManager.execute(ws, "start", opts) do
+          {:ok, _state} -> :ok
+          {:error, reason} -> send(parent, {:service_start_failed, reason})
+        end
       rescue
         e ->
           Logger.error(
             "start_service task crashed for #{ws.id}: " <>
               Exception.format(:error, e, __STACKTRACE__)
           )
+
+          send(parent, {:service_start_failed, Exception.message(e)})
       end
     end)
 
@@ -122,16 +128,22 @@ defmodule DestilaWeb.ServiceDetailLive do
 
   def handle_event("start_service", _params, %{assigns: %{target_kind: :project}} = socket) do
     project = socket.assigns.project
+    parent = self()
 
     Task.start(fn ->
       try do
-        ProjectServices.start(project)
+        case ProjectServices.start(project) do
+          {:ok, _state} -> :ok
+          {:error, reason} -> send(parent, {:service_start_failed, reason})
+        end
       rescue
         e ->
           Logger.error(
             "start_service task crashed for project #{project.id}: " <>
               Exception.format(:error, e, __STACKTRACE__)
           )
+
+          send(parent, {:service_start_failed, Exception.message(e)})
       end
     end)
 
@@ -285,6 +297,10 @@ defmodule DestilaWeb.ServiceDetailLive do
        :error,
        "Pull failed (#{stage}): #{format_error_details(details)}"
      )}
+  end
+
+  def handle_info({:service_start_failed, reason}, socket) do
+    {:noreply, put_flash(socket, :error, "Failed to start service: #{reason}")}
   end
 
   def handle_info({:service_proxy_error, reason}, socket) do
