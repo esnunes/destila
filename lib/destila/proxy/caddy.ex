@@ -165,6 +165,11 @@ defmodule Destila.Proxy.Caddy do
         Logger.warning(
           "Destila.Proxy.Caddy: pre-register DELETE returned #{status} for #{route_id}; continuing"
         )
+
+      {:error, {:transport, reason}} ->
+        Logger.warning(
+          "Destila.Proxy.Caddy: pre-register DELETE transport error for #{route_id}: #{inspect(reason)}; continuing"
+        )
     end
 
     payload = route_json(target, port, basic_auth?)
