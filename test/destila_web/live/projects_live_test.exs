@@ -551,6 +551,147 @@ defmodule DestilaWeb.ProjectsLiveTest do
     end
   end
 
+  describe "domain and basic auth" do
+    @tag feature: @feature, scenario: "Create a project with a domain"
+    test "creates a project with a domain", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+      assert has_element?(view, "#project-form-create-domain")
+
+      view
+      |> form("#project-form-create-form", %{
+        "name" => "Domain Project",
+        "git_repo_url" => "https://github.com/test/domain",
+        "domain" => "myapp.example.com"
+      })
+      |> render_submit()
+
+      project = Enum.find(Destila.Projects.list_projects(), &(&1.name == "Domain Project"))
+      assert project.domain == "myapp.example.com"
+    end
+
+    @tag feature: @feature, scenario: "Create a project with basic auth enabled"
+    test "creates a project with basic auth enabled", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+      assert has_element?(view, "#project-form-create-basic-auth-enabled")
+
+      view
+      |> form("#project-form-create-form", %{
+        "name" => "Basic Auth Project",
+        "git_repo_url" => "https://github.com/test/basic-auth",
+        "basic_auth_enabled" => "true"
+      })
+      |> render_submit()
+
+      project =
+        Enum.find(Destila.Projects.list_projects(), &(&1.name == "Basic Auth Project"))
+
+      assert project.basic_auth_enabled == true
+    end
+
+    @tag feature: @feature, scenario: "Create a project leaving domain blank"
+    test "defaults domain to nil and basic_auth_enabled to false when left blank", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      view
+      |> form("#project-form-create-form", %{
+        "name" => "Blank Domain Project",
+        "git_repo_url" => "https://github.com/test/blank-domain"
+      })
+      |> render_submit()
+
+      project =
+        Enum.find(Destila.Projects.list_projects(), &(&1.name == "Blank Domain Project"))
+
+      assert project.domain == nil
+      assert project.basic_auth_enabled == false
+    end
+
+    @tag feature: @feature, scenario: "Edit a project to set or clear the domain"
+    test "edits a project to set the domain", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Toggle Domain Project",
+          git_repo_url: "https://github.com/test/toggle-domain"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      view
+      |> form("#project-form-#{project.id}-form", %{"domain" => "edited.example.com"})
+      |> render_submit()
+
+      reloaded = Destila.Projects.get_project(project.id)
+      assert reloaded.domain == "edited.example.com"
+    end
+
+    @tag feature: @feature, scenario: "Edit a project to toggle basic auth"
+    test "edits a project to toggle basic_auth_enabled", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Toggle Basic Auth Project",
+          git_repo_url: "https://github.com/test/toggle-ba",
+          basic_auth_enabled: false
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      view
+      |> form("#project-form-#{project.id}-form", %{"basic_auth_enabled" => "true"})
+      |> render_submit()
+
+      reloaded = Destila.Projects.get_project(project.id)
+      assert reloaded.basic_auth_enabled == true
+    end
+
+    @tag feature: @feature, scenario: "Project create form rejects invalid domains"
+    test "submitting an invalid domain shows an inline error", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#new-project-btn") |> render_click()
+
+      html =
+        view
+        |> form("#project-form-create-form", %{
+          "name" => "Bad Domain Project",
+          "git_repo_url" => "https://github.com/test/bad-domain",
+          "domain" => "app..example.com"
+        })
+        |> render_submit()
+
+      assert html =~ "valid hostname"
+
+      assert Enum.find(Destila.Projects.list_projects(), &(&1.name == "Bad Domain Project")) ==
+               nil
+    end
+
+    test "edit modal shows the domain and basic_auth fields", %{conn: conn} do
+      {:ok, project} =
+        Destila.Projects.create_project(%{
+          name: "Edit Modal Project",
+          git_repo_url: "https://github.com/test/edit-modal",
+          domain: "myapp.example.com",
+          basic_auth_enabled: true
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/projects")
+
+      view |> element("#edit-project-#{project.id}") |> render_click()
+
+      assert has_element?(view, "#project-form-#{project.id}-domain")
+      assert has_element?(view, "#project-form-#{project.id}-basic-auth-enabled")
+    end
+  end
+
   describe "delete project" do
     @tag feature: @feature, scenario: "Delete a project not linked to any sessions"
     test "deletes a project not linked to sessions", %{conn: conn} do

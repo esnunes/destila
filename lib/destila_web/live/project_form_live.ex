@@ -22,7 +22,9 @@ defmodule DestilaWeb.ProjectFormLive do
          "setup_command" => project.setup_command || "",
          "run_command" => project.run_command || "",
          "service_env_var" => project.service_env_var || "",
-         "mise_auto_trust" => project.mise_auto_trust || false
+         "mise_auto_trust" => project.mise_auto_trust || false,
+         "domain" => project.domain || "",
+         "basic_auth_enabled" => project.basic_auth_enabled || false
        })
      end)
      |> assign_new(:errors, fn -> %{} end)
@@ -41,7 +43,9 @@ defmodule DestilaWeb.ProjectFormLive do
       setup_command: non_blank(params["setup_command"]),
       run_command: non_blank(params["run_command"]),
       service_env_var: non_blank(params["service_env_var"]),
-      mise_auto_trust: to_bool(params["mise_auto_trust"])
+      mise_auto_trust: to_bool(params["mise_auto_trust"]),
+      domain: non_blank(params["domain"]),
+      basic_auth_enabled: to_bool(params["basic_auth_enabled"])
     }
 
     result =
@@ -77,6 +81,7 @@ defmodule DestilaWeb.ProjectFormLive do
       {:name, {msg, _}}, acc -> Map.put(acc, :name, msg)
       {:git_repo_url, {msg, _}}, acc -> Map.put(acc, :location, msg)
       {:service_env_var, {msg, _}}, acc -> Map.put(acc, :service_env_var, msg)
+      {:domain, {msg, _}}, acc -> Map.put(acc, :domain, msg)
       _, acc -> acc
     end)
   end
@@ -243,6 +248,51 @@ defmodule DestilaWeb.ProjectFormLive do
           />
           <p :if={@errors[:service_env_var]} class="text-xs text-error mt-1">
             {@errors[:service_env_var]}
+          </p>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <label class="fieldset-label text-xs font-medium" for={"#{@id}-domain"}>
+            Domain
+          </label>
+          <input
+            type="text"
+            id={"#{@id}-domain"}
+            name="domain"
+            value={@form["domain"].value}
+            placeholder="myapp.example.com"
+            aria-invalid={@errors[:domain] && "true"}
+            class={[
+              "input input-bordered w-full input-sm",
+              @errors[:domain] && "input-error"
+            ]}
+          />
+          <p :if={@errors[:domain]} class="text-xs text-error mt-1">{@errors[:domain]}</p>
+          <p :if={!@errors[:domain]} class="text-xs text-base-content/50 mt-1">
+            Optional. When set, this project's service is reachable at this domain via Caddy.
+          </p>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <input type="hidden" name="basic_auth_enabled" value="false" />
+          <label
+            class="fieldset-label text-xs font-medium flex items-center gap-2 cursor-pointer"
+            for={"#{@id}-basic-auth-enabled"}
+          >
+            <input
+              type="checkbox"
+              id={"#{@id}-basic-auth-enabled"}
+              name="basic_auth_enabled"
+              value="true"
+              checked={to_bool(@form["basic_auth_enabled"].value)}
+              class="checkbox checkbox-sm"
+            />
+            <span>Wrap in basic auth</span>
+          </label>
+          <p class="text-xs text-base-content/50 mt-1">
+            Wrap this service in basic auth using the credentials configured in
+            <code class="font-mono" phx-no-curly-interpolation>DESTILA_BASIC_AUTH_USER</code>
+            / <code class="font-mono" phx-no-curly-interpolation>DESTILA_BASIC_AUTH_PASSWORD</code>.
           </p>
         </fieldset>
       </div>

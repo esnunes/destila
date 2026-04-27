@@ -13,6 +13,8 @@ defmodule Destila.Projects.Project do
     field(:setup_command, :string)
     field(:service_env_var, :string)
     field(:mise_auto_trust, :boolean, default: false)
+    field(:domain, :string)
+    field(:basic_auth_enabled, :boolean, default: false)
     field(:archived_at, :utc_datetime)
     field(:service_state, :map)
 
@@ -31,6 +33,8 @@ defmodule Destila.Projects.Project do
       :setup_command,
       :service_env_var,
       :mise_auto_trust,
+      :domain,
+      :basic_auth_enabled,
       :archived_at,
       :service_state
     ])
@@ -38,6 +42,7 @@ defmodule Destila.Projects.Project do
     |> validate_at_least_one_location()
     |> validate_git_repo_url()
     |> validate_service_env_var()
+    |> validate_domain()
   end
 
   @doc """
@@ -117,5 +122,54 @@ defmodule Destila.Projects.Project do
       true ->
         changeset
     end
+  end
+
+  @label_pattern ~r/^[A-Za-z0-9-]+$/
+
+  defp validate_domain(changeset) do
+    case get_field(changeset, :domain) do
+      nil ->
+        changeset
+
+      value when is_binary(value) ->
+        case normalize_domain(value) do
+          "" ->
+            put_change(changeset, :domain, nil)
+
+          normalized ->
+            cond do
+              String.length(normalized) > 253 ->
+                add_error(changeset, :domain, "must be at most 253 characters")
+
+              not valid_labels?(normalized) ->
+                add_error(
+                  changeset,
+                  :domain,
+                  "must be a valid hostname (RFC 1123): letters, digits and hyphens, no empty labels, no leading/trailing hyphens, labels up to 63 chars"
+                )
+
+              true ->
+                put_change(changeset, :domain, normalized)
+            end
+        end
+    end
+  end
+
+  defp normalize_domain(value) do
+    value
+    |> String.trim()
+    |> String.trim_trailing(".")
+  end
+
+  defp valid_labels?(domain) do
+    labels = String.split(domain, ".")
+
+    Enum.all?(labels, fn label ->
+      byte_size(label) > 0 and
+        byte_size(label) <= 63 and
+        Regex.match?(@label_pattern, label) and
+        not String.starts_with?(label, "-") and
+        not String.ends_with?(label, "-")
+    end)
   end
 end

@@ -1074,7 +1074,7 @@ defmodule DestilaWeb.WorkflowRunnerLive do
                       <% service_running? = service_status == "running" %>
                       <% service_starting? = service_status == "starting" %>
                       <% service_active? = service_running? or service_starting? %>
-                      <% url = service_url(@project, @workflow_session.service_state) %>
+                      <% url = service_url(@workflow_session) %>
                       <div
                         id="service-status-item"
                         class="w-full flex items-center gap-1 px-1 py-1.5 rounded-md hover:bg-base-200/60 transition-colors duration-150 group"
@@ -1565,10 +1565,9 @@ defmodule DestilaWeb.WorkflowRunnerLive do
     |> assign(:exported_metadata, Enum.filter(all, & &1.exported))
   end
 
-  defp service_url(_project, %{"status" => "running", "port" => port}) when is_integer(port),
-    do: "http://localhost:#{port}"
-
-  defp service_url(_project, _service_state), do: nil
+  defp service_url(workflow_session) do
+    Destila.Services.Url.for_session(workflow_session)
+  end
 
   defp assign_worktree_path(socket, ws_id) do
     ai_session = AI.get_ai_session_for_workflow(ws_id)

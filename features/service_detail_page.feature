@@ -5,6 +5,12 @@ Feature: Service Detail Page
   URL, configured commands and a live tail of the service log, plus lifecycle
   controls (Start, Stop, Restart, Clear logs).
 
+  The advertised URL is computed via Destila.Services.Url. When the project has
+  a configured `domain` and `service_state["caddy_route"]` is true, the URL is
+  the domain (https for non-localhost hosts, http for `*.localhost`). Otherwise
+  the URL falls back to http://localhost:<port>. See
+  features/caddy_proxy.feature for the full reverse-proxy contract.
+
   The :project branch additionally exposes:
     * a "Pull latest & restart" button that fetches the default branch,
       fast-forwards, and restarts the service
@@ -22,7 +28,7 @@ Feature: Service Detail Page
   sequences display correctly.
 
   Scenario: Running service renders status, port, URL, and commands
-    Given I visit the service detail page for a running service
+    Given I visit the service detail page for a running service whose project has no configured domain
     Then I should see the service URL pointing at http://localhost:<port>
     And I should see the configured run_command
     And I should see the configured setup_command
@@ -88,7 +94,7 @@ Feature: Service Detail Page
     Then the server should push the file contents to the terminal as an output event
 
   Scenario: Status update from PubSub refreshes the header
-    Given I am on the service detail page
+    Given I am on the service detail page for a service whose project has no configured domain
     When a service_status broadcast reports the service as running with a port
     Then the page should show the corresponding localhost URL link
 
@@ -137,3 +143,20 @@ Feature: Service Detail Page
     When I click "Remove service"
     Then the project's service_state should be cleared
     And I should be navigated back to /services
+
+  Scenario: Domain URL uses https for non-localhost hosts
+    Given I visit /services/projects/<project_id> for a running project service registered with Caddy at "myapp.example.com"
+    Then I should see the service URL pointing at https://myapp.example.com
+
+  Scenario: Domain URL uses http for *.localhost hosts
+    Given I visit /services/sessions/<session_id> for a running session service registered with Caddy at "<session_id>.localhost"
+    Then I should see the service URL pointing at http://<session_id>.localhost
+
+  Scenario: Localhost fallback when Caddy is unreachable
+    Given I visit the service detail page for a running service whose `caddy_route` is false
+    Then I should see the service URL pointing at http://localhost:<port>
+
+  Scenario: Caddy register failure surfaces an error flash
+    Given I am on the service detail page
+    When a {:service_proxy_error, _} broadcast is received on the service topic
+    Then the page should display an error flash mentioning Caddy

@@ -33,6 +33,12 @@ end
 config :destila, DestilaWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+config :destila, :proxy,
+  base_domain: System.get_env("DESTILA_BASE_DOMAIN", "localhost"),
+  admin_url: System.get_env("DESTILA_CADDY_ADMIN_URL", "http://localhost:2019"),
+  basic_auth_user: System.get_env("DESTILA_BASIC_AUTH_USER"),
+  basic_auth_password: System.get_env("DESTILA_BASIC_AUTH_PASSWORD")
+
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_PATH") ||

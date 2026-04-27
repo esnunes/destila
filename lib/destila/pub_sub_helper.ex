@@ -84,6 +84,22 @@ defmodule Destila.PubSubHelper do
     )
   end
 
+  def broadcast_service_proxy_error(%{kind: :session, id: ws_id}, reason) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      service_topic(ws_id),
+      {:service_proxy_error, reason}
+    )
+  end
+
+  def broadcast_service_proxy_error(%{kind: :project, id: project_id}, reason) do
+    Phoenix.PubSub.broadcast(
+      Destila.PubSub,
+      project_service_topic(project_id),
+      {:service_proxy_error, reason}
+    )
+  end
+
   def claude_auth_login_topic, do: "claude_auth_login"
 
   def broadcast_claude_auth_login(snapshot) do

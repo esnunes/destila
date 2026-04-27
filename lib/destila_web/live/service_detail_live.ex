@@ -287,6 +287,15 @@ defmodule DestilaWeb.ServiceDetailLive do
      )}
   end
 
+  def handle_info({:service_proxy_error, reason}, socket) do
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       "Caddy failed to register the route: #{format_proxy_error(reason)}"
+     )}
+  end
+
   def handle_info(
         {:workflow_session_updated, updated_ws},
         %{assigns: %{target_kind: :session}} = socket
@@ -374,7 +383,12 @@ defmodule DestilaWeb.ServiceDetailLive do
               >
                 <.icon name="hero-command-line-micro" class="size-4" /> Terminal
               </.link>
-              <.url_link state={@service_state} />
+              <.url_link
+                target_kind={@target_kind}
+                project={assigns[:project]}
+                workflow_session={assigns[:workflow_session]}
+                state={@service_state}
+              />
               <.control_buttons state={@service_state} target_kind={@target_kind} />
             </div>
           </div>
@@ -638,31 +652,53 @@ defmodule DestilaWeb.ServiceDetailLive do
     """
   end
 
+  attr :target_kind, :atom, required: true
+  attr :project, :map, default: nil
+  attr :workflow_session, :map, default: nil
   attr :state, :map, required: true
 
   defp url_link(assigns) do
-    status = assigns.state["status"]
-    port = assigns.state["port"]
+    url =
+      case assigns.target_kind do
+        :project ->
+          project = %{assigns.project | service_state: assigns.state}
+          Destila.Services.Url.for_project(project)
 
-    cond do
-      status == "running" and is_integer(port) ->
-        assigns = assign(assigns, :port, port)
+        :session ->
+          Destila.Services.Url.for_session(%{
+            id: assigns.workflow_session.id,
+            service_state: assigns.state
+          })
+      end
+
+    case url do
+      nil ->
+        ~H""
+
+      url ->
+        label = url_link_label(url, assigns.state["port"])
+        assigns = assign(assigns, url: url, label: label)
 
         ~H"""
         <a
           id="service-url-link"
-          href={"http://localhost:#{@port}"}
+          href={@url}
           target="_blank"
           rel="noopener noreferrer"
           class="btn btn-soft btn-sm"
-          title={"Open http://localhost:#{@port}"}
+          title={"Open #{@url}"}
         >
-          <.icon name="hero-arrow-top-right-on-square-micro" class="size-4" /> localhost:{@port}
+          <.icon name="hero-arrow-top-right-on-square-micro" class="size-4" /> {@label}
         </a>
         """
+    end
+  end
 
-      true ->
-        ~H""
+  defp url_link_label(url, port) do
+    case URI.parse(url) do
+      %URI{host: host} when host in [nil, "localhost"] -> "localhost:#{port}"
+      %URI{host: host} -> host
+      _ -> url
     end
   end
 
@@ -756,6 +792,14 @@ defmodule DestilaWeb.ServiceDetailLive do
 
   defp format_error_details(details) when is_binary(details), do: details
   defp format_error_details(details), do: inspect(details)
+
+  defp format_proxy_error({:caddy_status, status, body}) when is_binary(body),
+    do: "Caddy returned #{status}: #{body}"
+
+  defp format_proxy_error({:caddy_status, status, body}),
+    do: "Caddy returned #{status}: #{inspect(body)}"
+
+  defp format_proxy_error(reason), do: inspect(reason)
 
   # --- Private: log helpers ---
 

@@ -192,4 +192,211 @@ defmodule Destila.Projects.ProjectTest do
       assert loaded.setup_command == "mix deps.get"
     end
   end
+
+  describe "changeset/2 with domain" do
+    @tag feature: "project_management",
+         scenario: "Project domain accepts a valid hostname"
+    test "accepts a valid fully qualified hostname" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: "app.example.com"})
+        )
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :domain) == "app.example.com"
+    end
+
+    @tag feature: "project_management",
+         scenario: "Project domain is optional"
+    test "blank domain is valid and persisted as nil" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: ""})
+        )
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :domain) == nil
+    end
+
+    test "nil domain is valid" do
+      changeset = Project.changeset(%Project{}, @valid_attrs)
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :domain) == nil
+    end
+
+    @tag feature: "project_management",
+         scenario: "Project domain trims trailing dots"
+    test "trailing dot is trimmed before persistence" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: "app.example.com."})
+        )
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :domain) == "app.example.com"
+    end
+
+    @tag feature: "project_management",
+         scenario: "Project domain accepts single-label hostnames"
+    test "single-label hostname is accepted" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: "localhost"})
+        )
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :domain) == "localhost"
+    end
+
+    @tag feature: "project_management",
+         scenario: "Project domain enforces RFC 1123 length limits"
+    test "domain of exactly 253 chars is accepted" do
+      domain =
+        String.duplicate("a", 63) <>
+          "." <>
+          String.duplicate("b", 63) <>
+          "." <>
+          String.duplicate("c", 63) <>
+          "." <>
+          String.duplicate("d", 61)
+
+      assert String.length(domain) == 253
+
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: domain})
+        )
+
+      assert changeset.valid?
+    end
+
+    test "domain of 254 chars is rejected" do
+      label = String.duplicate("a", 63)
+      domain = label <> "." <> label <> "." <> label <> "." <> String.duplicate("a", 62)
+      assert String.length(domain) == 254
+
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: domain})
+        )
+
+      refute changeset.valid?
+      assert {"must be at most 253 characters", _} = changeset.errors[:domain]
+    end
+
+    test "label of exactly 63 chars is accepted" do
+      label = String.duplicate("a", 63)
+
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: label <> ".com"})
+        )
+
+      assert changeset.valid?
+    end
+
+    test "label of 64 chars is rejected" do
+      label = String.duplicate("a", 64)
+
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: label <> ".com"})
+        )
+
+      refute changeset.valid?
+      assert changeset.errors[:domain]
+    end
+
+    @tag feature: "project_management",
+         scenario: "Project domain rejects malformed hostnames"
+    test "rejects empty label (consecutive dots)" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: "app..example.com"})
+        )
+
+      refute changeset.valid?
+      assert changeset.errors[:domain]
+    end
+
+    test "rejects leading hyphen in a label" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: "-app.example.com"})
+        )
+
+      refute changeset.valid?
+    end
+
+    test "rejects trailing hyphen in a label" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: "app-.example.com"})
+        )
+
+      refute changeset.valid?
+    end
+
+    test "rejects underscore in a label" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: "app_x.example.com"})
+        )
+
+      refute changeset.valid?
+    end
+
+    test "rejects whitespace in a label" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{domain: "app x.example.com"})
+        )
+
+      refute changeset.valid?
+    end
+
+    @tag feature: "project_management",
+         scenario: "Project domain has no uniqueness constraint"
+    test "two changesets with the same domain both validate cleanly" do
+      attrs = Map.merge(@valid_attrs, %{domain: "shared.example.com"})
+
+      assert Project.changeset(%Project{}, attrs).valid?
+      assert Project.changeset(%Project{}, attrs).valid?
+    end
+  end
+
+  describe "changeset/2 with basic_auth_enabled" do
+    @tag feature: "project_management",
+         scenario: "Project basic_auth_enabled defaults to false"
+    test "defaults to false" do
+      changeset = Project.changeset(%Project{}, @valid_attrs)
+      assert Ecto.Changeset.get_field(changeset, :basic_auth_enabled) == false
+    end
+
+    @tag feature: "project_management",
+         scenario: "Project basic_auth_enabled can be enabled regardless of domain"
+    test "accepts true regardless of domain" do
+      changeset =
+        Project.changeset(
+          %Project{},
+          Map.merge(@valid_attrs, %{basic_auth_enabled: true})
+        )
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :basic_auth_enabled) == true
+    end
+  end
 end
