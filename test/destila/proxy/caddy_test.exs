@@ -109,6 +109,14 @@ defmodule Destila.Proxy.CaddyTest do
     pid
   end
 
+  defp existing_config do
+    %{
+      "apps" => %{
+        "http" => %{"servers" => %{"srv0" => %{"listen" => [":80"], "routes" => []}}}
+      }
+    }
+  end
+
   describe "route_id/1" do
     @tag feature: @feature,
          scenario:
@@ -188,7 +196,7 @@ defmodule Destila.Proxy.CaddyTest do
 
         case {conn.method, conn.request_path} do
           {"GET", "/config/"} ->
-            Req.Test.json(conn, %{})
+            Req.Test.json(conn, existing_config())
 
           {"DELETE", "/id/destila-session-sess-1"} ->
             Req.Test.json(conn, %{})
@@ -232,7 +240,7 @@ defmodule Destila.Proxy.CaddyTest do
         record_call(conn, agent)
 
         case {conn.method, conn.request_path} do
-          {"GET", "/config/"} -> Req.Test.json(conn, %{})
+          {"GET", "/config/"} -> Req.Test.json(conn, existing_config())
           {"DELETE", _} -> Req.Test.json(conn, %{})
           {"POST", _} -> Req.Test.json(conn, %{})
         end
@@ -298,7 +306,7 @@ defmodule Destila.Proxy.CaddyTest do
       Req.Test.stub(Caddy, fn conn ->
         case {conn.method, conn.request_path} do
           {"GET", "/config/"} ->
-            Req.Test.json(conn, %{})
+            Req.Test.json(conn, existing_config())
 
           {"DELETE", _} ->
             conn
@@ -311,6 +319,44 @@ defmodule Destila.Proxy.CaddyTest do
       end)
 
       assert Caddy.register(session_target(), 4321) == {:ok, :registered}
+    end
+
+    @tag feature: @feature,
+         scenario: "Bootstrap base config when srv0 is missing on first registration"
+    test "bootstraps srv0 via POST /load when current config has no srv0" do
+      agent = start_call_recorder()
+
+      Req.Test.stub(Caddy, fn conn ->
+        record_call(conn, agent)
+
+        case {conn.method, conn.request_path} do
+          {"GET", "/config/"} -> Req.Test.json(conn, %{})
+          {"POST", "/load"} -> Req.Test.json(conn, %{})
+          {"DELETE", _} -> Req.Test.json(conn, %{})
+          {"POST", "/config/apps/http/servers/srv0/routes"} -> Req.Test.json(conn, %{})
+        end
+      end)
+
+      assert Caddy.register(session_target("sess-1"), 4321) == {:ok, :registered}
+
+      calls = recorded_calls(agent)
+      paths = Enum.map(calls, fn {method, path, _} -> {method, path} end)
+
+      assert paths == [
+               {"GET", "/config/"},
+               {"POST", "/load"},
+               {"DELETE", "/id/destila-session-sess-1"},
+               {"POST", "/config/apps/http/servers/srv0/routes"}
+             ]
+
+      [_, {_, _, load_body}, _, _] = calls
+      load_payload = Jason.decode!(load_body)
+      assert get_in(load_payload, ["apps", "http", "servers", "srv0", "routes"]) == []
+
+      assert get_in(load_payload, ["apps", "http", "servers", "srv0", "listen"]) == [
+               ":80",
+               ":443"
+             ]
     end
   end
 
@@ -359,7 +405,7 @@ defmodule Destila.Proxy.CaddyTest do
       Req.Test.stub(Caddy, fn conn ->
         case conn.method do
           "GET" ->
-            Req.Test.json(conn, %{})
+            Req.Test.json(conn, existing_config())
 
           "DELETE" ->
             Req.Test.json(conn, %{})

@@ -20,7 +20,12 @@ defmodule Destila.Proxy.Caddy do
   All HTTP calls go through `Req`. Tests inject a `plug` via
   `Destila.Proxy.Config.req_options/0`.
 
-  Routes are inserted into the fixed Caddy server name `srv0`.
+  Routes are inserted into the fixed Caddy server name `srv0`. On the
+  first registration after Caddy starts with empty config, the base
+  structure (`apps.http.servers.srv0`) is bootstrapped via `POST /load`.
+  This assumes Destila owns the local Caddy instance — running this
+  against a Caddy that already serves other configuration would
+  overwrite that configuration.
   """
 
   alias Destila.Proxy.Config
@@ -45,9 +50,10 @@ defmodule Destila.Proxy.Caddy do
         {:error, :missing_credentials}
 
       true ->
-        case probe() do
+        case ensure_server() do
           :ok -> do_register(target, port)
-          :unreachable -> {:ok, :no_proxy}
+          {:error, {:transport, _}} -> {:ok, :no_proxy}
+          {:error, _} = err -> err
         end
     end
   end
@@ -178,6 +184,63 @@ defmodule Destila.Proxy.Caddy do
 
     payload = route_json(target, port, basic_auth?)
     post_route(payload)
+  end
+
+  defp ensure_server do
+    options =
+      [
+        url: Config.admin_url() <> "/config/",
+        connect_options: [timeout: 5_000],
+        receive_timeout: 5_000,
+        retry: false
+      ]
+      |> Keyword.merge(Config.req_options())
+
+    case Req.request(Keyword.put(options, :method, :get)) do
+      {:ok, %Req.Response{status: 200, body: body}} ->
+        if server_exists?(body), do: :ok, else: bootstrap_server()
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        {:error, {:caddy_status, status, body}}
+
+      {:error, reason} ->
+        {:error, {:transport, reason}}
+    end
+  end
+
+  defp server_exists?(body) when is_map(body) do
+    is_map(get_in(body, ["apps", "http", "servers", @server_name]))
+  end
+
+  defp server_exists?(_), do: false
+
+  defp bootstrap_server do
+    config = %{
+      "apps" => %{
+        "http" => %{
+          "servers" => %{
+            @server_name => %{"listen" => [":80", ":443"], "routes" => []}
+          }
+        }
+      }
+    }
+
+    options =
+      [
+        url: Config.admin_url() <> "/load",
+        json: config,
+        headers: [{"accept", "application/json"}],
+        connect_options: [timeout: 5_000],
+        receive_timeout: 5_000,
+        retry: false
+      ]
+      |> Keyword.merge(Config.req_options())
+
+    case Req.request(Keyword.put(options, :method, :post)) do
+      {:ok, %Req.Response{status: status}} when status in 200..299 -> :ok
+      {:ok, %Req.Response{status: status, body: body}} -> {:error, {:caddy_status, status, body}}
+      {:error, reason} -> {:error, {:transport, reason}}
+    end
   end
 
   defp post_route(payload) do
