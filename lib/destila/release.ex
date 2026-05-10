@@ -22,18 +22,15 @@ defmodule Destila.Release do
 
   def seed do
     load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
 
-    for repo <- repos() do
-      {:ok, _, _} = Ecto.Migrator.with_repo(repo, &run_seeds_for/1)
-    end
-  end
-
-  defp run_seeds_for(repo) do
-    app = Keyword.fetch!(repo.config(), :otp_app)
-    seeds_file = Application.app_dir(app, "priv/repo/seeds.exs")
+    seeds_file = Application.app_dir(@app, "priv/repo/seeds.exs")
 
     if File.exists?(seeds_file) do
+      IO.puts("Running seeds from #{seeds_file}")
       Code.eval_file(seeds_file)
+    else
+      IO.puts("No seeds file found at #{seeds_file}, skipping")
     end
   end
 
