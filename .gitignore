@@ -53,3 +53,7 @@ npm-debug.log
 
 # macOS Finder metadata
 .DS_Store
+
+# Local environment and systemd unit files
+/env
+/destila.service
