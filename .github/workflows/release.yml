@@ -59,7 +59,7 @@ jobs:
 
       - run: mix assets.deploy
 
-      - run: mix release
+      - run: mix release --overwrite
 
       - name: Compute version
         id: version
