@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04-arm
+    env:
+      MIX_ENV: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.19"
+          otp-version: "28"
+
+      - name: Cache mix deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-release-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-mix-
+
+      - name: Cache npm deps
+        uses: actions/cache@v4
+        with:
+          path: assets/node_modules
+          key: ${{ runner.os }}-release-npm-${{ hashFiles('assets/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-release-npm-
+
+      - name: Cache esbuild + tailwind binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            _build/esbuild-*
+            _build/tailwind-*
+          key: ${{ runner.os }}-release-asset-tools-${{ hashFiles('mix.lock') }}
+
+      - run: cd assets && npm ci
+
+      - run: mix deps.get --only prod
+
+      - run: mix compile
+
+      - run: mix assets.deploy
+
+      - run: mix release
+
+      - name: Compute version
+        id: version
+        run: |
+          VERSION=$(grep -E '^\s+version:' mix.exs | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TAG="v${VERSION}-${SHORT_SHA}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Package release tarball
+        id: package
+        run: |
+          ARCHIVE="destila-${{ steps.version.outputs.tag }}-linux-aarch64.tar.gz"
+          tar -C _build/prod/rel -czf "${ARCHIVE}" destila
+          sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
