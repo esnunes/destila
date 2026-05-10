@@ -66,7 +66,7 @@ jobs:
         run: |
           VERSION=$(grep -E '^\s+version:' mix.exs | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           SHORT_SHA=$(git rev-parse --short HEAD)
-          TAG="v${VERSION}-${SHORT_SHA}"
+          TAG="v${VERSION}-build.${{ github.run_number }}.${SHORT_SHA}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Package release tarball
@@ -84,6 +84,7 @@ jobs:
           name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
+          make_latest: "true"
           files: |
             ${{ steps.package.outputs.archive }}
             ${{ steps.package.outputs.archive }}.sha256
