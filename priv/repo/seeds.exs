@@ -19,7 +19,7 @@ case Repo.get_by(Project, name: "destila") do
         IO.puts("seeded destila project")
 
       {:error, changeset} ->
-        Mix.raise("failed to seed destila project: #{inspect(changeset.errors)}")
+        raise "failed to seed destila project: #{inspect(changeset.errors)}"
     end
 
   %Project{} = existing ->
@@ -28,6 +28,6 @@ case Repo.get_by(Project, name: "destila") do
         IO.puts("destila project already present — local_folder synced to cwd")
 
       {:error, changeset} ->
-        Mix.raise("failed to update destila project local_folder: #{inspect(changeset.errors)}")
+        raise "failed to update destila project local_folder: #{inspect(changeset.errors)}"
     end
 end
