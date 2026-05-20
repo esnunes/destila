@@ -21,6 +21,8 @@ defmodule Destila.Application do
         {DynamicSupervisor, name: Destila.Sessions.Supervisor, strategy: :one_for_one},
         {Registry, keys: :unique, name: Destila.Services.LogTailerRegistry},
         {DynamicSupervisor, name: Destila.Services.LogTailerSupervisor, strategy: :one_for_one},
+        {Registry, keys: :unique, name: Destila.Agent.SessionRegistry},
+        {DynamicSupervisor, name: Destila.Agent.SessionSupervisor, strategy: :one_for_one},
         DestilaWeb.Endpoint
       ]
 
@@ -31,6 +33,7 @@ defmodule Destila.Application do
     case Supervisor.start_link(children, opts) do
       {:ok, _pid} = ok ->
         Task.start(fn -> Destila.Services.ProjectServices.resume_all() end)
+        Task.start(fn -> Destila.Agent.WorkflowLoader.load_all() end)
         ok
 
       other ->

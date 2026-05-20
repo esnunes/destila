@@ -39,6 +39,26 @@ config :destila, :proxy,
   basic_auth_user: System.get_env("DESTILA_BASIC_AUTH_USER"),
   basic_auth_password: System.get_env("DESTILA_BASIC_AUTH_PASSWORD")
 
+# DESTILA_MCP_TOKEN authenticates MCP clients (the Go bridge) against the
+# Phoenix /mcp endpoint. Required in prod; a documented dev-only default
+# is used otherwise.
+config :destila,
+       :mcp_token,
+       System.get_env("DESTILA_MCP_TOKEN") ||
+         if(config_env() == :prod,
+           do:
+             raise("""
+             environment variable DESTILA_MCP_TOKEN is missing.
+             Set it to a strong random value to authenticate the MCP bridge.
+             """),
+           else: "destila-dev-only-token"
+         )
+
+config :destila,
+       :mcp_bridge_path,
+       System.get_env("DESTILA_MCP_BRIDGE_PATH") ||
+         Path.expand("../cmd/destila-mcp/destila-mcp", __DIR__)
+
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_PATH") ||

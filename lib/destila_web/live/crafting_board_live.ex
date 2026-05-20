@@ -216,6 +216,14 @@ defmodule DestilaWeb.CraftingBoardLive do
             <.link navigate={~p"/sessions/archived"} class="btn btn-soft btn-sm">
               <.icon name="hero-archive-box-micro" class="size-4" /> Archived
             </.link>
+            <.link
+              navigate={~p"/agent-sessions/new"}
+              id="new-mcp-session-card"
+              class="btn btn-soft btn-sm"
+            >
+              <.icon name="hero-sparkles-micro" class="size-4" /> New agent-driven session
+              <span class="badge badge-xs badge-info ml-1">MCP</span>
+            </.link>
             <.link navigate={~p"/workflows"} class="btn btn-primary btn-sm">
               <.icon name="hero-plus-micro" class="size-4" /> New Session
             </.link>
