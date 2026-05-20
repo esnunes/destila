@@ -1,0 +1,81 @@
+defmodule DestilaWeb.MCP.SseController do
+  @moduledoc """
+  GET /mcp/:session_id/events — long-lived SSE channel.
+
+  On connect, subscribes the calling process to PubSub topic
+  `agent_session_outbound:<session_id>` and chunk-streams any received
+  messages as `event:` frames until the client closes.
+  """
+
+  use DestilaWeb, :controller
+
+  alias Destila.Agent.{Sessions, SessionServer}
+
+  @keepalive_interval :timer.seconds(15)
+
+  def stream(conn, %{"session_id" => session_id}) do
+    Phoenix.PubSub.subscribe(Destila.PubSub, Sessions.outbound_topic(session_id))
+    SessionServer.sse_connected(session_id)
+
+    conn =
+      conn
+      |> put_resp_content_type("text/event-stream")
+      |> put_resp_header("cache-control", "no-cache")
+      |> put_resp_header("connection", "keep-alive")
+      |> send_chunked(200)
+
+    case Plug.Conn.chunk(conn, format_event("ok", %{"hello" => true})) do
+      {:ok, conn} ->
+        Process.send_after(self(), :keepalive, @keepalive_interval)
+        loop(conn, session_id)
+
+      {:error, _} ->
+        sse_done(conn, session_id)
+    end
+  end
+
+  defp loop(conn, session_id) do
+    receive do
+      :keepalive ->
+        case Plug.Conn.chunk(conn, ": keepalive\n\n") do
+          {:ok, conn} ->
+            Process.send_after(self(), :keepalive, @keepalive_interval)
+            loop(conn, session_id)
+
+          {:error, _} ->
+            sse_done(conn, session_id)
+        end
+
+      msg when is_tuple(msg) ->
+        event_name = elem(msg, 0)
+        payload = msg |> Tuple.to_list() |> tl()
+
+        case Plug.Conn.chunk(conn, format_event(to_string(event_name), payload)) do
+          {:ok, conn} -> loop(conn, session_id)
+          {:error, _} -> sse_done(conn, session_id)
+        end
+
+      _other ->
+        loop(conn, session_id)
+    after
+      :timer.minutes(5) ->
+        sse_done(conn, session_id)
+    end
+  end
+
+  defp sse_done(conn, session_id) do
+    Phoenix.PubSub.unsubscribe(Destila.PubSub, Sessions.outbound_topic(session_id))
+    SessionServer.sse_closed(session_id)
+    conn
+  end
+
+  defp format_event(name, payload) do
+    encoded =
+      case Jason.encode(payload) do
+        {:ok, json} -> json
+        {:error, _} -> Jason.encode!(%{"unencodable" => true})
+      end
+
+    "event: #{name}\ndata: #{encoded}\n\n"
+  end
+end

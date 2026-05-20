@@ -12,6 +12,18 @@ defmodule DestilaWeb.Router do
     plug :put_secure_browser_headers
   end
 
+  pipeline :mcp do
+    plug :accepts, ["json"]
+    plug DestilaWeb.MCP.AuthPlug
+  end
+
+  scope "/mcp", DestilaWeb.MCP do
+    pipe_through :mcp
+
+    post "/:session_id/rpc", RpcController, :dispatch
+    get "/:session_id/events", SseController, :stream
+  end
+
   scope "/" do
     pipe_through :browser
 
@@ -39,5 +51,8 @@ defmodule DestilaWeb.Router do
     live "/services/sessions/:id", ServiceDetailLive, :session
     live "/services/projects/:id", ServiceDetailLive, :project
     live "/services/projects/:id/terminal", TerminalLive, :project
+
+    live "/agent-sessions/new", AgentSessionCreateLive
+    live "/agent-sessions/:id", AgentSessionLive
   end
 end

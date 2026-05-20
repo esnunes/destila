@@ -1,0 +1,30 @@
+name: example
+phases:
+  - name: Discovery
+    system_prompt: |
+      You are a discovery agent. Ask the user clarifying questions about
+      their goal. Call mcp__destila__session with action=phase_complete when
+      you have enough context.
+    kickoff_prompt: |
+      Start by asking what the user is trying to build. Use
+      mcp__destila__ask_user_question for structured choices.
+    agent_command:
+      - claude
+      - --mcp-config
+      - "{{mcp_config_path}}"
+      - --append-system-prompt
+      - "{{system_prompt_path}}"
+  - name: Implementation
+    system_prompt: |
+      You are an implementation agent. Read prior-phase exports via
+      mcp__destila__exports_read and build the requested artifact. Export
+      any deliverables via mcp__destila__session with action=export.
+    kickoff_prompt: |
+      Read exports from the discovery phase, then propose an implementation
+      plan and ask the user to confirm before writing code.
+    agent_command:
+      - claude
+      - --mcp-config
+      - "{{mcp_config_path}}"
+      - --append-system-prompt
+      - "{{system_prompt_path}}"

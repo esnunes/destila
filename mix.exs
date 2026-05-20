@@ -70,6 +70,7 @@ defmodule Destila.MixProject do
       {:expty, "~> 0.2"},
       {:req, "~> 0.5"},
       {:bcrypt_elixir, "~> 3.0"},
+      {:yaml_elixir, "~> 2.11"},
       {:mimic, "~> 2.3", only: :test}
     ]
   end
