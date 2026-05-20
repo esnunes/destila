@@ -6,15 +6,24 @@ defmodule Destila.Agent.Tools.AskUserQuestionTool do
 
   alias Destila.Agent.Sessions
 
+  require Logger
+
   def execute(args, state) do
     questions = Map.get(args, "questions", [])
     question_id = generate_id()
 
-    {:ok, _event} =
-      Sessions.record_event(state.session, "ask_user_question", %{
-        tool_input: args,
-        tool_result: %{"question_id" => question_id}
-      })
+    case Sessions.record_event(state.session, "ask_user_question", %{
+           tool_input: args,
+           tool_result: %{"question_id" => question_id}
+         }) do
+      {:ok, _event} ->
+        :ok
+
+      {:error, changeset} ->
+        Logger.warning(
+          "Sessions.record_event(ask_user_question) failed: #{inspect(changeset.errors)}"
+        )
+    end
 
     Sessions.broadcast_session(
       state.session.id,

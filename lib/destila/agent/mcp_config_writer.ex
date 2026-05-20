@@ -12,12 +12,16 @@ defmodule Destila.Agent.McpConfigWriter do
   def write(session_id, phase) do
     tmpdir = Path.join([System.tmp_dir!(), "destila-mcp-#{session_id}"])
     File.mkdir_p!(tmpdir)
+    File.chmod!(tmpdir, 0o700)
 
     mcp_config_path = Path.join(tmpdir, "mcp.json")
     system_prompt_path = Path.join(tmpdir, "system_prompt.md")
 
     File.write!(mcp_config_path, render_mcp_config(session_id))
+    File.chmod!(mcp_config_path, 0o600)
+
     File.write!(system_prompt_path, phase.system_prompt)
+    File.chmod!(system_prompt_path, 0o600)
 
     {:ok,
      %{
@@ -38,7 +42,9 @@ defmodule Destila.Agent.McpConfigWriter do
       Application.get_env(:destila, :mcp_bridge_path) ||
         Path.expand("../cmd/destila-mcp/destila-mcp", __DIR__)
 
-    token = Application.fetch_env!(:destila, :mcp_token)
+    token =
+      Application.get_env(:destila, :mcp_token) ||
+        raise "DESTILA_MCP_TOKEN not configured; cannot write .mcp.json"
 
     url =
       System.get_env("DESTILA_MCP_URL") ||

@@ -17,7 +17,7 @@ defmodule Destila.Agent.ExternalHost do
   def connection_info(session_id) do
     %{
       bridge_path: Application.get_env(:destila, :mcp_bridge_path, "destila-mcp"),
-      token: Application.fetch_env!(:destila, :mcp_token),
+      token: Application.get_env(:destila, :mcp_token) || "<DESTILA_MCP_TOKEN not configured>",
       mcp_url:
         System.get_env("DESTILA_MCP_URL") ||
           "http://127.0.0.1:#{port_from_env()}/mcp",

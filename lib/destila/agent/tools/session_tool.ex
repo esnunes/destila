@@ -5,6 +5,8 @@ defmodule Destila.Agent.Tools.SessionTool do
 
   alias Destila.Agent.Sessions
 
+  require Logger
+
   def execute(args, state) do
     case Map.get(args, "action") do
       "phase_complete" -> phase_complete(args, state)
@@ -17,27 +19,37 @@ defmodule Destila.Agent.Tools.SessionTool do
   defp phase_complete(args, state) do
     message = Map.get(args, "message")
 
-    {:ok, _event} =
-      Sessions.record_event(state.session, "session.phase_complete", %{
-        tool_input: args,
-        tool_result: %{"message" => message}
-      })
+    safe_record_event(state.session, "session.phase_complete", %{
+      tool_input: args,
+      tool_result: %{"message" => message}
+    })
 
-    {:ok, session} = Sessions.advance_phase(state.session)
+    case Sessions.advance_phase(state.session) do
+      {:ok, session} ->
+        Sessions.broadcast_session(session.id, {:phase_advanced, session.current_phase_index})
 
-    Sessions.broadcast_session(session.id, {:phase_advanced, session.current_phase_index})
+        {{:ok, ack("Phase complete acknowledged.")}, %{state | session: session}}
 
-    {{:ok, ack("Phase complete acknowledged.")}, %{state | session: session}}
+      {:error, changeset} ->
+        Logger.warning("Sessions.advance_phase failed: #{inspect(changeset.errors)}")
+
+        {{:ok,
+          %{
+            "content" => [
+              %{"type" => "text", "text" => "Phase advance failed; please retry."}
+            ],
+            "isError" => true
+          }}, state}
+    end
   end
 
   defp suggest_phase_complete(args, state) do
     message = Map.get(args, "message", "")
 
-    {:ok, _event} =
-      Sessions.record_event(state.session, "session.suggest_phase_complete", %{
-        tool_input: args,
-        tool_result: %{"message" => message}
-      })
+    safe_record_event(state.session, "session.suggest_phase_complete", %{
+      tool_input: args,
+      tool_result: %{"message" => message}
+    })
 
     Sessions.broadcast_session(
       state.session.id,
@@ -68,11 +80,10 @@ defmodule Destila.Agent.Tools.SessionTool do
                value: %{"value" => value, "type" => type}
              }) do
           {:ok, _meta} ->
-            {:ok, _event} =
-              Sessions.record_event(state.session, "session.export", %{
-                tool_input: args,
-                tool_result: %{"key" => key, "type" => type}
-              })
+            safe_record_event(state.session, "session.export", %{
+              tool_input: args,
+              tool_result: %{"key" => key, "type" => type}
+            })
 
             {{:ok, ack("Export #{key} recorded.")}, state}
 
@@ -83,6 +94,18 @@ defmodule Destila.Agent.Tools.SessionTool do
   end
 
   defp phase_name_for(state), do: "phase-#{state.session.current_phase_index}"
+
+  defp safe_record_event(session, name, attrs) do
+    case Sessions.record_event(session, name, attrs) do
+      {:ok, event} ->
+        {:ok, event}
+
+      {:error, changeset} ->
+        Logger.warning("Sessions.record_event(#{name}) failed: #{inspect(changeset.errors)}")
+
+        :error
+    end
+  end
 
   defp ack(text) do
     %{"content" => [%{"type" => "text", "text" => text}], "isError" => false}

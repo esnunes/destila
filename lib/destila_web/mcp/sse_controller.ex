@@ -24,10 +24,14 @@ defmodule DestilaWeb.MCP.SseController do
       |> put_resp_header("connection", "keep-alive")
       |> send_chunked(200)
 
-    {:ok, conn} = Plug.Conn.chunk(conn, format_event("ok", %{"hello" => true}))
+    case Plug.Conn.chunk(conn, format_event("ok", %{"hello" => true})) do
+      {:ok, conn} ->
+        Process.send_after(self(), :keepalive, @keepalive_interval)
+        loop(conn, session_id)
 
-    Process.send_after(self(), :keepalive, @keepalive_interval)
-    loop(conn, session_id)
+      {:error, _} ->
+        sse_done(conn, session_id)
+    end
   end
 
   defp loop(conn, session_id) do
@@ -39,12 +43,14 @@ defmodule DestilaWeb.MCP.SseController do
             loop(conn, session_id)
 
           {:error, _} ->
-            SessionServer.sse_closed(session_id)
-            conn
+            sse_done(conn, session_id)
         end
 
-      {event_name, payload} when is_atom(event_name) ->
-        case Plug.Conn.chunk(conn, format_event(Atom.to_string(event_name), payload)) do
+      msg when is_tuple(msg) ->
+        event_name = elem(msg, 0)
+        payload = msg |> Tuple.to_list() |> tl()
+
+        case Plug.Conn.chunk(conn, format_event(to_string(event_name), payload)) do
           {:ok, conn} -> loop(conn, session_id)
           {:error, _} -> sse_done(conn, session_id)
         end
@@ -52,17 +58,24 @@ defmodule DestilaWeb.MCP.SseController do
       _other ->
         loop(conn, session_id)
     after
-      :timer.minutes(60) ->
+      :timer.minutes(5) ->
         sse_done(conn, session_id)
     end
   end
 
   defp sse_done(conn, session_id) do
+    Phoenix.PubSub.unsubscribe(Destila.PubSub, Sessions.outbound_topic(session_id))
     SessionServer.sse_closed(session_id)
     conn
   end
 
   defp format_event(name, payload) do
-    "event: #{name}\ndata: #{Jason.encode!(payload)}\n\n"
+    encoded =
+      case Jason.encode(payload) do
+        {:ok, json} -> json
+        {:error, _} -> Jason.encode!(%{"unencodable" => true})
+      end
+
+    "event: #{name}\ndata: #{encoded}\n\n"
   end
 end

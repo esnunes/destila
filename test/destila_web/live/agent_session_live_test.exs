@@ -47,7 +47,8 @@ defmodule DestilaWeb.AgentSessionLiveTest do
     assert render(view) =~ "prompt"
   end
 
-  @tag feature: "mcp_driven_session", scenario: "Embedded terminal renders"
+  @tag feature: "mcp_driven_session",
+       scenario: "User types directly into the embedded terminal"
   test "embedded sessions render the xterm.js terminal panel", %{conn: conn} do
     {:ok, session} = Sessions.create_session(embedded_attrs())
     {:ok, view, _html} = live(conn, ~p"/agent-sessions/#{session.id}")

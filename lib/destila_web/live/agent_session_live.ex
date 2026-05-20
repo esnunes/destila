@@ -58,12 +58,21 @@ defmodule DestilaWeb.AgentSessionLive do
         %{"question_id" => question_id, "value" => value},
         socket
       ) do
-    :ok = SessionServer.answer_question(socket.assigns.session.id, question_id, value)
+    case SessionServer.answer_question(socket.assigns.session.id, question_id, value) do
+      :ok ->
+        {:noreply,
+         socket
+         |> assign(:pending_question, nil)
+         |> update(:answered_questions, &MapSet.put(&1, question_id))}
 
-    {:noreply,
-     socket
-     |> assign(:pending_question, nil)
-     |> update(:answered_questions, &MapSet.put(&1, question_id))}
+      {:error, _reason} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "The agent session is no longer active — refresh the page to reconnect."
+         )}
+    end
   end
 
   def handle_event("confirm_phase_complete", _, socket) do

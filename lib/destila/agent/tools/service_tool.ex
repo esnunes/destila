@@ -1,62 +1,60 @@
 defmodule Destila.Agent.Tools.ServiceTool do
   @moduledoc """
-  Delegates the `service` tool to `Destila.Services.ServiceManager`, scoped
-  to the agent session's associated project (when set).
+  Service tool stub for the agent path.
+
+  The chat-path `Destila.Services.ServiceManager.execute/3` expects a
+  workflow-session-shaped struct. Wiring the agent path to that helper
+  requires either a refactor of `ServiceManager` to accept agent sessions
+  or a new `execute_for_agent_session/3` entry point — both larger than the
+  scope of this commit. Until then this handler returns a typed error so
+  the agent gets a clear signal instead of a runtime crash.
   """
 
   alias Destila.Agent.Sessions
+
+  @valid_actions ~w(start stop restart status)
 
   def execute(args, state) do
     action = Map.get(args, "action")
 
     {:ok, _event} =
-      Sessions.record_event(state.session, "service.#{action}", %{
+      Sessions.record_event(state.session, "service.#{action || "unknown"}", %{
         tool_input: args,
-        tool_result: %{}
+        tool_result: %{"status" => "not_implemented"}
       })
 
-    case execute_action(action, state) do
-      {:ok, payload} ->
+    cond do
+      action not in @valid_actions ->
         {{:ok,
           %{
-            "content" => [%{"type" => "text", "text" => Jason.encode!(payload)}],
-            "isError" => false
+            "content" => [
+              %{"type" => "text", "text" => "Unknown service action: #{inspect(action)}"}
+            ],
+            "isError" => true
           }}, state}
 
-      {:error, reason} ->
+      is_nil(state.session.project_id) ->
         {{:ok,
           %{
-            "content" => [%{"type" => "text", "text" => "Service error: #{inspect(reason)}"}],
+            "content" => [
+              %{"type" => "text", "text" => "Agent session has no attached project."}
+            ],
+            "isError" => true
+          }}, state}
+
+      true ->
+        {{:ok,
+          %{
+            "content" => [
+              %{
+                "type" => "text",
+                "text" =>
+                  "service.#{action} is not yet wired for MCP-driven sessions. " <>
+                    "Use the existing chat-path workflow runner for service management."
+              }
+            ],
             "isError" => true
           }}, state}
     end
   end
-
-  defp execute_action(nil, _state), do: {:error, :missing_action}
-
-  defp execute_action(action, state) when action in ["start", "stop", "restart", "status"] do
-    case Sessions.get_session(state.session.id) do
-      %{project_id: nil} ->
-        {:error, "no project attached to agent session"}
-
-      %{project_id: project_id} ->
-        case Destila.Projects.get_project(project_id) do
-          nil ->
-            {:error, "project not found"}
-
-          project ->
-            try do
-              case Destila.Services.ServiceManager.execute(project, String.to_atom(action), []) do
-                {:ok, state_payload} -> {:ok, state_payload}
-                {:error, _} = err -> err
-                other -> {:ok, other}
-              end
-            rescue
-              e -> {:error, Exception.message(e)}
-            end
-        end
-    end
-  end
-
-  defp execute_action(action, _state), do: {:error, "unknown action: #{inspect(action)}"}
 end

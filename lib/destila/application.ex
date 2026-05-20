@@ -33,7 +33,20 @@ defmodule Destila.Application do
     case Supervisor.start_link(children, opts) do
       {:ok, _pid} = ok ->
         Task.start(fn -> Destila.Services.ProjectServices.resume_all() end)
-        Task.start(fn -> Destila.Agent.WorkflowLoader.load_all() end)
+
+        Task.start(fn ->
+          try do
+            Destila.Agent.WorkflowLoader.load_all()
+          rescue
+            e ->
+              require Logger
+
+              Logger.error(
+                "Destila.Agent.WorkflowLoader.load_all/0 failed at boot: #{Exception.message(e)}"
+              )
+          end
+        end)
+
         ok
 
       other ->

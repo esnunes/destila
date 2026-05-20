@@ -7,6 +7,8 @@ defmodule Destila.Agent.Tools.ExportsReadTool do
 
   alias Destila.Agent.Sessions
 
+  require Logger
+
   def execute(_args, state) do
     exports = Sessions.list_exports(state.session.id)
 
@@ -23,11 +25,16 @@ defmodule Destila.Agent.Tools.ExportsReadTool do
         }
       end)
 
-    {:ok, _event} =
-      Sessions.record_event(state.session, "exports_read", %{
-        tool_input: %{},
-        tool_result: %{"count" => length(payload)}
-      })
+    case Sessions.record_event(state.session, "exports_read", %{
+           tool_input: %{},
+           tool_result: %{"count" => length(payload)}
+         }) do
+      {:ok, _event} ->
+        :ok
+
+      {:error, changeset} ->
+        Logger.warning("Sessions.record_event(exports_read) failed: #{inspect(changeset.errors)}")
+    end
 
     {{:ok,
       %{

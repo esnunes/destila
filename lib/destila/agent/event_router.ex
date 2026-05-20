@@ -26,11 +26,17 @@ defmodule Destila.Agent.EventRouter do
         end
 
       {:error, code, message} ->
-        %{
-          "jsonrpc" => "2.0",
-          "id" => request_id,
-          "error" => %{"code" => code, "message" => message}
-        }
+        if is_nil(request_id) do
+          # Per JSON-RPC 2.0 §4.1, notifications MUST NOT receive a response,
+          # even on error.
+          :noreply
+        else
+          %{
+            "jsonrpc" => "2.0",
+            "id" => request_id,
+            "error" => %{"code" => code, "message" => message}
+          }
+        end
     end
   end
 

@@ -140,7 +140,15 @@ defmodule Destila.Agent.Sessions do
       |> Map.put_new(:exported, true)
       |> Map.put_new(:phase_index, session.current_phase_index)
 
-    case %SessionMetadata{} |> SessionMetadata.changeset(attrs) |> Repo.insert() do
+    changeset = SessionMetadata.changeset(%SessionMetadata{}, attrs)
+
+    result =
+      Repo.insert(changeset,
+        on_conflict: {:replace, [:value, :exported, :phase_index, :updated_at]},
+        conflict_target: [:agent_session_id, :phase_name, :key]
+      )
+
+    case result do
       {:ok, meta} ->
         broadcast_session(session.id, {:export_added, meta})
         {:ok, meta}

@@ -7,8 +7,16 @@ defmodule DestilaWeb.MCP.AuthPlugTest do
   alias DestilaWeb.MCP.AuthPlug
 
   setup do
+    prev = Application.get_env(:destila, :mcp_token)
     Application.put_env(:destila, :mcp_token, "test-token-abc")
-    on_exit(fn -> Application.delete_env(:destila, :mcp_token) end)
+
+    on_exit(fn ->
+      case prev do
+        nil -> Application.delete_env(:destila, :mcp_token)
+        v -> Application.put_env(:destila, :mcp_token, v)
+      end
+    end)
+
     :ok
   end
 

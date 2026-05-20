@@ -47,9 +47,15 @@ defmodule Destila.Agent.SessionServer do
 
   def whereis(session_id), do: GenServer.whereis(via(session_id))
 
+  @tool_call_timeout :timer.seconds(60)
+
   def handle_tool_call(session_id, name, params) do
     with {:ok, pid} <- ensure_started(session_id) do
-      GenServer.call(pid, {:tool_call, name, params})
+      try do
+        GenServer.call(pid, {:tool_call, name, params}, @tool_call_timeout)
+      catch
+        :exit, reason -> {:error, {:server_exit, reason}}
+      end
     end
   end
 
@@ -121,11 +127,16 @@ defmodule Destila.Agent.SessionServer do
 
   @impl true
   def handle_cast(:sse_connected, state) do
-    {:ok, session} =
+    session =
       case state.session.status do
-        :awaiting_agent -> Sessions.mark_connected(state.session)
-        :disconnected -> Sessions.mark_connected(state.session)
-        _ -> {:ok, state.session}
+        status when status in [:awaiting_agent, :disconnected] ->
+          case Sessions.mark_connected(state.session) do
+            {:ok, updated} -> updated
+            {:error, _} -> state.session
+          end
+
+        _ ->
+          state.session
       end
 
     Sessions.broadcast_session(session.id, {:agent_connected, session})
@@ -133,10 +144,16 @@ defmodule Destila.Agent.SessionServer do
   end
 
   def handle_cast(:sse_closed, state) do
-    {:ok, session} =
+    session =
       case state.session.status do
-        :active -> Sessions.mark_disconnected(state.session)
-        _ -> {:ok, state.session}
+        :active ->
+          case Sessions.mark_disconnected(state.session) do
+            {:ok, updated} -> updated
+            {:error, _} -> state.session
+          end
+
+        _ ->
+          state.session
       end
 
     Sessions.broadcast_session(session.id, {:agent_disconnected, session})
